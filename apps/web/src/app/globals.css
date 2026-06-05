@@ -461,6 +461,7 @@ h2 {
 .agentHealthItem,
 .auditEventItem,
 .jobHistoryItem,
+.workflowHistoryItem,
 .reportBox {
   display: grid;
   gap: 6px;
@@ -475,6 +476,7 @@ h2 {
 .agentHealthItem strong,
 .auditEventItem strong,
 .jobHistoryItem strong,
+.workflowHistoryItem strong,
 .reportBox strong {
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -484,6 +486,7 @@ h2 {
 .agentHealthItem p,
 .auditEventItem p,
 .jobHistoryItem p,
+.workflowHistoryItem p,
 .reportBox p,
 .reportBox.muted {
   margin: 0;
@@ -514,6 +517,20 @@ h2 {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.workflowHistoryItem > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workflowHistoryItem > .secondaryButton {
+  justify-self: end;
+  min-height: 32px;
+  padding: 0 12px;
 }
 
 .auditEventItem span {

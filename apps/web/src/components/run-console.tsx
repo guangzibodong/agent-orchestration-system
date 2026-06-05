@@ -58,6 +58,10 @@ import {
 } from "@/components/job-history-display";
 import { loadOperationsSnapshot } from "@/components/operations-snapshot";
 import {
+  buildWorkflowListDisplay,
+  summarizeWorkflowList
+} from "@/components/workflow-list-display";
+import {
   canCancelJobStatus,
   canCleanupWorkflowStatus,
   canRetryWorkflowStatus,
@@ -125,6 +129,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function RunConsole() {
   const [workflow, setWorkflow] = useState<WorkflowRun>();
+  const [workflowList, setWorkflowList] = useState<WorkflowRun[]>([]);
   const [report, setReport] = useState<RunReport>();
   const [job, setJob] = useState<ConsoleWorkflowJob>();
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
@@ -171,9 +176,22 @@ export function RunConsole() {
     () => buildJobHistoryDisplay(jobHistory).slice(0, 8),
     [jobHistory]
   );
+  const workflowListSummary = useMemo(
+    () => summarizeWorkflowList(workflowList),
+    [workflowList]
+  );
+  const workflowListDisplay = useMemo(
+    () => buildWorkflowListDisplay(workflowList).slice(-8).reverse(),
+    [workflowList]
+  );
 
   const metrics = useMemo(
     () => [
+      {
+        label: "Workflows",
+        value: String(workflowListSummary.total),
+        icon: GitBranch
+      },
       {
         label: "Repositories",
         value: String(repositorySummary.total),
@@ -217,7 +235,8 @@ export function RunConsole() {
       auditEventSummary,
       jobHistorySummary,
       repositorySummary,
-      workflow
+      workflow,
+      workflowListSummary
     ]
   );
   const canCreateRepositoryRun = useMemo(
@@ -259,6 +278,13 @@ export function RunConsole() {
     }));
   }, []);
 
+  const loadWorkflowList = useCallback(async () => {
+    const workflows = await api<unknown[]>("/workflows");
+    const parsed = workflows.map((item) => workflowRunSchema.parse(item));
+    setWorkflowList(parsed);
+    return parsed;
+  }, []);
+
   const createDemo = useCallback(async () => {
     setIsBusy(true);
     setError(undefined);
@@ -272,12 +298,13 @@ export function RunConsole() {
         body: "{}"
       });
       setWorkflow(workflowRunSchema.parse(next));
+      await loadWorkflowList();
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Create failed");
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [loadWorkflowList]);
 
   const createWorktreeDemo = useCallback(async () => {
     setIsBusy(true);
@@ -292,6 +319,7 @@ export function RunConsole() {
         body: "{}"
       });
       setWorkflow(workflowRunSchema.parse(next));
+      await loadWorkflowList();
     } catch (apiError) {
       setError(
         apiError instanceof Error ? apiError.message : "Create worktree run failed"
@@ -299,7 +327,7 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [loadWorkflowList]);
 
   const createAgentDemo = useCallback(async () => {
     setIsBusy(true);
@@ -314,6 +342,7 @@ export function RunConsole() {
         body: "{}"
       });
       setWorkflow(workflowRunSchema.parse(next));
+      await loadWorkflowList();
     } catch (apiError) {
       setError(
         apiError instanceof Error ? apiError.message : "Create agent run failed"
@@ -321,7 +350,7 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [loadWorkflowList]);
 
   const createRepositoryWorkflow = useCallback(async () => {
     setIsBusy(true);
@@ -337,6 +366,7 @@ export function RunConsole() {
         body: JSON.stringify(payload)
       });
       setWorkflow(workflowRunSchema.parse(next));
+      await loadWorkflowList();
     } catch (apiError) {
       setError(
         apiError instanceof Error
@@ -346,19 +376,34 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [repositoryForm]);
+  }, [loadWorkflowList, repositoryForm]);
 
   const loadLatestWorkflow = useCallback(async () => {
-    const workflows = await api<unknown[]>("/workflows");
-    const parsed = workflows.map((item) => workflowRunSchema.parse(item));
-
+    const parsed = await loadWorkflowList();
     if (parsed.length > 0) {
       setWorkflow(parsed.at(-1));
       return;
     }
 
     await createDemo();
-  }, [createDemo]);
+  }, [createDemo, loadWorkflowList]);
+
+  const openWorkflow = useCallback(async (workflowId: string) => {
+    setIsBusy(true);
+    setError(undefined);
+    setReport(undefined);
+    setJob(undefined);
+    setMergeCandidate(undefined);
+
+    try {
+      const next = await api<unknown>(`/workflows/${workflowId}`);
+      setWorkflow(workflowRunSchema.parse(next));
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : "Load workflow failed");
+    } finally {
+      setIsBusy(false);
+    }
+  }, []);
 
   const loadConfiguredAgents = useCallback(async () => {
     const agents = await api<unknown[]>("/agents");
@@ -456,6 +501,7 @@ export function RunConsole() {
             setReport(runReportSchema.parse(nextReport));
             await loadMergeCandidate(workflow.id);
           }
+          await loadWorkflowList();
           await refreshOperationsSnapshot();
           break;
         }
@@ -465,7 +511,7 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [loadMergeCandidate, refreshOperationsSnapshot, workflow]);
+  }, [loadMergeCandidate, loadWorkflowList, refreshOperationsSnapshot, workflow]);
 
   const cancelJob = useCallback(async () => {
     if (!job || !workflow || !canCancelJobStatus(job.status)) {
@@ -481,6 +527,7 @@ export function RunConsole() {
         body: "{}"
       });
       await refreshJobAndWorkflow(job.id, workflow.id);
+      await loadWorkflowList();
       await refreshOperationsSnapshot();
     } catch (apiError) {
       setError(
@@ -492,7 +539,13 @@ export function RunConsole() {
     } finally {
       setIsCanceling(false);
     }
-  }, [job, refreshJobAndWorkflow, refreshOperationsSnapshot, workflow]);
+  }, [
+    job,
+    loadWorkflowList,
+    refreshJobAndWorkflow,
+    refreshOperationsSnapshot,
+    workflow
+  ]);
 
   const retryWorkflow = useCallback(async () => {
     if (!workflow || !canRetryWorkflowStatus(workflow.status)) {
@@ -511,13 +564,14 @@ export function RunConsole() {
         body: "{}"
       });
       setWorkflow(workflowRunSchema.parse(retried));
+      await loadWorkflowList();
       await refreshOperationsSnapshot();
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Retry failed");
     } finally {
       setIsBusy(false);
     }
-  }, [refreshOperationsSnapshot, workflow]);
+  }, [loadWorkflowList, refreshOperationsSnapshot, workflow]);
 
   const reviewWorkflow = useCallback(
     async (decision: "approve" | "reject") => {
@@ -534,6 +588,7 @@ export function RunConsole() {
           body: JSON.stringify(buildWorkflowReviewPayload(decision))
         });
         setWorkflow(workflowRunSchema.parse(reviewed));
+        await loadWorkflowList();
         if (decision === "approve") {
           await loadMergeCandidate(workflow.id);
         }
@@ -544,7 +599,7 @@ export function RunConsole() {
         setIsBusy(false);
       }
     },
-    [loadMergeCandidate, refreshOperationsSnapshot, workflow]
+    [loadMergeCandidate, loadWorkflowList, refreshOperationsSnapshot, workflow]
   );
 
   const cleanupWorkspaces = useCallback(async () => {
@@ -558,13 +613,14 @@ export function RunConsole() {
     try {
       const refreshed = await cleanupWorkflowWorkspaces(api, workflow);
       setWorkflow(refreshed);
+      await loadWorkflowList();
       await refreshOperationsSnapshot();
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Cleanup failed");
     } finally {
       setIsBusy(false);
     }
-  }, [refreshOperationsSnapshot, workflow]);
+  }, [loadWorkflowList, refreshOperationsSnapshot, workflow]);
 
   useEffect(() => {
     // Load the API-backed in-memory run after the browser can reach the API.
@@ -596,6 +652,7 @@ export function RunConsole() {
     loadAgentHealth,
     loadConfiguredAgents,
     loadLatestWorkflow,
+    loadWorkflowList,
     loadRepositories,
     refreshOperationsSnapshot
   ]);
@@ -836,6 +893,55 @@ export function RunConsole() {
             <div className={`statusPill ${workflow?.status ?? "draft"}`}>
               {workflow?.status ?? "draft"}
             </div>
+
+            <section className="inspectorSection">
+              <div className="sectionHeader">
+                <h3>Workflows</h3>
+                <span>
+                  {workflowListSummary.active} active /{" "}
+                  {workflowListSummary.needsReview} review
+                </span>
+              </div>
+              <div className="runList">
+                {workflowListDisplay.map((item) => (
+                  <article className="workflowHistoryItem" key={item.id}>
+                    <div>
+                      <strong>{item.goal}</strong>
+                      <span className={`statusPill ${item.status}`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <p>{item.repositoryLabel}</p>
+                    <dl className="artifactMeta">
+                      <div>
+                        <dt>Workflow</dt>
+                        <dd>{item.workflowLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Nodes</dt>
+                        <dd>{item.nodeLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Updated</dt>
+                        <dd>{item.updatedAt}</dd>
+                      </div>
+                    </dl>
+                    <button
+                      className="secondaryButton"
+                      disabled={isBusy || workflow?.id === item.id}
+                      onClick={() => void openWorkflow(item.id)}
+                      type="button"
+                    >
+                      <GitBranch aria-hidden="true" size={16} />
+                      Open
+                    </button>
+                  </article>
+                ))}
+                {workflowListDisplay.length === 0 ? (
+                  <div className="reportBox muted">No workflows</div>
+                ) : null}
+              </div>
+            </section>
 
             <section className="inspectorSection">
               <div className="sectionHeader">
