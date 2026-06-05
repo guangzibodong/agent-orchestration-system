@@ -32,6 +32,18 @@ const events: AuditEvent[] = [
       repositoryName: "MAWO Core",
       qualityGates: "1"
     }
+  },
+  {
+    id: "event-4",
+    type: "job.recovered",
+    createdAt: "2026-06-05T10:31:10.513Z",
+    actor: "system",
+    workflowId: "workflow-recovered",
+    jobId: "job-recovered",
+    metadata: {
+      previousStatus: "running",
+      recoveredStatus: "failed"
+    }
   }
 ];
 
@@ -64,13 +76,22 @@ describe("audit event display", () => {
         workflowLabel: undefined,
         jobLabel: undefined,
         metadataLabel: "repositoryName=MAWO Core, qualityGates=1"
+      },
+      {
+        id: "event-4",
+        label: "Job Recovered",
+        actor: "system",
+        createdAt: "2026-06-05T10:31:10.513Z",
+        workflowLabel: "workflow-",
+        jobLabel: "job-recov",
+        metadataLabel: "previousStatus=running, recoveredStatus=failed"
       }
     ]);
   });
 
   it("summarizes audit activity for the console header", () => {
     expect(summarizeAuditEvents(events)).toEqual({
-      total: 3,
+      total: 4,
       operatorActions: 2
     });
   });

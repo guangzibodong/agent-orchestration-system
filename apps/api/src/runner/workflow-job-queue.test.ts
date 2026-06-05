@@ -139,6 +139,58 @@ describe("WorkflowJobQueue", () => {
     );
   });
 
+  it("notifies operators when persisted active jobs are recovered as failed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-job-recovery-notice-test-"));
+    tempRoots.push(root);
+    const stateFile = join(root, "jobs.json");
+    await writeFile(
+      stateFile,
+      JSON.stringify(
+        [
+          {
+            id: "running-job",
+            workflowId: "workflow-2",
+            status: "running",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:01.000Z",
+            startedAt: "2026-06-05T00:00:01.000Z"
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+    const recoveredJobs: Array<{
+      before: string;
+      after: string;
+      jobId: string;
+      workflowId: string;
+    }> = [];
+
+    new WorkflowJobQueue({
+      runner: new LocalRunner(),
+      jobStore: new FileJobStore({ stateFile }),
+      onJobRecovered: ({ original, recovered }) => {
+        recoveredJobs.push({
+          before: original.status,
+          after: recovered.status,
+          jobId: recovered.id,
+          workflowId: recovered.workflowId
+        });
+      }
+    });
+
+    expect(recoveredJobs).toEqual([
+      {
+        before: "running",
+        after: "failed",
+        jobId: "running-job",
+        workflowId: "workflow-2"
+      }
+    ]);
+  });
+
   it("rejects duplicate jobs while a workflow already has an active job", async () => {
     vi.useFakeTimers();
     const runner = new LocalRunner();

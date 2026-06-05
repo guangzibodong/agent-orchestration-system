@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -525,6 +525,51 @@ describe("runner API", () => {
     expect(limitedResponse.statusCode).toBe(200);
     expect(limited.map((job: { id: string }) => job.id)).toEqual(
       jobs.slice(-2).map((job: { id: string }) => job.id)
+    );
+  });
+
+  it("records audit events for jobs recovered after API restart", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-recovery-audit-test-"));
+    const stateRoot = join(demoRoot, ".mawo", "state");
+    tempRoots.push(demoRoot);
+    await mkdir(stateRoot, { recursive: true });
+    await writeFile(
+      join(stateRoot, "jobs.json"),
+      JSON.stringify(
+        [
+          {
+            id: "running-job",
+            workflowId: "workflow-2",
+            status: "running",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:01.000Z",
+            startedAt: "2026-06-05T00:00:01.000Z"
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const app = buildApp(undefined, { demoRoot });
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+
+    expect(auditResponse.statusCode).toBe(200);
+    expect(auditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "job.recovered",
+        actor: "system",
+        workflowId: "workflow-2",
+        jobId: "running-job",
+        metadata: expect.objectContaining({
+          previousStatus: "running",
+          recoveredStatus: "failed"
+        })
+      })
     );
   });
 

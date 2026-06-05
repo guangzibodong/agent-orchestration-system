@@ -23,6 +23,10 @@ export type WorkflowJob = {
 export type WorkflowJobQueueOptions = {
   runner: LocalRunner;
   jobStore?: JobStore;
+  onJobRecovered?: (event: {
+    original: WorkflowJob;
+    recovered: WorkflowJob;
+  }) => void;
 };
 
 export class WorkflowAlreadyRunningError extends Error {
@@ -57,6 +61,10 @@ export class WorkflowJobQueue {
       this.jobs.set(restored.id, restored);
       if (restored !== job) {
         this.jobStore?.save(restored);
+        options.onJobRecovered?.({
+          original: job,
+          recovered: restored
+        });
       }
     }
   }

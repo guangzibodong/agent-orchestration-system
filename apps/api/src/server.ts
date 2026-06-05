@@ -98,7 +98,20 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       options.jobStore ??
       new FileJobStore({
         stateFile: join(root, ".mawo", "state", "jobs.json")
-      })
+      }),
+    onJobRecovered: ({ original, recovered }) => {
+      auditStore.append({
+        type: "job.recovered",
+        actor: "system",
+        workflowId: recovered.workflowId,
+        jobId: recovered.id,
+        metadata: {
+          previousStatus: original.status,
+          recoveredStatus: recovered.status,
+          error: recovered.error ?? ""
+        }
+      });
+    }
   });
   const repositoryStore =
     options.repositoryStore ??
