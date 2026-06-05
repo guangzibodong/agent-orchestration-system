@@ -258,6 +258,9 @@ export class LocalRunner {
   private readonly runStore?: RunStore;
   private readonly artifactStore?: ArtifactStore;
   private readonly eventSink?: (event: WorkflowRuntimeEvent) => void;
+  private readonly readyPromise: Promise<void>;
+  private pendingPersistence = Promise.resolve();
+  private readyState = false;
 
   constructor(shell = new ShellAdapter(), options: LocalRunnerOptions = {}) {
     this.shell = shell;
@@ -267,9 +270,40 @@ export class LocalRunner {
     for (const config of options.cliAgents ?? []) {
       this.cliAgents.set(config.id, new CliAgentAdapter(config, this.shell));
     }
-    for (const run of this.runStore?.list() ?? []) {
+    this.readyPromise = this.restoreRuns();
+  }
+
+  async ready(): Promise<void> {
+    await this.readyPromise;
+  }
+
+  async flush(): Promise<void> {
+    await this.ready();
+    await this.pendingPersistence;
+  }
+
+  isReady(): boolean {
+    return this.readyState;
+  }
+
+  private restoreRuns(): Promise<void> {
+    const restoredRuns = this.runStore?.list() ?? [];
+
+    if (isPromiseLike(restoredRuns)) {
+      return restoredRuns.then((runs) => {
+        this.loadRuns(runs);
+      });
+    }
+
+    this.loadRuns(restoredRuns);
+    return Promise.resolve();
+  }
+
+  private loadRuns(runs: LocalWorkflowRun[]): void {
+    for (const run of runs) {
       this.runs.set(run.id, run);
     }
+    this.readyState = true;
   }
 
   createWorkflow(definition: WorkflowDefinition): LocalWorkflowRun {
@@ -779,7 +813,17 @@ export class LocalRunner {
   }
 
   private persist(run: LocalWorkflowRun): void {
-    this.runStore?.save(run);
+    if (!this.runStore) {
+      return;
+    }
+
+    const snapshot = structuredClone(run);
+    this.pendingPersistence = this.pendingPersistence
+      .catch(() => undefined)
+      .then(async () => {
+        await this.runStore?.save(snapshot);
+      });
+    void this.pendingPersistence.catch(() => undefined);
   }
 
   private emitEvent(event: WorkflowRuntimeEvent): void {
@@ -809,6 +853,12 @@ export class LocalRunner {
   private lastTaskWorkspacePath(run: LocalWorkflowRun): string | undefined {
     return [...run.tasks].reverse().find((task) => task.workspace)?.workspace?.path;
   }
+}
+
+function isPromiseLike<T>(value: T | Promise<T> | undefined): value is Promise<T> {
+  return Boolean(
+    value && typeof (value as Promise<T>).then === "function"
+  );
 }
 
 function resolveTaskCwd(workspacePath: string, cwd?: string): string {

@@ -30,7 +30,7 @@ import {
   FileRepositoryStore,
   type RepositoryStore
 } from "./runner/file-repository-store.js";
-import { FileRunStore } from "./runner/file-run-store.js";
+import { FileRunStore, type RunStore } from "./runner/file-run-store.js";
 import {
   createAgentHealthChecks,
   createAgentSummaries,
@@ -62,6 +62,7 @@ export type BuildAppOptions = {
   env?: Record<string, string | undefined>;
   auditStore?: AuditStore;
   jobStore?: JobStore;
+  runStore?: RunStore;
   repositoryStore?: RepositoryStore;
 };
 
@@ -115,9 +116,11 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     runner ??
     new LocalRunner(undefined, {
       cliAgents,
-      runStore: new FileRunStore({
-        stateFile: join(stateRoot, "workflows.json")
-      }),
+      runStore:
+        options.runStore ??
+        new FileRunStore({
+          stateFile: join(stateRoot, "workflows.json")
+        }),
       artifactStore: new FileArtifactStore({
         root: artifactRoot
       }),
@@ -169,6 +172,12 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         }
       });
     }
+  });
+  app.addHook("onReady", async () => {
+    await activeRunner.ready();
+    await queue.ready();
+    await activeRunner.flush();
+    await queue.flush();
   });
   const repositoryStore =
     options.repositoryStore ??
@@ -453,6 +462,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.post("/workflows/demo", async (_request, reply) => {
     const run = activeRunner.createWorkflow(createDemoWorkflowDefinition());
+    await activeRunner.flush();
 
     await appendAuditEvent({
       type: "workflow.created",
@@ -469,6 +479,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.post("/workflows/worktree-demo", async (_request, reply) => {
     const definition = await createWorktreeDemoWorkflowDefinition(options.demoRoot);
     const run = activeRunner.createWorkflow(definition);
+    await activeRunner.flush();
 
     await appendAuditEvent({
       type: "workflow.created",
@@ -485,6 +496,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.post("/workflows/agent-demo", async (_request, reply) => {
     const definition = await createAgentDemoWorkflowDefinition(options.demoRoot);
     const run = activeRunner.createWorkflow(definition);
+    await activeRunner.flush();
 
     await appendAuditEvent({
       type: "workflow.created",
@@ -545,6 +557,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         }
       );
       const run = activeRunner.createWorkflow(definition);
+      await activeRunner.flush();
 
       await appendAuditEvent({
         type: "workflow.created",
@@ -588,6 +601,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     try {
       const run = activeRunner.reviewWorkflow(request.params.id, parsed.data);
+      await activeRunner.flush();
 
       await appendAuditEvent({
         type: "workflow.reviewed",
@@ -632,6 +646,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       const cleanup = await activeRunner.cleanupWorkflowWorkspaces(
         request.params.id
       );
+      await activeRunner.flush();
 
       await appendAuditEvent({
         type: "workflow.workspaces_cleaned",
@@ -675,7 +690,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     Params: { id: string };
   }>("/workflows/:id/run", async (request, reply) => {
     try {
-      return await activeRunner.runWorkflow(request.params.id);
+      const run = await activeRunner.runWorkflow(request.params.id);
+      await activeRunner.flush();
+      return run;
     } catch {
       return reply.code(404).send({ error: "workflow_not_found" });
     }
@@ -691,6 +708,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     try {
       const retry = await activeRunner.retryWorkflowWithResult(request.params.id);
       const run = retry.run;
+      await activeRunner.flush();
 
       await appendAuditEvent({
         type: "workflow.retry_requested",
@@ -733,6 +751,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     try {
       const job = queue.enqueue(request.params.id);
+      await queue.flush();
 
       await appendAuditEvent({
         type: "workflow.enqueued",
@@ -810,6 +829,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       return reply.code(404).send({ error: "job_not_found" });
     }
 
+    await queue.flush();
     const workflow = activeRunner.getWorkflow(job.workflowId);
     await appendAuditEvent({
       type: "job.canceled",

@@ -5,12 +5,15 @@ import type { AuditEvent, RepositoryRegistrationRequest } from "@mawo/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./server.js";
 import type { AuditEventInput, AuditStore } from "./runner/file-audit-store.js";
+import type { JobStore } from "./runner/file-job-store.js";
+import type { RunStore } from "./runner/file-run-store.js";
 import type {
   RepositoryStore,
   RepositoryUpsertResult
 } from "./runner/file-repository-store.js";
-import { LocalRunner } from "./runner/local-runner.js";
+import { LocalRunner, type LocalWorkflowRun } from "./runner/local-runner.js";
 import { ShellAdapter } from "./runner/shell-adapter.js";
+import type { WorkflowJob } from "./runner/workflow-job-queue.js";
 
 const tempRoots: string[] = [];
 const node = JSON.stringify(process.execPath);
@@ -24,6 +27,12 @@ async function run(command: string, cwd: string) {
   }
 
   return result;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function createCommittedRepo() {
@@ -1809,6 +1818,135 @@ describe("runner API", () => {
           repositoryId: "async-repository",
           repositoryPath: repoPath
         })
+      })
+    ]);
+  });
+
+  it("awaits asynchronous workflow and job stores before serving runtime reads", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-async-runtime-test-"));
+    tempRoots.push(demoRoot);
+    const workflow: LocalWorkflowRun = {
+      id: "async-workflow",
+      goal: "Restore async runtime state",
+      status: "needs_review",
+      executionMode: "direct",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:01:00.000Z",
+      tasks: [],
+      qualityGates: []
+    };
+    const job: WorkflowJob = {
+      id: "async-job",
+      workflowId: workflow.id,
+      status: "completed",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:02:00.000Z",
+      startedAt: "2026-06-05T00:00:30.000Z",
+      finishedAt: "2026-06-05T00:02:00.000Z"
+    };
+    const runStore = {
+      async list() {
+        await delay(5);
+        return [workflow];
+      },
+      async save() {
+        await delay(5);
+      }
+    } as RunStore;
+    const jobStore = {
+      async list() {
+        await delay(5);
+        return [job];
+      },
+      async save() {
+        await delay(5);
+      }
+    } as JobStore;
+    const app = buildApp(undefined, {
+      demoRoot,
+      jobStore,
+      runStore
+    });
+
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${workflow.id}`
+    });
+    const jobResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${job.id}`
+    });
+
+    expect(workflowResponse.statusCode).toBe(200);
+    expect(workflowResponse.json()).toMatchObject({
+      id: workflow.id,
+      status: "needs_review"
+    });
+    expect(jobResponse.statusCode).toBe(200);
+    expect(jobResponse.json()).toMatchObject({
+      id: job.id,
+      workflowId: workflow.id,
+      status: "completed"
+    });
+  });
+
+  it("awaits asynchronous workflow and job saves before write responses", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-async-save-test-"));
+    tempRoots.push(demoRoot);
+    const savedWorkflows: LocalWorkflowRun[] = [];
+    const savedJobs: WorkflowJob[] = [];
+    const runStore = {
+      async list() {
+        return [];
+      },
+      async save(run: LocalWorkflowRun) {
+        const snapshot = structuredClone(run);
+        await delay(5);
+        savedWorkflows.push(snapshot);
+      }
+    } as RunStore;
+    const jobStore = {
+      async list() {
+        return [];
+      },
+      async save(job: WorkflowJob) {
+        const snapshot = { ...job };
+        await delay(5);
+        savedJobs.push(snapshot);
+      }
+    } as JobStore;
+    const app = buildApp(undefined, {
+      demoRoot,
+      jobStore,
+      runStore
+    });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const created = createResponse.json();
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(savedWorkflows).toEqual([
+      expect.objectContaining({
+        id: created.id,
+        status: "ready"
+      })
+    ]);
+
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/enqueue`
+    });
+    const job = enqueueResponse.json();
+
+    expect(enqueueResponse.statusCode).toBe(202);
+    expect(savedJobs).toEqual([
+      expect.objectContaining({
+        id: job.id,
+        workflowId: created.id,
+        status: "queued"
       })
     ]);
   });

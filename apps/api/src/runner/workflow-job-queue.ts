@@ -47,14 +47,57 @@ export class WorkflowJobQueue {
   private readonly jobs = new Map<string, WorkflowJob>();
   private readonly waiters = new Map<string, Array<(job: WorkflowJob) => void>>();
   private readonly controllers = new Map<string, AbortController>();
+  private readonly readyPromise: Promise<void>;
+  private pendingPersistence = Promise.resolve();
+  private readyState = false;
+  private readonly onJobRecovered?: WorkflowJobQueueOptions["onJobRecovered"];
 
   constructor(options: WorkflowJobQueueOptions) {
     this.runner = options.runner;
     this.jobStore = options.jobStore;
+    this.onJobRecovered = options.onJobRecovered;
     this.maxConcurrentJobs = normalizeMaxConcurrentJobs(
       options.maxConcurrentJobs
     );
-    for (const job of this.jobStore?.list() ?? []) {
+    this.readyPromise = this.restorePersistedJobs();
+  }
+
+  async ready(): Promise<void> {
+    await this.readyPromise;
+  }
+
+  async flush(): Promise<void> {
+    await this.ready();
+    await this.pendingPersistence;
+  }
+
+  isReady(): boolean {
+    return this.readyState;
+  }
+
+  private restorePersistedJobs(): Promise<void> {
+    const restoredJobs = this.jobStore?.list() ?? [];
+
+    if (isPromiseLike(restoredJobs) || !this.runner.isReady()) {
+      return Promise.resolve(restoredJobs).then(async (jobs) => {
+        await this.runner.ready();
+        await this.loadJobs(jobs);
+      });
+    }
+
+    const loaded = this.loadJobs(restoredJobs);
+
+    if (isPromiseLike(loaded)) {
+      return loaded;
+    }
+
+    return Promise.resolve();
+  }
+
+  private loadJobs(jobs: WorkflowJob[]): Promise<void> | void {
+    const persistedRecoveries: Array<Promise<unknown>> = [];
+
+    for (const job of jobs) {
       if (this.isTerminal(job)) {
         this.jobs.set(job.id, job);
         continue;
@@ -73,11 +116,20 @@ export class WorkflowJobQueue {
         error: "Job was interrupted by API restart."
       };
       this.jobs.set(restored.id, restored);
-      this.jobStore?.save(restored);
-      options.onJobRecovered?.({
+      const persisted = this.jobStore?.save(restored);
+      if (isPromiseLike(persisted)) {
+        persistedRecoveries.push(persisted);
+      }
+      this.onJobRecovered?.({
         original: job,
         recovered: restored
       });
+    }
+
+    this.readyState = true;
+
+    if (persistedRecoveries.length > 0) {
+      return Promise.all(persistedRecoveries).then(() => undefined);
     }
   }
 
@@ -98,7 +150,7 @@ export class WorkflowJobQueue {
     };
 
     this.jobs.set(job.id, job);
-    this.jobStore?.save(job);
+    this.persist(job);
     this.scheduleProcess();
 
     return job;
@@ -250,7 +302,7 @@ export class WorkflowJobQueue {
       updatedAt: new Date().toISOString()
     });
     this.jobs.set(job.id, job);
-    this.jobStore?.save(job);
+    this.persist(job);
 
     for (const waiter of this.waiters.get(job.id) ?? []) {
       waiter(job);
@@ -259,6 +311,20 @@ export class WorkflowJobQueue {
 
   private isTerminal(job: WorkflowJob): boolean {
     return ["completed", "failed", "canceled"].includes(job.status);
+  }
+
+  private persist(job: WorkflowJob): void {
+    if (!this.jobStore) {
+      return;
+    }
+
+    const snapshot = { ...job };
+    this.pendingPersistence = this.pendingPersistence
+      .catch(() => undefined)
+      .then(async () => {
+        await this.jobStore?.save(snapshot);
+      });
+    void this.pendingPersistence.catch(() => undefined);
   }
 }
 
@@ -272,4 +338,10 @@ function normalizeMaxConcurrentJobs(value: number | undefined): number {
   }
 
   return Math.max(1, Math.floor(value));
+}
+
+function isPromiseLike<T>(value: T | Promise<T> | undefined): value is Promise<T> {
+  return Boolean(
+    value && typeof (value as Promise<T>).then === "function"
+  );
 }

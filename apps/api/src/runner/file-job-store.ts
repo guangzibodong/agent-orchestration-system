@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { workflowJobSchema, type WorkflowJob } from "@mawo/shared";
 import { writeJsonFileAtomically } from "./atomic-json-file.js";
+import type { MaybePromise } from "./file-run-store.js";
 
 export type JobStore = {
-  list(): WorkflowJob[];
-  save(job: WorkflowJob): void;
+  list(): MaybePromise<WorkflowJob[]>;
+  save(job: WorkflowJob): MaybePromise<void>;
 };
 
 export type FileJobStoreOptions = {

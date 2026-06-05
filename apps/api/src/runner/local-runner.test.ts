@@ -3,8 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { RunStore } from "./file-run-store.js";
 import { ShellAdapter } from "./shell-adapter.js";
-import { LocalRunner } from "./local-runner.js";
+import { LocalRunner, type LocalWorkflowRun } from "./local-runner.js";
 
 const node = JSON.stringify(process.execPath);
 const shell = new ShellAdapter();
@@ -34,6 +35,12 @@ async function createCommittedRepo() {
   return repoPath;
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 afterEach(async () => {
   for (const root of tempRoots.splice(0)) {
     await rm(root, { recursive: true, force: true });
@@ -41,6 +48,37 @@ afterEach(async () => {
 });
 
 describe("LocalRunner", () => {
+  it("hydrates workflows from asynchronous run stores before serving reads", async () => {
+    const persistedRun: LocalWorkflowRun = {
+      id: "persisted-workflow",
+      goal: "Restore async workflow state",
+      status: "needs_review",
+      executionMode: "direct",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:01:00.000Z",
+      tasks: [],
+      qualityGates: []
+    };
+    const store = {
+      async list() {
+        await delay(5);
+        return [persistedRun];
+      },
+      async save() {
+        await delay(5);
+      }
+    } as RunStore;
+    const runner = new LocalRunner(undefined, {
+      runStore: store
+    });
+
+    expect(runner.getWorkflow(persistedRun.id)).toBeUndefined();
+
+    await runner.ready();
+
+    expect(runner.getWorkflow(persistedRun.id)).toEqual(persistedRun);
+  });
+
   it("runs workflow tasks and quality gates into a review-ready report", async () => {
     const runner = new LocalRunner();
 

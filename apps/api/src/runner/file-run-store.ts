@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { writeJsonFileAtomically } from "./atomic-json-file.js";
 import type { LocalWorkflowRun } from "./local-runner.js";
 
+export type MaybePromise<T> = T | Promise<T>;
+
 export type RunStore = {
-  list(): LocalWorkflowRun[];
-  save(run: LocalWorkflowRun): void;
+  list(): MaybePromise<LocalWorkflowRun[]>;
+  save(run: LocalWorkflowRun): MaybePromise<void>;
 };
 
 export type FileRunStoreOptions = {

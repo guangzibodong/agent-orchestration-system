@@ -3,9 +3,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FileJobStore } from "./file-job-store.js";
+import { FileJobStore, type JobStore } from "./file-job-store.js";
 import { LocalRunner } from "./local-runner.js";
-import { WorkflowJobQueue } from "./workflow-job-queue.js";
+import {
+  WorkflowJobQueue,
+  type WorkflowJob
+} from "./workflow-job-queue.js";
 
 const node = JSON.stringify(process.execPath);
 const tempRoots: string[] = [];
@@ -86,6 +89,58 @@ describe("WorkflowJobQueue", () => {
       status: "completed"
     });
     expect(restoredQueue.listJobs().map((restored) => restored.id)).toContain(job.id);
+  });
+
+  it("hydrates and recovers persisted jobs from asynchronous job stores", async () => {
+    const runningJob: WorkflowJob = {
+      id: "async-running-job",
+      workflowId: "workflow-1",
+      status: "running",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:01:00.000Z",
+      startedAt: "2026-06-05T00:01:00.000Z"
+    };
+    const savedJobs: WorkflowJob[] = [];
+    const store = {
+      async list() {
+        await delay(5);
+        return [runningJob];
+      },
+      async save(job: WorkflowJob) {
+        await delay(5);
+        savedJobs.push({ ...job });
+      }
+    } as JobStore;
+    const recoveredJobs: WorkflowJob[] = [];
+    const queue = new WorkflowJobQueue({
+      runner: new LocalRunner(),
+      jobStore: store,
+      onJobRecovered: ({ recovered }) => {
+        recoveredJobs.push(recovered);
+      }
+    });
+
+    expect(queue.getJob(runningJob.id)).toBeUndefined();
+
+    await queue.ready();
+
+    expect(queue.getJob(runningJob.id)).toMatchObject({
+      id: runningJob.id,
+      status: "failed",
+      error: "Job was interrupted by API restart."
+    });
+    expect(savedJobs).toEqual([
+      expect.objectContaining({
+        id: runningJob.id,
+        status: "failed"
+      })
+    ]);
+    expect(recoveredJobs).toEqual([
+      expect.objectContaining({
+        id: runningJob.id,
+        status: "failed"
+      })
+    ]);
   });
 
   it("resumes persisted queued jobs and marks running jobs failed on queue startup", async () => {
