@@ -332,7 +332,25 @@ async function main() {
       typeof workspacePath?.path === "string" && !existsSync(workspacePath.path),
       "Workspace cleanup did not remove the task worktree path.",
     );
-    log("completed workflow workspaces were cleaned after review");
+    const secondCleanup = await request(
+      baseUrl,
+      "POST",
+      `/workflows/${workflowId}/workspaces/cleanup`,
+    );
+    assert(
+      secondCleanup.status === 200,
+      `Second workspace cleanup returned ${secondCleanup.status}`,
+    );
+    assert(
+      secondCleanup.body.status === "empty",
+      `Second workspace cleanup status was ${String(secondCleanup.body.status)}`,
+    );
+    assert(
+      Array.isArray(secondCleanup.body.cleaned) &&
+        secondCleanup.body.cleaned.length === 0,
+      "Second workspace cleanup should not report already removed worktrees.",
+    );
+    log("completed workflow workspaces were cleaned after review and cleanup is idempotent");
 
     const slowMarkerPath = join(smokeRoot, "slow-marker.txt").replace(
       /\\/g,
@@ -505,6 +523,18 @@ async function main() {
       "Audit log did not include workspace cleanup metadata for the cleaned worktree.",
     );
     assert(
+      events.some((event) => {
+        const metadata = event.metadata as JsonObject | undefined;
+        return (
+          event.type === "workflow.workspaces_cleaned" &&
+          event.workflowId === workflowId &&
+          metadata?.status === "empty" &&
+          metadata.cleanedCount === "0"
+        );
+      }),
+      "Audit log did not include the idempotent empty cleanup event.",
+    );
+    assert(
       events.some(
         (event) =>
           event.type === "workflow.task_completed" &&
@@ -554,6 +584,7 @@ async function main() {
           report: report.body.summary,
           mergeCandidate: mergeCandidate.body.summary,
           workspaceCleanup: cleanup.body.status,
+          secondWorkspaceCleanup: secondCleanup.body.status,
           canceledJobId: cancelJobId,
         },
         null,
