@@ -124,6 +124,71 @@ describe("runner API", () => {
     expect(JSON.stringify(health)).not.toContain("{promptFile}");
   });
 
+  it("reports deployment readiness without exposing agent command templates", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-readiness-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        MAWO_API_TOKEN: "secret-token",
+        MAWO_CODEX_COMMAND_TEMPLATE:
+          "missing-codex-binary run --prompt-file {promptFile}"
+      }
+    });
+
+    const rejectedResponse = await app.inject({
+      method: "GET",
+      url: "/readiness"
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/readiness",
+      headers: {
+        authorization: "Bearer secret-token"
+      }
+    });
+    const readiness = response.json();
+
+    expect(rejectedResponse.statusCode).toBe(401);
+    expect(response.statusCode).toBe(200);
+    expect(readiness).toMatchObject({
+      ok: false,
+      service: "mawo-api",
+      protectedByToken: true,
+      activeJobs: 0
+    });
+    expect(readiness.checkedAt).toEqual(expect.any(String));
+    expect(readiness.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "state_store",
+          ok: true,
+          status: "ready",
+          path: join(demoRoot, ".mawo", "state")
+        }),
+        expect.objectContaining({
+          id: "artifact_store",
+          ok: true,
+          status: "ready",
+          path: join(demoRoot, ".mawo", "artifacts")
+        }),
+        expect.objectContaining({
+          id: "git_cli",
+          ok: true,
+          status: "ready"
+        }),
+        expect.objectContaining({
+          id: "agents",
+          ok: false,
+          status: "degraded",
+          healthyAgents: 1,
+          totalAgents: 2
+        })
+      ])
+    );
+    expect(JSON.stringify(readiness)).not.toContain("{promptFile}");
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

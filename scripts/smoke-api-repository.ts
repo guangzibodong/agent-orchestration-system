@@ -194,6 +194,36 @@ async function main() {
     );
     log("agent health endpoint reports configured agents without leaking templates");
 
+    const readiness = await request(baseUrl, "GET", "/readiness");
+    assert(
+      readiness.status === 200,
+      `GET /readiness returned ${readiness.status}`,
+    );
+    const readinessChecks = readiness.body.checks as Array<JsonObject>;
+    assert(readiness.body.ok === true, "Readiness endpoint did not return ok=true.");
+    assert(
+      readiness.body.protectedByToken === Boolean(process.env.MAWO_API_TOKEN),
+      "Readiness endpoint did not report token protection state.",
+    );
+    assert(
+      readinessChecks.some(
+        (check) => check.id === "state_store" && check.ok === true,
+      ) &&
+        readinessChecks.some(
+          (check) => check.id === "artifact_store" && check.ok === true,
+        ) &&
+        readinessChecks.some(
+          (check) => check.id === "git_cli" && check.ok === true,
+        ) &&
+        readinessChecks.some((check) => check.id === "agents" && check.ok === true),
+      "Readiness endpoint did not report all production checks as ready.",
+    );
+    assert(
+      !JSON.stringify(readiness.body).includes("{promptFile}"),
+      "Readiness endpoint leaked a command template.",
+    );
+    log("readiness endpoint reports production checks without leaking templates");
+
     const recoveredWorkflow = await request(
       baseUrl,
       "GET",

@@ -11,6 +11,7 @@ path does not require them for workflow execution.
 - Web UI: Next.js, default `http://127.0.0.1:3000`
 - API: Fastify, default `http://127.0.0.1:4000`
 - Health endpoint: `GET /health`
+- Readiness endpoint: `GET /readiness` for protected production checks.
 - Workflow state: `.mawo/state/workflows.json`
 - Job history: `.mawo/state/jobs.json`
 - Repository registry: `.mawo/state/repositories.json`
@@ -90,12 +91,14 @@ Open:
 
 - Web: `http://127.0.0.1:3000`
 - API health: `http://127.0.0.1:4000/health`
+- API readiness: `http://127.0.0.1:4000/readiness`
 - Agent health: `http://127.0.0.1:4000/agents/health`
 
 PowerShell health check:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:4000/health
+Invoke-RestMethod http://127.0.0.1:4000/readiness
 Invoke-RestMethod http://127.0.0.1:4000/agents
 Invoke-RestMethod http://127.0.0.1:4000/agents/health
 ```
@@ -124,6 +127,26 @@ template. Real agents can be `healthy`, `auth_unchecked`, `auth_failed`, or
     "status": "healthy"
   }
 ]
+```
+
+Expected readiness response includes deployability checks for `.mawo/state`,
+`.mawo/artifacts`, Git CLI availability, agent health, token protection, and
+active queue pressure. In production, treat `ok=false` as a deployment blocker
+until each degraded check is resolved:
+
+```json
+{
+  "ok": true,
+  "service": "mawo-api",
+  "protectedByToken": true,
+  "activeJobs": 0,
+  "checks": [
+    { "id": "state_store", "ok": true, "status": "ready" },
+    { "id": "artifact_store", "ok": true, "status": "ready" },
+    { "id": "git_cli", "ok": true, "status": "ready" },
+    { "id": "agents", "ok": true, "status": "ready" }
+  ]
+}
 ```
 
 ## 4. Docker Compose Stack
@@ -408,6 +431,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `npm run build` passes.
 - [ ] `docker compose config` succeeds on the target host.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
+- [ ] `GET /readiness` returns `ok=true`, reports token protection, and marks
+      `state_store`, `artifact_store`, `git_cli`, and `agents` as ready.
 - [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
       configured production agent reports `missing_command` or `auth_failed`.
 - [ ] Web starts and can reach the configured API URL from the browser.

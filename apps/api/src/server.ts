@@ -8,7 +8,16 @@ import {
   workflowReviewRequestSchema
 } from "@mawo/shared";
 import Fastify from "fastify";
-import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+  unlinkSync
+} from "node:fs";
 import { resolve, sep, join, isAbsolute } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
@@ -60,6 +69,7 @@ const JOB_TIMELINE_WORKFLOW_EVENT_TYPES = new Set([
 
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const root = options.demoRoot ?? process.cwd();
+  const stateRoot = join(root, ".mawo", "state");
   const artifactRoot = join(root, ".mawo", "artifacts");
   const env = options.env ?? process.env;
   const apiToken = env.MAWO_API_TOKEN?.trim();
@@ -77,7 +87,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     new LocalRunner(undefined, {
       cliAgents,
       runStore: new FileRunStore({
-        stateFile: join(root, ".mawo", "state", "workflows.json")
+        stateFile: join(stateRoot, "workflows.json")
       }),
       artifactStore: new FileArtifactStore({
         root: artifactRoot
@@ -109,7 +119,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     jobStore:
       options.jobStore ??
       new FileJobStore({
-        stateFile: join(root, ".mawo", "state", "jobs.json")
+        stateFile: join(stateRoot, "jobs.json")
       }),
     onJobRecovered: ({ original, recovered }) => {
       const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
@@ -136,7 +146,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const repositoryStore =
     options.repositoryStore ??
     new FileRepositoryStore({
-      stateFile: join(root, ".mawo", "state", "repositories.json")
+      stateFile: join(stateRoot, "repositories.json")
     });
 
   app.register(cors, {
@@ -163,6 +173,52 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     return {
       ok: true,
       service: "mawo-api"
+    };
+  });
+
+  app.get("/readiness", async () => {
+    const checkedAt = new Date().toISOString();
+    const storeChecks = [
+      createWritableDirectoryCheck("state_store", "State store", stateRoot),
+      createWritableDirectoryCheck(
+        "artifact_store",
+        "Artifact store",
+        artifactRoot
+      )
+    ];
+    const gitCheck = createGitCliCheck();
+    const agentHealth = await createAgentHealthChecks(cliAgents);
+    const healthyAgents = agentHealth.filter((agent) => agent.healthy).length;
+    const agentsCheck = {
+      id: "agents",
+      label: "Agent health",
+      ok: healthyAgents === agentHealth.length,
+      status: healthyAgents === agentHealth.length ? "ready" : "degraded",
+      healthyAgents,
+      totalAgents: agentHealth.length,
+      degradedAgents: agentHealth
+        .filter((agent) => !agent.healthy)
+        .map((agent) => ({
+          id: agent.id,
+          status: agent.status,
+          message: agent.message,
+          command: agent.command
+        }))
+    };
+    const activeJobs = queue
+      .listJobs()
+      .filter((job) => job.status === "queued" || job.status === "running")
+      .length;
+    const checks = [...storeChecks, gitCheck, agentsCheck];
+
+    return {
+      ok: checks.every((check) => check.ok),
+      service: "mawo-api",
+      checkedAt,
+      protectedByToken: Boolean(apiToken),
+      root,
+      activeJobs,
+      checks
     };
   });
 
@@ -943,4 +999,66 @@ function readArtifactPrefix(path: string, maxBytes: number): string {
   } finally {
     closeSync(file);
   }
+}
+
+function createWritableDirectoryCheck(
+  id: string,
+  label: string,
+  path: string
+) {
+  try {
+    mkdirSync(path, { recursive: true });
+    const probePath = join(
+      path,
+      `.readiness-${process.pid}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`
+    );
+    const file = openSync(probePath, "w");
+    closeSync(file);
+    unlinkSync(probePath);
+
+    return {
+      id,
+      label,
+      ok: true,
+      status: "ready",
+      path
+    };
+  } catch (error) {
+    return {
+      id,
+      label,
+      ok: false,
+      status: "failed",
+      path,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+function createGitCliCheck() {
+  const result = spawnSync("git", ["--version"], {
+    encoding: "utf8",
+    windowsHide: true
+  });
+  const version = result.stdout.trim();
+
+  if (result.status === 0) {
+    return {
+      id: "git_cli",
+      label: "Git CLI",
+      ok: true,
+      status: "ready",
+      version
+    };
+  }
+
+  return {
+    id: "git_cli",
+    label: "Git CLI",
+    ok: false,
+    status: "failed",
+    message: result.stderr.trim() || "git --version failed"
+  };
 }

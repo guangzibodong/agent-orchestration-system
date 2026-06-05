@@ -89,6 +89,7 @@ $env:PATH = "$root\.tools\node;$root\.tools\git\cmd;$env:PATH"
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:4000`
 - Health: `http://127.0.0.1:4000/health`
+- Readiness: `http://127.0.0.1:4000/readiness`
 
 常用验证命令：
 
@@ -186,6 +187,7 @@ Invoke-RestMethod -Method Post `
 
 ```text
 GET  /health
+GET  /readiness
 GET  /agents
 GET  /agents/health
 GET  /workflows
