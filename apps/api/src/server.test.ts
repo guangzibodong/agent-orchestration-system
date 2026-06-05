@@ -328,6 +328,42 @@ describe("runner API", () => {
     });
   });
 
+  it("returns only the requested artifact prefix for large files", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-limit-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/worktree-demo"
+    });
+    const created = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const reportResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/report`
+    });
+    const report = reportResponse.json();
+    await writeFile(report.reportArtifactPath, "🙂🙂🙂", "utf8");
+
+    const artifactResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/artifact?maxBytes=8&path=${encodeURIComponent(
+        report.reportArtifactPath
+      )}`
+    });
+    const artifact = artifactResponse.json();
+
+    expect(artifactResponse.statusCode).toBe(200);
+    expect(artifact.truncated).toBe(true);
+    expect(artifact.maxBytes).toBe(8);
+    expect(artifact.sizeBytes).toBe(12);
+    expect(Buffer.byteLength(artifact.content, "utf8")).toBeLessThanOrEqual(8);
+  });
+
   it("persists audit events for operator workflow actions across API rebuilds", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-audit-test-"));
     const repoPath = await createCommittedRepo();

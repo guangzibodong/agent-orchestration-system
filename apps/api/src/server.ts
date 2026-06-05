@@ -5,7 +5,7 @@ import {
   workflowReviewRequestSchema
 } from "@mawo/shared";
 import Fastify from "fastify";
-import { existsSync, statSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { resolve, sep, join, isAbsolute } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
@@ -598,8 +598,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     const sizeBytes = statSync(artifactPath).size;
     const maxBytes = parseArtifactMaxBytes(request.query.maxBytes);
-    const content = readFileSync(artifactPath, "utf8");
-    const truncated = Buffer.byteLength(content, "utf8") > maxBytes;
+    const truncated = sizeBytes > maxBytes;
+    const content = readArtifactPrefix(artifactPath, maxBytes);
 
     return {
       workflowId: request.params.id,
@@ -691,4 +691,22 @@ function parseArtifactMaxBytes(value?: string): number {
   }
 
   return Math.min(parsed, defaultMaxBytes);
+}
+
+function readArtifactPrefix(path: string, maxBytes: number): string {
+  const file = openSync(path, "r");
+
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = readSync(file, buffer, 0, maxBytes, 0);
+    let content = buffer.subarray(0, bytesRead).toString("utf8");
+
+    while (Buffer.byteLength(content, "utf8") > maxBytes) {
+      content = content.slice(0, -1);
+    }
+
+    return content;
+  } finally {
+    closeSync(file);
+  }
 }
