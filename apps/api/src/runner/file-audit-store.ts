@@ -20,9 +20,11 @@ export type AuditEventFilter = {
   workflowId?: string;
 };
 
+type MaybePromise<T> = T | Promise<T>;
+
 export type AuditStore = {
-  list(filter?: AuditEventFilter): AuditEvent[];
-  append(event: AuditEventInput): AuditEvent;
+  list(filter?: AuditEventFilter): MaybePromise<AuditEvent[]>;
+  append(event: AuditEventInput): MaybePromise<AuditEvent>;
 };
 
 export type FileAuditStoreOptions = {

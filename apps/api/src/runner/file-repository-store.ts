@@ -14,11 +14,13 @@ export type RepositoryUpsertResult = {
   previous?: RepositoryRecord;
 };
 
+type MaybePromise<T> = T | Promise<T>;
+
 export type RepositoryStore = {
-  list(): RepositoryRecord[];
-  get(id: string): RepositoryRecord | undefined;
-  upsert(input: RepositoryRegistrationRequest): RepositoryUpsertResult;
-  remove(id: string): RepositoryRecord | undefined;
+  list(): MaybePromise<RepositoryRecord[]>;
+  get(id: string): MaybePromise<RepositoryRecord | undefined>;
+  upsert(input: RepositoryRegistrationRequest): MaybePromise<RepositoryUpsertResult>;
+  remove(id: string): MaybePromise<RepositoryRecord | undefined>;
 };
 
 export type FileRepositoryStoreOptions = {

@@ -1,8 +1,14 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
+import type { AuditEvent, RepositoryRegistrationRequest } from "@mawo/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./server.js";
+import type { AuditEventInput, AuditStore } from "./runner/file-audit-store.js";
+import type {
+  RepositoryStore,
+  RepositoryUpsertResult
+} from "./runner/file-repository-store.js";
 import { LocalRunner } from "./runner/local-runner.js";
 import { ShellAdapter } from "./runner/shell-adapter.js";
 
@@ -1695,6 +1701,116 @@ describe("runner API", () => {
         })
       })
     );
+  });
+
+  it("awaits asynchronous repository and audit stores during registration", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-async-store-test-")
+    );
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const repositories: RepositoryUpsertResult["repository"][] = [];
+    const auditEvents: AuditEvent[] = [];
+    const repositoryStore = {
+      async list() {
+        return repositories;
+      },
+      async get(id: string) {
+        return repositories.find((repository) => repository.id === id);
+      },
+      async upsert(input: RepositoryRegistrationRequest) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const now = "2026-06-05T00:00:00.000Z";
+        const repository = {
+          id: "async-repository",
+          name: input.name,
+          path: repoPath,
+          defaultBranch: input.defaultBranch,
+          qualityGates: input.qualityGates,
+          createdAt: now,
+          updatedAt: now
+        };
+
+        repositories.push(repository);
+
+        return {
+          repository,
+          created: true
+        };
+      },
+      async remove(id: string) {
+        const index = repositories.findIndex(
+          (repository) => repository.id === id
+        );
+        if (index < 0) {
+          return undefined;
+        }
+
+        return repositories.splice(index, 1)[0];
+      }
+    } as unknown as RepositoryStore;
+    const auditStore = {
+      async list() {
+        return auditEvents;
+      },
+      async append(input: AuditEventInput) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const event = {
+          ...input,
+          id: "async-audit-event",
+          createdAt: "2026-06-05T00:00:01.000Z"
+        };
+
+        auditEvents.push(event);
+
+        return event;
+      }
+    } as unknown as AuditStore;
+    const app = buildApp(undefined, {
+      auditStore,
+      demoRoot,
+      repositoryStore
+    });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Async store repo",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: []
+      }
+    });
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/repositories"
+    });
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.json()).toMatchObject({
+      id: "async-repository",
+      name: "Async store repo",
+      path: repoPath
+    });
+    expect(listResponse.json()).toEqual([
+      expect.objectContaining({
+        id: "async-repository"
+      })
+    ]);
+    expect(auditResponse.json()).toEqual([
+      expect.objectContaining({
+        type: "repository.registered",
+        metadata: expect.objectContaining({
+          repositoryId: "async-repository",
+          repositoryPath: repoPath
+        })
+      })
+    ]);
   });
 
   it("updates existing repository registrations for the same normalized path", async () => {

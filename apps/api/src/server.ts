@@ -20,7 +20,11 @@ import {
 } from "node:fs";
 import { resolve, sep, join, isAbsolute } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
-import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
+import {
+  FileAuditStore,
+  type AuditEventInput,
+  type AuditStore
+} from "./runner/file-audit-store.js";
 import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
 import {
   FileRepositoryStore,
@@ -97,6 +101,16 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     new FileAuditStore({
       stateFile: join(root, ".mawo", "state", "audit-events.json")
     });
+  const app = Fastify({
+    logger: process.env.NODE_ENV !== "test"
+  });
+  const appendAuditEvent = (event: AuditEventInput) =>
+    Promise.resolve(auditStore.append(event));
+  const appendAuditEventInBackground = (event: AuditEventInput) => {
+    void appendAuditEvent(event).catch((error: unknown) => {
+      app.log.error({ error }, "failed to append audit event");
+    });
+  };
   const activeRunner =
     runner ??
     new LocalRunner(undefined, {
@@ -108,7 +122,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         root: artifactRoot
       }),
       eventSink: (event) => {
-        auditStore.append({
+        appendAuditEventInBackground({
           type: event.type,
           actor: "runner",
           workflowId: event.workflowId,
@@ -126,9 +140,6 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         });
       }
     });
-  const app = Fastify({
-    logger: process.env.NODE_ENV !== "test"
-  });
   const queue = new WorkflowJobQueue({
     runner: activeRunner,
     maxConcurrentJobs,
@@ -141,7 +152,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
         recovered.workflowId
       );
-      auditStore.append({
+      appendAuditEventInBackground({
         type: "job.recovered",
         actor: "system",
         workflowId: recovered.workflowId,
@@ -339,7 +350,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       });
     }
 
-    const events = auditStore.list({
+    const events = await auditStore.list({
       actor: request.query.actor,
       jobId: request.query.jobId,
       repositoryId: request.query.repositoryId,
@@ -350,7 +361,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   app.get("/repositories", async () => {
-    return repositoryStore.list();
+    return await repositoryStore.list();
   });
 
   app.post("/repositories", async (request, reply) => {
@@ -386,9 +397,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         },
         { root }
       );
-      const result = repositoryStore.upsert(parsed.data);
+      const result = await repositoryStore.upsert(parsed.data);
       const repository = result.repository;
-      auditStore.append({
+      await appendAuditEvent({
         type: result.created ? "repository.registered" : "repository.updated",
         actor: "operator",
         metadata: {
@@ -419,13 +430,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.delete<{
     Params: { id: string };
   }>("/repositories/:id", async (request, reply) => {
-    const repository = repositoryStore.remove(request.params.id);
+    const repository = await repositoryStore.remove(request.params.id);
 
     if (!repository) {
       return reply.code(404).send({ error: "repository_not_found" });
     }
 
-    auditStore.append({
+    await appendAuditEvent({
       type: "repository.deleted",
       actor: "operator",
       metadata: {
@@ -443,7 +454,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.post("/workflows/demo", async (_request, reply) => {
     const run = activeRunner.createWorkflow(createDemoWorkflowDefinition());
 
-    auditStore.append({
+    await appendAuditEvent({
       type: "workflow.created",
       actor: "operator",
       workflowId: run.id,
@@ -459,7 +470,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const definition = await createWorktreeDemoWorkflowDefinition(options.demoRoot);
     const run = activeRunner.createWorkflow(definition);
 
-    auditStore.append({
+    await appendAuditEvent({
       type: "workflow.created",
       actor: "operator",
       workflowId: run.id,
@@ -475,7 +486,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const definition = await createAgentDemoWorkflowDefinition(options.demoRoot);
     const run = activeRunner.createWorkflow(definition);
 
-    auditStore.append({
+    await appendAuditEvent({
       type: "workflow.created",
       actor: "operator",
       workflowId: run.id,
@@ -499,7 +510,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     try {
       const repository = parsed.data.repositoryId
-        ? repositoryStore.get(parsed.data.repositoryId)
+        ? await repositoryStore.get(parsed.data.repositoryId)
         : undefined;
 
       if (parsed.data.repositoryId && !repository) {
@@ -535,7 +546,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       );
       const run = activeRunner.createWorkflow(definition);
 
-      auditStore.append({
+      await appendAuditEvent({
         type: "workflow.created",
         actor: "operator",
         workflowId: run.id,
@@ -578,7 +589,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     try {
       const run = activeRunner.reviewWorkflow(request.params.id, parsed.data);
 
-      auditStore.append({
+      await appendAuditEvent({
         type: "workflow.reviewed",
         actor: "operator",
         workflowId: run.id,
@@ -622,7 +633,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         request.params.id
       );
 
-      auditStore.append({
+      await appendAuditEvent({
         type: "workflow.workspaces_cleaned",
         actor: "operator",
         workflowId: cleanup.workflowId,
@@ -681,7 +692,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       const retry = await activeRunner.retryWorkflowWithResult(request.params.id);
       const run = retry.run;
 
-      auditStore.append({
+      await appendAuditEvent({
         type: "workflow.retry_requested",
         actor: "operator",
         workflowId: run.id,
@@ -723,7 +734,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     try {
       const job = queue.enqueue(request.params.id);
 
-      auditStore.append({
+      await appendAuditEvent({
         type: "workflow.enqueued",
         actor: "operator",
         workflowId: job.workflowId,
@@ -800,7 +811,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     const workflow = activeRunner.getWorkflow(job.workflowId);
-    auditStore.append({
+    await appendAuditEvent({
       type: "job.canceled",
       actor: "operator",
       workflowId: job.workflowId,
@@ -828,9 +839,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const report = workflow ? activeRunner.getReport(workflow.id) : undefined;
     const jobStartedAt = Date.parse(job.createdAt);
     const jobFinishedAt = job.finishedAt ? Date.parse(job.finishedAt) : undefined;
-    const events = auditStore
-      .list({ workflowId: job.workflowId })
-      .filter((event) => {
+    const events = (await auditStore.list({ workflowId: job.workflowId })).filter(
+      (event) => {
         if (event.jobId) {
           return event.jobId === job.id;
         }
@@ -849,7 +859,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         }
 
         return true;
-      });
+      }
+    );
 
     return {
       job,
@@ -929,7 +940,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const truncated = sizeBytes > maxBytes;
     const content = readArtifactPrefix(artifactPath, maxBytes);
 
-    auditStore.append({
+    await appendAuditEvent({
       type: "workflow.artifact_read",
       actor: "operator",
       workflowId: request.params.id,
