@@ -113,6 +113,8 @@ docker compose up --build -d
 docker compose ps
 ```
 
+Compose 会先启动一次性 `mawo-migrate` 服务执行 `npm run db:migrate:deploy`，迁移成功后 API 才会启动。`docker compose ps` 里看到 `mawo-migrate` 退出成功是正常现象。
+
 默认端口：
 
 - Web: `http://127.0.0.1:3000`

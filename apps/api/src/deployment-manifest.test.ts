@@ -20,9 +20,14 @@ describe("deployment manifests", () => {
     const compose = read("docker-compose.yml");
 
     expect(compose).toContain("api:");
+    expect(compose).toContain("migrate:");
     expect(compose).toContain("web:");
     expect(compose).toContain("target: api");
     expect(compose).toContain("target: web");
+    expect(compose).toContain("container_name: mawo-migrate");
+    expect(compose).toContain("npm run db:migrate:deploy");
+    expect(compose).toContain("migrate:");
+    expect(compose).toContain("condition: service_completed_successfully");
     expect(compose).toContain("API_HOST: 0.0.0.0");
     expect(compose).toContain("MAWO_STATE_BACKEND: ${MAWO_STATE_BACKEND:-file}");
     expect(compose).toContain(

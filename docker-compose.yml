@@ -1,4 +1,16 @@
 services:
+  migrate:
+    build:
+      context: .
+      target: api
+    container_name: mawo-migrate
+    environment:
+      DATABASE_URL: "postgresql://mawo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before production}@postgres:5432/mawo?schema=public"
+    command: ["sh", "-c", "npm run db:migrate:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -27,6 +39,8 @@ services:
     volumes:
       - mawo_state:/app/.mawo
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

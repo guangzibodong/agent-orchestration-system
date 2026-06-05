@@ -181,6 +181,11 @@ docker compose up -d
 docker compose ps
 ```
 
+Compose starts a one-shot `mawo-migrate` service that runs
+`npm run db:migrate:deploy` after Postgres is healthy. The API service depends
+on that migration service completing successfully, so a failed migration blocks
+API startup instead of starting against a missing or stale schema.
+
 The default container ports are:
 
 - Web: `http://127.0.0.1:3000`
