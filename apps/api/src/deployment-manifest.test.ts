@@ -41,4 +41,19 @@ describe("deployment manifests", () => {
     expect(env).toContain("MAWO_CODEX_COMMAND_TEMPLATE=");
     expect(env).toContain("MAWO_CODEX_AUTH_PROBE_COMMAND=");
   });
+
+  it("runs the production verification suite in GitHub Actions", () => {
+    const workflow = read(".github/workflows/ci.yml");
+
+    expect(workflow).toContain("on:");
+    expect(workflow).toContain("push:");
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("node-version: 26");
+    expect(workflow).toContain("npm ci");
+    expect(workflow).toContain("npm run test");
+    expect(workflow).toContain("npm run typecheck");
+    expect(workflow).toContain("npm run lint");
+    expect(workflow).toContain("npm run build");
+    expect(workflow).toContain("npm run smoke:api");
+  });
 });
