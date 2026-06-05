@@ -54,6 +54,10 @@ import {
   summarizeAuditEvents
 } from "@/components/audit-event-display";
 import {
+  buildJobHistoryDisplay,
+  summarizeJobHistory
+} from "@/components/job-history-display";
+import {
   canCancelJobStatus,
   canCleanupWorkflowStatus,
   canRetryWorkflowStatus,
@@ -129,6 +133,7 @@ export function RunConsole() {
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -157,6 +162,14 @@ export function RunConsole() {
   const auditEventDisplay = useMemo(
     () => buildAuditEventDisplay(auditEvents).slice(0, 8),
     [auditEvents]
+  );
+  const jobHistorySummary = useMemo(
+    () => summarizeJobHistory(jobHistory),
+    [jobHistory]
+  );
+  const jobHistoryDisplay = useMemo(
+    () => buildJobHistoryDisplay(jobHistory).slice(0, 8),
+    [jobHistory]
   );
 
   const metrics = useMemo(
@@ -192,9 +205,20 @@ export function RunConsole() {
         label: "Audit Events",
         value: String(auditEventSummary.total),
         icon: Activity
+      },
+      {
+        label: "Jobs",
+        value: String(jobHistorySummary.total),
+        icon: Play
       }
     ],
-    [agentHealthSummary, auditEventSummary, repositorySummary, workflow]
+    [
+      agentHealthSummary,
+      auditEventSummary,
+      jobHistorySummary,
+      repositorySummary,
+      workflow
+    ]
   );
   const canCreateRepositoryRun = useMemo(
     () => canCreateRepositoryWorkflow(repositoryForm),
@@ -354,6 +378,11 @@ export function RunConsole() {
   const loadAuditEvents = useCallback(async () => {
     const events = await api<unknown[]>("/audit-events");
     setAuditEvents(events.map((event) => auditEventSchema.parse(event)));
+  }, []);
+
+  const loadJobHistory = useCallback(async () => {
+    const jobs = await api<unknown[]>("/jobs");
+    setJobHistory(jobs.map((item) => workflowJobSchema.parse(item)));
   }, []);
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
@@ -555,6 +584,11 @@ export function RunConsole() {
         apiError instanceof Error ? apiError.message : "Load audit events failed"
       );
     });
+    loadJobHistory().catch((apiError) => {
+      setError(
+        apiError instanceof Error ? apiError.message : "Load job history failed"
+      );
+    });
     loadAgentHealth().catch((apiError) => {
       setError(
         apiError instanceof Error ? apiError.message : "Load agent health failed"
@@ -564,6 +598,7 @@ export function RunConsole() {
     loadAgentHealth,
     loadAuditEvents,
     loadConfiguredAgents,
+    loadJobHistory,
     loadLatestWorkflow,
     loadRepositories
   ]);
@@ -879,6 +914,45 @@ export function RunConsole() {
                 ))}
                 {auditEventDisplay.length === 0 ? (
                   <div className="reportBox muted">No audit events</div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="inspectorSection">
+              <div className="sectionHeader">
+                <h3>Jobs</h3>
+                <span>
+                  {jobHistorySummary.active} active / {jobHistorySummary.failed} failed
+                </span>
+              </div>
+              <div className="runList">
+                {jobHistoryDisplay.map((historyJob) => (
+                  <article className="jobHistoryItem" key={historyJob.id}>
+                    <div>
+                      <strong>{historyJob.jobLabel}</strong>
+                      <span className={`healthBadge ${historyJob.severity}`}>
+                        {historyJob.statusLabel}
+                      </span>
+                    </div>
+                    <dl className="artifactMeta">
+                      <div>
+                        <dt>Workflow</dt>
+                        <dd>{historyJob.workflowLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Duration</dt>
+                        <dd>{historyJob.durationLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Updated</dt>
+                        <dd>{historyJob.updatedAt}</dd>
+                      </div>
+                    </dl>
+                    {historyJob.errorLabel ? <p>{historyJob.errorLabel}</p> : null}
+                  </article>
+                ))}
+                {jobHistoryDisplay.length === 0 ? (
+                  <div className="reportBox muted">No job history</div>
                 ) : null}
               </div>
             </section>

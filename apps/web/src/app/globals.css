@@ -460,6 +460,7 @@ h2 {
 .runItem,
 .agentHealthItem,
 .auditEventItem,
+.jobHistoryItem,
 .reportBox {
   display: grid;
   gap: 6px;
@@ -473,6 +474,7 @@ h2 {
 .runItem strong,
 .agentHealthItem strong,
 .auditEventItem strong,
+.jobHistoryItem strong,
 .reportBox strong {
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -481,6 +483,7 @@ h2 {
 .runItem span,
 .agentHealthItem p,
 .auditEventItem p,
+.jobHistoryItem p,
 .reportBox p,
 .reportBox.muted {
   margin: 0;
@@ -498,6 +501,14 @@ h2 {
 }
 
 .auditEventItem > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.jobHistoryItem > div:first-child {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -536,6 +547,11 @@ h2 {
 .healthBadge.danger {
   background: #fbe8e8;
   color: var(--danger);
+}
+
+.healthBadge.neutral {
+  background: #eef2f6;
+  color: var(--muted);
 }
 
 .runItem pre {
