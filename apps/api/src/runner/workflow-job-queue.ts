@@ -50,22 +50,29 @@ export class WorkflowJobQueue {
     this.runner = options.runner;
     this.jobStore = options.jobStore;
     for (const job of this.jobStore?.list() ?? []) {
-      const restored = this.isTerminal(job)
-        ? job
-        : {
-            ...job,
-            status: "failed" as const,
-            finishedAt: new Date().toISOString(),
-            error: "Job was interrupted by API restart."
-          };
-      this.jobs.set(restored.id, restored);
-      if (restored !== job) {
-        this.jobStore?.save(restored);
-        options.onJobRecovered?.({
-          original: job,
-          recovered: restored
-        });
+      if (this.isTerminal(job)) {
+        this.jobs.set(job.id, job);
+        continue;
       }
+
+      if (job.status === "queued") {
+        this.jobs.set(job.id, job);
+        this.scheduleProcess(job.id);
+        continue;
+      }
+
+      const restored = {
+        ...job,
+        status: "failed" as const,
+        finishedAt: new Date().toISOString(),
+        error: "Job was interrupted by API restart."
+      };
+      this.jobs.set(restored.id, restored);
+      this.jobStore?.save(restored);
+      options.onJobRecovered?.({
+        original: job,
+        recovered: restored
+      });
     }
   }
 
@@ -87,9 +94,7 @@ export class WorkflowJobQueue {
 
     this.jobs.set(job.id, job);
     this.jobStore?.save(job);
-    setTimeout(() => {
-      void this.process(job.id);
-    }, 0);
+    this.scheduleProcess(job.id);
 
     return job;
   }
@@ -198,6 +203,12 @@ export class WorkflowJobQueue {
     } finally {
       this.controllers.delete(id);
     }
+  }
+
+  private scheduleProcess(id: string): void {
+    setTimeout(() => {
+      void this.process(id);
+    }, 0);
   }
 
   private update(job: WorkflowJob, patch: Partial<WorkflowJob>): void {

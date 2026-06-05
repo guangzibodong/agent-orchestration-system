@@ -1480,6 +1480,83 @@ describe("runner API", () => {
     expect(retry.qualityGates[0]?.result).toBeUndefined();
   });
 
+  it("resumes persisted queued jobs when the API is rebuilt", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-queued-resume-test-"));
+    const stateRoot = join(demoRoot, ".mawo", "state");
+    tempRoots.push(demoRoot);
+    await mkdir(stateRoot, { recursive: true });
+    await writeFile(
+      join(stateRoot, "jobs.json"),
+      JSON.stringify(
+        [
+          {
+            id: "queued-job",
+            workflowId: "workflow-queued",
+            status: "queued",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:00.000Z"
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await writeFile(
+      join(stateRoot, "workflows.json"),
+      JSON.stringify(
+        [
+          {
+            id: "workflow-queued",
+            goal: "Resume queued workflow",
+            status: "ready",
+            executionMode: "direct",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:00.000Z",
+            tasks: [
+              {
+                id: "queued-task",
+                title: "Queued task",
+                agent: "shell",
+                command: `${node} -e "console.log('resumed by rebuilt api')"`,
+                status: "waiting"
+              }
+            ],
+            qualityGates: []
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const app = buildApp(undefined, { demoRoot });
+    let job = { status: "queued" };
+    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const jobResponse = await app.inject({
+        method: "GET",
+        url: "/jobs/queued-job"
+      });
+      job = jobResponse.json();
+    }
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: "/workflows/workflow-queued"
+    });
+
+    expect(job).toMatchObject({
+      id: "queued-job",
+      workflowId: "workflow-queued",
+      status: "completed"
+    });
+    expect(workflowResponse.json()).toMatchObject({
+      id: "workflow-queued",
+      status: "needs_review"
+    });
+  });
+
   it("registers repositories and restores them across API rebuilds", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-registry-test-"));
     const repoPath = await createCommittedRepo();

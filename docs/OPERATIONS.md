@@ -335,12 +335,12 @@ Runtime logs:
 Persistent workflow data:
 
 - `.mawo/state/workflows.json`: workflow and review state.
-- `.mawo/state/jobs.json`: background job history. Queued/running jobs found
-  during API startup are marked failed because the in-process worker cannot be
-  resumed after restart. If the matching workflow is still `running`, startup
-  recovery marks it `aborted`, converts running tasks/gates to `canceled`, and
-  records `interrupted=api_restart` metadata so operators can retry from a
-  consistent state.
+- `.mawo/state/jobs.json`: background job history. Queued jobs found during API
+  startup are rescheduled automatically. Running jobs are marked failed because
+  the original in-process worker is gone; if the matching workflow is still
+  `running`, startup recovery marks it `aborted`, converts running tasks/gates
+  to `canceled`, and records `interrupted=api_restart` metadata so operators can
+  retry from a consistent state.
 - `.mawo/state/repositories.json`: registered repositories and their default
   quality gates.
 - `.mawo/state/audit-events.json`: append-only operator and runner trail for
@@ -436,9 +436,9 @@ back the web process first while keeping the API and `.mawo` untouched.
   blocks production if the configured count is higher while the runtime remains
   file-backed and in-process.
 - The background worker is still in the API process. Job history is persisted,
-  but queued/running jobs found after API restart are marked failed. Matching
-  running workflows are recovered to `aborted` with interrupted task/gate
-  metadata, then require operator retry.
+  queued jobs found after API restart are resumed, and running jobs are marked
+  failed. Matching running workflows are recovered to `aborted` with interrupted
+  task/gate metadata, then require operator retry.
 - Postgres and Redis are present in Compose but are not the active workflow
   persistence path.
 - API and web are containerized, but production public exposure still requires

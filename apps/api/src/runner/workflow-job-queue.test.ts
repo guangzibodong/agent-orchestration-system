@@ -88,17 +88,30 @@ describe("WorkflowJobQueue", () => {
     expect(restoredQueue.listJobs().map((restored) => restored.id)).toContain(job.id);
   });
 
-  it("marks persisted non-terminal jobs failed on queue startup", async () => {
+  it("resumes persisted queued jobs and marks running jobs failed on queue startup", async () => {
     const root = await mkdtemp(join(tmpdir(), "mawo-job-recover-test-"));
     tempRoots.push(root);
     const stateFile = join(root, "jobs.json");
+    const runner = new LocalRunner();
+    const run = runner.createWorkflow({
+      goal: "Resume queued job after restart",
+      tasks: [
+        {
+          id: "task",
+          title: "Resumed task",
+          agent: "shell",
+          command: `${node} -e "console.log('resumed queued job')"`
+        }
+      ],
+      qualityGates: []
+    });
     await writeFile(
       stateFile,
       JSON.stringify(
         [
           {
             id: "queued-job",
-            workflowId: "workflow-1",
+            workflowId: run.id,
             status: "queued",
             createdAt: "2026-06-05T00:00:00.000Z",
             updatedAt: "2026-06-05T00:00:00.000Z"
@@ -119,21 +132,20 @@ describe("WorkflowJobQueue", () => {
     );
 
     const queue = new WorkflowJobQueue({
-      runner: new LocalRunner(),
+      runner,
       jobStore: new FileJobStore({ stateFile })
     });
+    const resumed = await queue.waitForJob("queued-job", 5000);
 
-    expect(queue.getJob("queued-job")).toMatchObject({
-      status: "failed",
-      error: "Job was interrupted by API restart."
-    });
+    expect(resumed.status).toBe("completed");
+    expect(runner.getWorkflow(run.id)?.status).toBe("needs_review");
     expect(queue.getJob("running-job")).toMatchObject({
       status: "failed",
       error: "Job was interrupted by API restart."
     });
     expect(new FileJobStore({ stateFile }).list()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "queued-job", status: "failed" }),
+        expect.objectContaining({ id: "queued-job", status: "completed" }),
         expect.objectContaining({ id: "running-job", status: "failed" })
       ])
     );

@@ -241,7 +241,7 @@ POST /jobs/:id/cancel
       tasks/<taskId>/patch.diff
 ```
 
-这些文件用于恢复 workflow 状态、查看 job 历史、复用已登记仓库、查看审计记录、排查运行失败和生成可应用的 patch。审计事件同时覆盖 operator action 和 runner lifecycle，包括 task/gate 开始、完成、失败、取消等状态。API 重启时，如果发现 `jobs.json` 里遗留的 queued/running job，会把它们标记为 failed，避免旧 job 永远占用运行槽。
+这些文件用于恢复 workflow 状态、查看 job 历史、复用已登记仓库、查看审计记录、排查运行失败和生成可应用的 patch。审计事件同时覆盖 operator action 和 runner lifecycle，包括 task/gate 开始、完成、失败、取消等状态。API 重启时，`jobs.json` 里遗留的 queued job 会自动恢复调度；running job 会标记为 failed，并把匹配的 running workflow 恢复为 aborted，避免旧 job 永远占用运行槽。
 
 ## 接入真实 CLI Agent
 
@@ -303,7 +303,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
 - 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；如果生产环境声明多 API 副本，`GET /readiness` 会通过 `deployment_topology` 阻塞上线。
 - workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
-- job queue 运行器仍在单 API 进程内；API 重启后历史会恢复，但重启前 queued/running job 会被标记为 failed，需要人工重试。
+- job queue 运行器仍在单 API 进程内；API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
 - Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
 - 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
 
