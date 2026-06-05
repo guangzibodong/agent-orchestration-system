@@ -211,6 +211,7 @@ GET  /workflows/:id/merge-candidate
 GET  /jobs
 GET  /jobs?status=<status>&workflowId=<workflowId>&repositoryId=<repositoryId>&limit=<n>
 GET  /jobs/:id
+GET  /jobs/:id/timeline
 POST /jobs/:id/cancel
 ```
 

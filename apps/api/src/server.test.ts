@@ -801,6 +801,75 @@ describe("runner API", () => {
     );
   });
 
+  it("returns a job timeline with workflow summary and lifecycle events", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-timeline-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const created = createResponse.json();
+
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/enqueue`
+    });
+    const queued = enqueueResponse.json();
+    let job = queued;
+    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const jobResponse = await app.inject({
+        method: "GET",
+        url: `/jobs/${queued.id}`
+      });
+      job = jobResponse.json();
+    }
+
+    const timelineResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${queued.id}/timeline`
+    });
+    const timeline = timelineResponse.json();
+
+    expect(job.status).toBe("completed");
+    expect(timelineResponse.statusCode).toBe(200);
+    expect(timeline.job).toMatchObject({
+      id: queued.id,
+      workflowId: created.id,
+      status: "completed"
+    });
+    expect(timeline.workflow).toMatchObject({
+      id: created.id,
+      status: "needs_review"
+    });
+    expect(timeline.summary).toMatchObject({
+      recommendation: "ready_for_review",
+      failedTasks: [],
+      failedGates: []
+    });
+    expect(timeline.events.map((event: { type: string }) => event.type)).toEqual(
+      expect.arrayContaining([
+        "workflow.enqueued",
+        "workflow.task_started",
+        "workflow.task_completed",
+        "workflow.gate_started",
+        "workflow.gate_completed"
+      ])
+    );
+    expect(timeline.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "workflow.task_completed",
+          metadata: expect.objectContaining({
+            taskId: "plan",
+            status: "passed"
+          })
+        })
+      ])
+    );
+  });
+
   it("limits job history to the most recent jobs", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-limit-test-"));
     tempRoots.push(demoRoot);

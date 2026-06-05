@@ -215,6 +215,7 @@ Invoke-RestMethod http://127.0.0.1:4000/health
 Invoke-RestMethod http://127.0.0.1:4000/jobs
 Invoke-RestMethod "http://127.0.0.1:4000/jobs?status=canceled&workflowId=<workflowId>&limit=20"
 Invoke-RestMethod "http://127.0.0.1:4000/jobs?status=canceled&repositoryId=<repositoryId>&limit=20"
+Invoke-RestMethod http://127.0.0.1:4000/jobs/<jobId>/timeline
 Invoke-RestMethod http://127.0.0.1:4000/workflows
 Invoke-RestMethod "http://127.0.0.1:4000/workflows?status=needs_review&limit=20"
 Invoke-RestMethod "http://127.0.0.1:4000/workflows?status=needs_review&repositoryId=<repositoryId>&limit=20"

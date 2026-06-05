@@ -51,6 +51,13 @@ export type BuildAppOptions = {
   repositoryStore?: RepositoryStore;
 };
 
+const JOB_TIMELINE_WORKFLOW_EVENT_TYPES = new Set([
+  "workflow.task_started",
+  "workflow.task_completed",
+  "workflow.gate_started",
+  "workflow.gate_completed"
+]);
+
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const root = options.demoRoot ?? process.cwd();
   const artifactRoot = join(root, ".mawo", "artifacts");
@@ -682,6 +689,64 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     });
 
     return job;
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/jobs/:id/timeline", async (request, reply) => {
+    const job = queue.getJob(request.params.id);
+
+    if (!job) {
+      return reply.code(404).send({ error: "job_not_found" });
+    }
+
+    const workflow = activeRunner.getWorkflow(job.workflowId);
+    const report = workflow ? activeRunner.getReport(workflow.id) : undefined;
+    const jobStartedAt = Date.parse(job.createdAt);
+    const jobFinishedAt = job.finishedAt ? Date.parse(job.finishedAt) : undefined;
+    const events = auditStore
+      .list({ workflowId: job.workflowId })
+      .filter((event) => {
+        if (event.jobId) {
+          return event.jobId === job.id;
+        }
+
+        if (!JOB_TIMELINE_WORKFLOW_EVENT_TYPES.has(event.type)) {
+          return false;
+        }
+
+        const eventTime = Date.parse(event.createdAt);
+        if (eventTime < jobStartedAt) {
+          return false;
+        }
+
+        if (jobFinishedAt && eventTime > jobFinishedAt) {
+          return false;
+        }
+
+        return true;
+      });
+
+    return {
+      job,
+      workflow: workflow
+        ? {
+            id: workflow.id,
+            status: workflow.status,
+            repositoryId: workflow.repositoryId,
+            repositoryPath: workflow.repositoryPath
+          }
+        : undefined,
+      summary: report
+        ? {
+            text: report.summary,
+            recommendation: report.recommendation,
+            failedTasks: report.failedTasks,
+            failedGates: report.failedGates
+          }
+        : undefined,
+      events
+    };
   });
 
   app.get<{

@@ -824,6 +824,36 @@ async function main() {
         repositoryJobHistory[0]?.workflowId === cancelWorkflowId,
       "Repository job history did not isolate the canceled repository job.",
     );
+    const jobTimeline = await request(
+      baseUrl,
+      "GET",
+      `/jobs/${cancelJobId}/timeline`,
+    );
+    assert(
+      jobTimeline.status === 200,
+      `Job timeline endpoint returned ${jobTimeline.status}`,
+    );
+    assert(
+      (jobTimeline.body.job as JsonObject | undefined)?.id === cancelJobId &&
+        (jobTimeline.body.workflow as JsonObject | undefined)?.id ===
+          cancelWorkflowId,
+      "Job timeline did not include the canceled job and workflow.",
+    );
+    assert(
+      (
+        (jobTimeline.body.summary as JsonObject | undefined)
+          ?.failedTasks as Array<unknown> | undefined
+      )?.includes("slow-task"),
+      "Job timeline summary did not include the canceled task.",
+    );
+    const timelineEventTypes = (
+      jobTimeline.body.events as Array<JsonObject>
+    ).map((event) => event.type);
+    assert(
+      timelineEventTypes.includes("workflow.enqueued") &&
+        timelineEventTypes.includes("job.canceled"),
+      "Job timeline did not include enqueue and cancel lifecycle events.",
+    );
     const invalidJobStatus = await request(baseUrl, "GET", "/jobs?status=not-real");
     assert(
       invalidJobStatus.status === 400 &&
