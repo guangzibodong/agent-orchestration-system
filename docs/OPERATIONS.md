@@ -223,6 +223,17 @@ The underlying package scripts are `npm run db:generate` and
 `npm run db:migrate` for local development, plus `npm run db:validate` and
 `npm run db:migrate:deploy` for CI and production migration deployment.
 
+After migrations, run the Postgres-backed API smoke before switching traffic:
+
+```powershell
+$env:MAWO_STATE_BACKEND = "postgres"
+.\.tools\node\npm.cmd run smoke:api:postgres
+```
+
+The smoke verifies `/readiness` reports `activeStateBackend: "postgres"`, then
+creates a repository workflow, enqueues it, and checks the workflow/job rows
+through Prisma.
+
 Stop the stack:
 
 ```powershell
@@ -517,6 +528,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `npm run lint` passes or approved lint exceptions are documented.
 - [ ] `npm run build` passes.
 - [ ] `docker compose config` succeeds on the target host.
+- [ ] `npm run smoke:api:postgres` passes if `MAWO_STATE_BACKEND=postgres` is
+      part of the rollout.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /readiness` returns `ok=true`, reports token protection, and marks
       `state_store`, `artifact_store`, `git_cli`, `agents`, and

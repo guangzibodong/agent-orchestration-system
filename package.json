@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck -w @mawo/shared && npm run typecheck -w @mawo/api && npm run typecheck -w @mawo/web",
     "test": "vitest run",
     "smoke:api": "node scripts/smoke-api-repository.mjs",
+    "smoke:api:postgres": "node scripts/smoke-api-postgres.mjs",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",

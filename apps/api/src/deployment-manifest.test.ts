@@ -76,6 +76,7 @@ describe("deployment manifests", () => {
     expect(operations).toContain("npm run db:migrate:deploy");
     expect(packageJson).toContain("\"db:validate\"");
     expect(packageJson).toContain("\"db:migrate:deploy\"");
+    expect(packageJson).toContain("\"smoke:api:postgres\"");
   });
 
   it("ignores runtime logs and generated verification artifacts", () => {
@@ -103,6 +104,20 @@ describe("deployment manifests", () => {
     expect(workflow).toContain("npm run lint");
     expect(workflow).toContain("npm run build");
     expect(workflow).toContain("npm run smoke:api");
+    expect(workflow).toContain("npm run smoke:api:postgres");
     expect(workflow).toContain("MAWO_API_TOKEN: smoke-secret");
+  });
+
+  it("provides a Postgres-backed API smoke entrypoint", () => {
+    const wrapper = read("scripts/smoke-api-postgres.mjs");
+    const smoke = read("scripts/smoke-api-postgres.ts");
+    const helper = read("apps/api/src/postgres-smoke-helpers.ts");
+
+    expect(wrapper).toContain("scripts/smoke-api-postgres.ts");
+    expect(smoke).toContain("MAWO_STATE_BACKEND");
+    expect(smoke).toContain("assertPostgresRuntimeReady");
+    expect(helper).toContain("activeStateBackend=postgres");
+    expect(smoke).toContain("prisma.workflowRun.findUnique");
+    expect(smoke).toContain("prisma.workflowJob.findUnique");
   });
 });
