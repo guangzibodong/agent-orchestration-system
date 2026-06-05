@@ -115,23 +115,32 @@ template:
 ]
 ```
 
-## 4. Optional Docker Infrastructure
+## 4. Docker Compose Stack
 
-Docker Compose currently starts only Postgres and Redis:
+Docker Compose can run the API, web console, Postgres, Redis, and a named
+runtime state volume for `.mawo`:
 
 ```powershell
+Copy-Item .env.example .env
 docker compose up -d
 docker compose ps
 ```
 
-Stop optional infrastructure:
+The default container ports are:
+
+- Web: `http://127.0.0.1:3000`
+- API: `http://127.0.0.1:4000`
+- Postgres: `localhost:5432`
+- Redis: `localhost:6379`
+
+Stop the stack:
 
 ```powershell
 docker compose down
 ```
 
 Do not use `docker compose down -v` in an environment with data you care about;
-it deletes the named Postgres and Redis volumes.
+it deletes the named `.mawo`, Postgres, and Redis volumes.
 
 ## 5. Server Startup
 
@@ -330,11 +339,13 @@ back the web process first while keeping the API and `.mawo` untouched.
 - CORS currently allows all origins.
 - Workflow state is file-based under `.mawo`, so concurrent multi-host API
   replicas are not supported.
-- The background job queue is in memory; queued/running job state is not durable
-  across API restarts.
+- The background worker is still in the API process. Job history is persisted,
+  but queued/running jobs found after API restart are marked failed and require
+  operator retry.
 - Postgres and Redis are present in Compose but are not the active workflow
   persistence path.
-- API and web are not containerized by the current `docker-compose.yml`.
+- API and web are containerized, but production public exposure still requires
+  a reverse proxy, TLS, and an auth boundary.
 - Repository workflows require the target repository to be a git repository with
   a committed `HEAD`.
 - Long-running agent commands should set `timeoutMs` in workflow requests.
@@ -348,6 +359,7 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `npm run test` passes.
 - [ ] `npm run lint` passes or approved lint exceptions are documented.
 - [ ] `npm run build` passes.
+- [ ] `docker compose config` succeeds on the target host.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
       configured production agent reports `missing_command`.

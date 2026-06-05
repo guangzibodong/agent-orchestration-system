@@ -100,6 +100,29 @@ $env:PATH = "$root\.tools\node;$root\.tools\git\cmd;$env:PATH"
 .\.tools\node\npm.cmd run smoke:api
 ```
 
+## Docker Compose 部署
+
+仓库提供 API/Web/Postgres/Redis 的 Compose 栈，API 的 `.mawo` 运行状态会挂载到 `mawo_state` volume：
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build -d
+docker compose ps
+```
+
+默认端口：
+
+- Web: `http://127.0.0.1:3000`
+- API: `http://127.0.0.1:4000`
+
+停止服务：
+
+```powershell
+docker compose down
+```
+
+不要在有生产数据时执行 `docker compose down -v`，它会删除 `.mawo` 状态卷和数据库/Redis volume。
+
 ## 真实仓库 Workflow 示例
 
 创建一个真实仓库 workflow：
@@ -258,9 +281,9 @@ Invoke-RestMethod http://127.0.0.1:4000/agents/health
 近期优先级：
 
 1. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
-2. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
-3. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
-4. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+2. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
+3. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+4. 云平台部署模板：Render/Vercel/Cloudflare/本机服务脚本。
 
 ## 文档入口
 

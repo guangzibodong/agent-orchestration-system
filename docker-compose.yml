@@ -1,4 +1,47 @@
 services:
+  api:
+    build:
+      context: .
+      target: api
+    container_name: mawo-api
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      DATABASE_URL: postgresql://mawo:mawo@postgres:5432/mawo?schema=public
+      REDIS_URL: redis://redis:6379
+      MAWO_CODEX_COMMAND_TEMPLATE: ${MAWO_CODEX_COMMAND_TEMPLATE:-}
+      MAWO_CLAUDE_COMMAND_TEMPLATE: ${MAWO_CLAUDE_COMMAND_TEMPLATE:-}
+      MAWO_CURSOR_COMMAND_TEMPLATE: ${MAWO_CURSOR_COMMAND_TEMPLATE:-}
+    ports:
+      - "4000:4000"
+    volumes:
+      - mawo_state:/app/.mawo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: .
+      target: web
+    container_name: mawo-web
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:4000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
   postgres:
     image: postgres:17
     container_name: mawo-postgres
@@ -30,5 +73,6 @@ services:
       retries: 10
 
 volumes:
+  mawo_state:
   postgres_data:
   redis_data:
