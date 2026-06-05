@@ -178,4 +178,33 @@ describe("audit event display", () => {
     expect(event?.metadataLabel).toContain("cleanedBranches=mawo/work");
     expect(event?.metadataLabel.length).toBeLessThanOrEqual(150);
   });
+
+  it("summarizes retry cleanup metadata as an operator-ready audit row", () => {
+    const [event] = buildAuditEventDisplay([
+      {
+        id: "event-retry",
+        type: "workflow.retry_requested",
+        createdAt: "2026-06-05T10:35:10.513Z",
+        actor: "operator",
+        workflowId: "workflow-retry",
+        metadata: {
+          previousStatus: "failed",
+          status: "ready",
+          cleanedCount: "1",
+          cleanedTaskIds: "flaky-task",
+          cleanedBranches:
+            "mawo/workflow-with-a-very-long-identifier/flaky-task-1234567890",
+          cleanedPaths:
+            "C:/Users/Harry/AppData/Local/Temp/mawo-smoke-repo/.mawo/worktrees/workflow-flaky-task-1234567890"
+        }
+      }
+    ]);
+
+    expect(event?.metadataLabel).toContain("failed -> ready");
+    expect(event?.metadataLabel).toContain("cleaned 1 workspace");
+    expect(event?.metadataLabel).toContain("tasks flaky-task");
+    expect(event?.metadataLabel).toContain("branches mawo/work");
+    expect(event?.metadataLabel).toContain("...workflow-flaky-task-1234567890");
+    expect(event?.metadataLabel.length).toBeLessThanOrEqual(150);
+  });
 });

@@ -38,7 +38,7 @@ export function buildAuditEventDisplay(
     createdAt: event.createdAt,
     workflowLabel: shortId(event.workflowId),
     jobLabel: shortId(event.jobId),
-    metadataLabel: formatMetadata(event.metadata)
+    metadataLabel: formatMetadata(event.type, event.metadata)
   }));
 }
 
@@ -56,11 +56,18 @@ function shortId(id?: string): string | undefined {
   return id?.slice(0, 9);
 }
 
-function formatMetadata(metadata?: Record<string, string>): string {
+function formatMetadata(
+  type: AuditEventType,
+  metadata?: Record<string, string>
+): string {
   const entries = Object.entries(metadata ?? {});
 
   if (entries.length === 0) {
     return "No metadata";
+  }
+
+  if (type === "workflow.retry_requested") {
+    return formatRetryMetadata(metadata ?? {});
   }
 
   return entries
@@ -68,21 +75,50 @@ function formatMetadata(metadata?: Record<string, string>): string {
     .join(", ");
 }
 
-function compactMetadataValue(value: string): string {
-  const maxLength = 58;
+function formatRetryMetadata(metadata: Record<string, string>): string {
+  const parts = [
+    metadata.previousStatus && metadata.status
+      ? `${metadata.previousStatus} -> ${metadata.status}`
+      : metadata.status
+        ? `status ${metadata.status}`
+        : undefined,
+    metadata.cleanedCount
+      ? `cleaned ${metadata.cleanedCount} ${pluralize(
+          Number(metadata.cleanedCount),
+          "workspace"
+        )}`
+      : undefined,
+    metadata.cleanedTaskIds
+      ? `tasks ${compactMetadataValue(metadata.cleanedTaskIds, 24)}`
+      : undefined,
+    metadata.cleanedBranches
+      ? `branches ${compactMetadataValue(metadata.cleanedBranches, 16)}`
+      : undefined,
+    metadata.cleanedPaths
+      ? `paths ${compactMetadataValue(metadata.cleanedPaths, 57)}`
+      : undefined
+  ].filter((part): part is string => Boolean(part));
 
+  return parts.length > 0 ? parts.join(" / ") : "No metadata";
+}
+
+function compactMetadataValue(value: string, maxLength = 58): string {
   if (value.length <= maxLength) {
     return value;
   }
 
-  const headLength = 24;
+  const headLength = Math.min(24, Math.max(9, Math.floor(maxLength * 0.55)));
   const pathSegment = value.split(/[\\/]/).at(-1);
 
-  if (pathSegment && pathSegment.length < maxLength - headLength - 3) {
+  if (pathSegment && pathSegment.length <= maxLength - headLength - 3) {
     return `${value.slice(0, headLength)}...${pathSegment}`;
   }
 
   const tailLength = maxLength - headLength - 3;
 
   return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
+}
+
+function pluralize(count: number, noun: string): string {
+  return count === 1 ? noun : `${noun}s`;
 }
