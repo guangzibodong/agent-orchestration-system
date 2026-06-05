@@ -491,6 +491,20 @@ async function main() {
       "Audit log did not include workspace cleanup event for the main workflow.",
     );
     assert(
+      events.some((event) => {
+        const metadata = event.metadata as JsonObject | undefined;
+        return (
+          event.type === "workflow.workspaces_cleaned" &&
+          event.workflowId === workflowId &&
+          metadata?.cleanedTaskIds === "flaky-task" &&
+          typeof metadata.cleanedBranches === "string" &&
+          metadata.cleanedBranches.includes("flaky-task") &&
+          metadata.cleanedPaths === workspacePath.path
+        );
+      }),
+      "Audit log did not include workspace cleanup metadata for the cleaned worktree.",
+    );
+    assert(
       events.some(
         (event) =>
           event.type === "workflow.task_completed" &&

@@ -1071,6 +1071,15 @@ describe("runner API", () => {
       url: `/workflows/${created.id}/workspaces/cleanup`
     });
     const cleanup = cleanupResponse.json();
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?workflowId=${created.id}`
+    });
+    const cleanupAuditEvents = auditResponse
+      .json()
+      .filter(
+        (event: { type: string }) => event.type === "workflow.workspaces_cleaned"
+      );
 
     expect(blockedCleanupResponse.statusCode).toBe(409);
     expect(cleanupResponse.statusCode).toBe(200);
@@ -1084,6 +1093,17 @@ describe("runner API", () => {
         })
       ]
     });
+    expect(cleanupAuditEvents).toContainEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          status: "cleaned",
+          cleanedCount: "1",
+          cleanedTaskIds: "worktree-edit",
+          cleanedBranches: expect.stringContaining("worktree-edit"),
+          cleanedPaths: reviewReady.tasks[0].workspace.path
+        })
+      })
+    );
   });
 
   it("rejects review decisions before a workflow is review-ready", async () => {

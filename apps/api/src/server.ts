@@ -407,7 +407,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         workflowId: cleanup.workflowId,
         metadata: {
           status: cleanup.status,
-          cleanedCount: String(cleanup.cleaned.length)
+          cleanedCount: String(cleanup.cleaned.length),
+          cleanedTaskIds: cleanup.cleaned.map((item) => item.taskId).join(","),
+          cleanedBranches: cleanup.cleaned.map((item) => item.branch).join(","),
+          cleanedPaths: cleanup.cleaned.map((item) => item.path).join(",")
         }
       });
 
