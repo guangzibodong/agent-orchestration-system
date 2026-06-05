@@ -19,6 +19,7 @@ import {
   unlinkSync
 } from "node:fs";
 import { resolve, sep, join, isAbsolute } from "node:path";
+import { prisma } from "./db.js";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import {
   FileAuditStore,
@@ -31,6 +32,22 @@ import {
   type RepositoryStore
 } from "./runner/file-repository-store.js";
 import { FileRunStore, type RunStore } from "./runner/file-run-store.js";
+import {
+  PrismaAuditStore,
+  type PrismaAuditStoreClient
+} from "./runner/prisma-audit-store.js";
+import {
+  PrismaJobStore,
+  type PrismaJobStoreClient
+} from "./runner/prisma-job-store.js";
+import {
+  PrismaRepositoryStore,
+  type PrismaRepositoryStoreClient
+} from "./runner/prisma-repository-store.js";
+import {
+  PrismaRunStore,
+  type PrismaRunStoreClient
+} from "./runner/prisma-run-store.js";
 import {
   createAgentHealthChecks,
   createAgentSummaries,
@@ -62,9 +79,53 @@ export type BuildAppOptions = {
   env?: Record<string, string | undefined>;
   auditStore?: AuditStore;
   jobStore?: JobStore;
+  prismaClient?: PrismaStateStoreClient;
   runStore?: RunStore;
   repositoryStore?: RepositoryStore;
 };
+
+type PrismaStateStoreClient = PrismaAuditStoreClient &
+  PrismaJobStoreClient &
+  PrismaRepositoryStoreClient &
+  PrismaRunStoreClient;
+
+function createStateStores(input: {
+  requestedStateBackend: string;
+  stateRoot: string;
+  prismaClient: PrismaStateStoreClient;
+}): {
+  activeStateBackend: "file" | "postgres";
+  auditStore: AuditStore;
+  jobStore: JobStore;
+  repositoryStore: RepositoryStore;
+  runStore: RunStore;
+} {
+  if (input.requestedStateBackend === "postgres") {
+    return {
+      activeStateBackend: "postgres",
+      auditStore: new PrismaAuditStore(input.prismaClient),
+      jobStore: new PrismaJobStore(input.prismaClient),
+      repositoryStore: new PrismaRepositoryStore(input.prismaClient),
+      runStore: new PrismaRunStore(input.prismaClient)
+    };
+  }
+
+  return {
+    activeStateBackend: "file",
+    auditStore: new FileAuditStore({
+      stateFile: join(input.stateRoot, "audit-events.json")
+    }),
+    jobStore: new FileJobStore({
+      stateFile: join(input.stateRoot, "jobs.json")
+    }),
+    repositoryStore: new FileRepositoryStore({
+      stateFile: join(input.stateRoot, "repositories.json")
+    }),
+    runStore: new FileRunStore({
+      stateFile: join(input.stateRoot, "workflows.json")
+    })
+  };
+}
 
 const JOB_TIMELINE_WORKFLOW_EVENT_TYPES = new Set([
   "workflow.task_started",
@@ -97,11 +158,17 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     env.MAWO_ALLOWED_REPOSITORY_ROOTS
   );
   const cliAgents = createConfiguredAgentConfigs(env);
+  const stateStores = createStateStores({
+    requestedStateBackend,
+    stateRoot,
+    prismaClient:
+      options.prismaClient ?? (prisma as unknown as PrismaStateStoreClient)
+  });
+  const activeStateBackend = stateStores.activeStateBackend;
+  const activeQueueBackend = "in_process";
   const auditStore =
     options.auditStore ??
-    new FileAuditStore({
-      stateFile: join(root, ".mawo", "state", "audit-events.json")
-    });
+    stateStores.auditStore;
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test"
   });
@@ -118,9 +185,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       cliAgents,
       runStore:
         options.runStore ??
-        new FileRunStore({
-          stateFile: join(stateRoot, "workflows.json")
-        }),
+        stateStores.runStore,
       artifactStore: new FileArtifactStore({
         root: artifactRoot
       }),
@@ -148,9 +213,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     maxConcurrentJobs,
     jobStore:
       options.jobStore ??
-      new FileJobStore({
-        stateFile: join(stateRoot, "jobs.json")
-      }),
+      stateStores.jobStore,
     onJobRecovered: ({ original, recovered }) => {
       const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
         recovered.workflowId
@@ -181,9 +244,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
   const repositoryStore =
     options.repositoryStore ??
-    new FileRepositoryStore({
-      stateFile: join(stateRoot, "repositories.json")
-    });
+    stateStores.repositoryStore;
 
   app.register(cors, {
     origin: true
@@ -252,11 +313,15 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     });
     const deploymentTopologyCheck = createDeploymentTopologyCheck({
       deploymentMode,
-      apiReplicaCount
+      apiReplicaCount,
+      stateBackend: activeStateBackend,
+      queueBackend: activeQueueBackend
     });
     const runtimeBackendCheck = createRuntimeBackendCheck({
       requestedStateBackend,
       requestedQueueBackend,
+      activeStateBackend,
+      activeQueueBackend,
       maxConcurrentJobs,
       databaseUrlConfigured: Boolean(env.DATABASE_URL?.trim()),
       redisUrlConfigured: Boolean(env.REDIS_URL?.trim())
@@ -1183,9 +1248,9 @@ function createProductionConfigCheck(input: {
 function createDeploymentTopologyCheck(input: {
   deploymentMode: "development" | "production";
   apiReplicaCount: number;
+  stateBackend: "file" | "postgres";
+  queueBackend: "in_process";
 }) {
-  const stateBackend = "file";
-  const queueBackend = "in_process";
   const maxSupportedApiReplicas = 1;
 
   if (!Number.isInteger(input.apiReplicaCount) || input.apiReplicaCount < 1) {
@@ -1197,8 +1262,8 @@ function createDeploymentTopologyCheck(input: {
       deploymentMode: input.deploymentMode,
       apiReplicaCount: input.apiReplicaCount,
       maxSupportedApiReplicas,
-      stateBackend,
-      queueBackend,
+      stateBackend: input.stateBackend,
+      queueBackend: input.queueBackend,
       message: "MAWO_API_REPLICA_COUNT must be a positive integer."
     };
   }
@@ -1215,10 +1280,10 @@ function createDeploymentTopologyCheck(input: {
     deploymentMode: input.deploymentMode,
     apiReplicaCount: input.apiReplicaCount,
     maxSupportedApiReplicas,
-    stateBackend,
-    queueBackend,
+    stateBackend: input.stateBackend,
+    queueBackend: input.queueBackend,
     message: scaledPastFileRuntimeLimit
-      ? "File-backed state and in-process queue support one API replica. Set MAWO_API_REPLICA_COUNT=1 or migrate state and queue backends before scaling."
+      ? "The in-process queue supports one API replica. Set MAWO_API_REPLICA_COUNT=1 or migrate the queue backend before scaling."
       : "Runtime topology is compatible with the configured API replica count."
   };
 }
@@ -1226,17 +1291,17 @@ function createDeploymentTopologyCheck(input: {
 function createRuntimeBackendCheck(input: {
   requestedStateBackend: string;
   requestedQueueBackend: string;
+  activeStateBackend: "file" | "postgres";
+  activeQueueBackend: "in_process";
   maxConcurrentJobs: number;
   databaseUrlConfigured: boolean;
   redisUrlConfigured: boolean;
 }) {
-  const activeStateBackend = "file";
-  const activeQueueBackend = "in_process";
   const unsupported = [
-    input.requestedStateBackend !== activeStateBackend
+    input.requestedStateBackend !== input.activeStateBackend
       ? `MAWO_STATE_BACKEND=${input.requestedStateBackend}`
       : undefined,
-    input.requestedQueueBackend !== activeQueueBackend
+    input.requestedQueueBackend !== input.activeQueueBackend
       ? `MAWO_QUEUE_BACKEND=${input.requestedQueueBackend}`
       : undefined
   ].filter((item): item is string => Boolean(item));
@@ -1248,16 +1313,16 @@ function createRuntimeBackendCheck(input: {
     ok,
     status: ok ? "ready" : "blocked",
     requestedStateBackend: input.requestedStateBackend,
-    activeStateBackend,
+    activeStateBackend: input.activeStateBackend,
     requestedQueueBackend: input.requestedQueueBackend,
-    activeQueueBackend,
+    activeQueueBackend: input.activeQueueBackend,
     maxConcurrentJobs: input.maxConcurrentJobs,
     databaseUrlConfigured: input.databaseUrlConfigured,
     redisUrlConfigured: input.redisUrlConfigured,
     unsupported,
     message: ok
-      ? `Using file-backed state and in-process queue with max ${input.maxConcurrentJobs} concurrent workflow job${input.maxConcurrentJobs === 1 ? "" : "s"}.`
-      : `Requested runtime backend is not active yet: ${unsupported.join(", ")}. Keep MAWO_STATE_BACKEND=file and MAWO_QUEUE_BACKEND=in_process until Postgres/Redis backends are implemented.`
+      ? `Using ${input.activeStateBackend} state and ${input.activeQueueBackend} queue with max ${input.maxConcurrentJobs} concurrent workflow job${input.maxConcurrentJobs === 1 ? "" : "s"}.`
+      : `Requested runtime backend is not active yet: ${unsupported.join(", ")}. Keep unsupported backends on implemented values before rollout.`
   };
 }
 

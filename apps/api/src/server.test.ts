@@ -35,6 +35,38 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+function createEmptyPrismaStateClient() {
+  return {
+    repositoryRecord: {
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn()
+    },
+    workflowRun: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn()
+    },
+    workflowTaskRun: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn()
+    },
+    qualityGateRun: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn()
+    },
+    workflowJob: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn()
+    },
+    auditEvent: {
+      findMany: vi.fn(async () => []),
+      create: vi.fn()
+    }
+  };
+}
+
 async function createCommittedRepo() {
   const repoPath = await mkdtemp(join(tmpdir(), "mawo-server-repo-test-"));
   tempRoots.push(repoPath);
@@ -285,7 +317,7 @@ describe("runner API", () => {
     );
   });
 
-  it("blocks production readiness when unsupported runtime backends are requested", async () => {
+  it("blocks production readiness when an unsupported queue backend is requested", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-backend-test-"));
     tempRoots.push(demoRoot);
     const token = "production-token-1234567890";
@@ -299,7 +331,8 @@ describe("runner API", () => {
         MAWO_QUEUE_BACKEND: "redis",
         DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
         REDIS_URL: "redis://localhost:6379"
-      }
+      },
+      prismaClient: createEmptyPrismaStateClient()
     });
 
     const response = await app.inject({
@@ -322,7 +355,7 @@ describe("runner API", () => {
         ok: false,
         status: "blocked",
         requestedStateBackend: "postgres",
-        activeStateBackend: "file",
+        activeStateBackend: "postgres",
         requestedQueueBackend: "redis",
         activeQueueBackend: "in_process",
         databaseUrlConfigured: true,
@@ -1947,6 +1980,151 @@ describe("runner API", () => {
         id: job.id,
         workflowId: created.id,
         status: "queued"
+      })
+    ]);
+  });
+
+  it("uses Prisma stores when the postgres state backend is requested", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-postgres-state-test-"));
+    tempRoots.push(demoRoot);
+    const createdAt = new Date("2026-06-05T00:00:00.000Z");
+    const updatedAt = new Date("2026-06-05T00:01:00.000Z");
+    const repository = {
+      id: "postgres-repository",
+      name: "Postgres repo",
+      path: demoRoot,
+      defaultBranch: "main",
+      qualityGates: [],
+      createdAt,
+      updatedAt
+    };
+    const workflow = {
+      id: "postgres-workflow",
+      goal: "Restore from postgres",
+      status: "needs_review",
+      executionMode: "direct",
+      repositoryId: repository.id,
+      repositoryPath: repository.path,
+      worktreeRoot: null,
+      reviewDecision: null,
+      reviewNote: null,
+      reviewedAt: null,
+      createdAt,
+      updatedAt,
+      tasks: [],
+      qualityGates: []
+    };
+    const job = {
+      id: "postgres-job",
+      workflowRunId: workflow.id,
+      status: "completed",
+      error: null,
+      createdAt,
+      updatedAt,
+      startedAt: createdAt,
+      finishedAt: updatedAt
+    };
+    const auditEvent = {
+      id: "postgres-audit",
+      type: "workflow.created",
+      actor: "operator",
+      workflowRunId: workflow.id,
+      jobId: null,
+      metadata: {
+        repositoryId: repository.id
+      },
+      createdAt
+    };
+    const prismaClient = {
+      repositoryRecord: {
+        findMany: vi.fn(async () => [repository]),
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn()
+      },
+      workflowRun: {
+        findMany: vi.fn(async () => [workflow]),
+        upsert: vi.fn()
+      },
+      workflowTaskRun: {
+        deleteMany: vi.fn(),
+        createMany: vi.fn()
+      },
+      qualityGateRun: {
+        deleteMany: vi.fn(),
+        createMany: vi.fn()
+      },
+      workflowJob: {
+        findMany: vi.fn(async () => [job]),
+        upsert: vi.fn()
+      },
+      auditEvent: {
+        findMany: vi.fn(async () => [auditEvent]),
+        create: vi.fn()
+      }
+    };
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        MAWO_STATE_BACKEND: "postgres",
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo"
+      },
+      prismaClient
+    });
+
+    const readinessResponse = await app.inject({
+      method: "GET",
+      url: "/readiness"
+    });
+    const repositoriesResponse = await app.inject({
+      method: "GET",
+      url: "/repositories"
+    });
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${workflow.id}`
+    });
+    const jobResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${job.id}`
+    });
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+
+    expect(readinessResponse.statusCode).toBe(200);
+    expect(readinessResponse.json().checks).toContainEqual(
+      expect.objectContaining({
+        id: "runtime_backend",
+        ok: true,
+        requestedStateBackend: "postgres",
+        activeStateBackend: "postgres",
+        requestedQueueBackend: "in_process",
+        activeQueueBackend: "in_process"
+      })
+    );
+    expect(repositoriesResponse.json()).toEqual([
+      expect.objectContaining({
+        id: repository.id,
+        name: repository.name
+      })
+    ]);
+    expect(workflowResponse.json()).toMatchObject({
+      id: workflow.id,
+      repositoryId: repository.id,
+      status: "needs_review"
+    });
+    expect(jobResponse.json()).toMatchObject({
+      id: job.id,
+      workflowId: workflow.id,
+      status: "completed"
+    });
+    expect(auditResponse.json()).toEqual([
+      expect.objectContaining({
+        id: auditEvent.id,
+        workflowId: workflow.id
       })
     ]);
   });

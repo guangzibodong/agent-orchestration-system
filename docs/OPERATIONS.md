@@ -2,9 +2,10 @@
 
 This runbook is for the fastest safe launch of the MAWO multi-agent workflow
 orchestrator. It covers the current verified runtime: Node.js API + Next.js web
-app, with workflow state and artifacts persisted on local disk under `.mawo`.
-Postgres and Redis are available through Docker Compose, but the current app
-path does not require them for workflow execution.
+app, with workflow artifacts persisted on local disk under `.mawo`. Workflow
+state can run on the default `.mawo` file store or on Postgres with
+`MAWO_STATE_BACKEND=postgres`. Redis is available through Docker Compose, but
+the workflow queue is still in-process.
 
 ## 1. Runtime Summary
 
@@ -12,17 +13,20 @@ path does not require them for workflow execution.
 - API: Fastify, default `http://127.0.0.1:4000`
 - Health endpoint: `GET /health`
 - Readiness endpoint: `GET /readiness` for protected production checks.
-- Workflow state: `.mawo/state/workflows.json`
-- Job history: `.mawo/state/jobs.json`
-- Repository registry: `.mawo/state/repositories.json`
-- Audit events: `.mawo/state/audit-events.json`
+- Workflow state: `.mawo/state/workflows.json` by default, or Postgres when
+  `MAWO_STATE_BACKEND=postgres`
+- Job history: `.mawo/state/jobs.json` by default, or Postgres with the same
+  state backend setting
+- Repository registry: `.mawo/state/repositories.json` by default, or Postgres
+- Audit events: `.mawo/state/audit-events.json` by default, or Postgres
 - Workflow artifacts: `.mawo/artifacts/<workflowId>/`
 - Local logs, if redirected by operator scripts: `.logs/`
 - Optional infrastructure: Postgres `localhost:5432`, Redis `localhost:6379`
 
-Current launch limitation: the application stores workflow state in files, not
-Postgres/Redis. Treat `.mawo` as production data and back it up before deploys
-or rollback operations.
+Current launch limitation: the queue is still in the API process, so
+`MAWO_API_REPLICA_COUNT=1` remains the production-safe topology until the Redis
+worker queue is implemented. If you use the file state backend, treat `.mawo`
+as production data and back it up before deploys or rollback operations.
 
 ## 2. Environment Variables
 
@@ -65,12 +69,11 @@ Docker Compose infrastructure:
 
 Reserved or optional:
 
-- `MAWO_STATE_BACKEND`: active workflow state backend. Keep `file` until the
-  Postgres store is implemented.
+- `MAWO_STATE_BACKEND`: active workflow state backend. Use `file` for local
+  file-backed state, or `postgres` after running Prisma migrations.
 - `MAWO_QUEUE_BACKEND`: active workflow queue backend. Keep `in_process` until
   the Redis/worker queue is implemented.
-- `DATABASE_URL`: currently used only by Prisma helpers and future database
-  work; workflow runtime still uses `.mawo`.
+- `DATABASE_URL`: required when `MAWO_STATE_BACKEND=postgres`.
 - `REDIS_URL`: reserved for future queue/runtime work.
 
 Agent template placeholders:
@@ -211,10 +214,10 @@ migration command:
 
 The baseline migration lives in `apps/api/prisma/migrations` and creates tables
 for workflow runs, task runs, quality gate runs, workflow jobs, registered
-repositories, audit events, artifacts, and merge candidates. This prepares the
-database for the Postgres state-store migration, but the active runtime path is
-still `.mawo` file state until `/readiness` reports the `runtime_backend` as
-Postgres/Redis-backed.
+repositories, audit events, artifacts, and merge candidates. After migration,
+set `MAWO_STATE_BACKEND=postgres`; `/readiness` should report
+`activeStateBackend: "postgres"`. Queue execution remains in-process until the
+Redis/worker queue is implemented.
 
 The underlying package scripts are `npm run db:generate` and
 `npm run db:migrate` for local development, plus `npm run db:validate` and
@@ -485,10 +488,10 @@ back the web process first while keeping the API and `.mawo` untouched.
   persisted, queued jobs found after API restart are resumed, and running jobs
   are marked failed. Matching running workflows are recovered to `aborted` with
   interrupted task/gate metadata, then require operator retry.
-- Postgres and Redis are present in Compose but are not the active workflow
-  persistence path. `/readiness` reports the active `runtime_backend` and blocks
-  if `MAWO_STATE_BACKEND` or `MAWO_QUEUE_BACKEND` requests an unimplemented
-  backend.
+- Postgres is available as the active workflow state backend with
+  `MAWO_STATE_BACKEND=postgres`. Redis is present in Compose but is not yet the
+  active queue backend. `/readiness` reports the active `runtime_backend` and
+  blocks if `MAWO_QUEUE_BACKEND` requests an unimplemented backend.
 - API and web are containerized, but production public exposure still requires
   a reverse proxy, TLS, and an auth boundary.
 - Repository workflows require the target repository to be a git repository with

@@ -136,7 +136,7 @@ Postgres 的 baseline schema 已放在 `apps/api/prisma/migrations`，覆盖 wor
 
 对应的 package scripts 是 `npm run db:validate`、`npm run db:generate`、`npm run db:migrate` 和 `npm run db:migrate:deploy`。GitHub Actions 会启动 Postgres service 并执行 `npm run db:migrate:deploy`，防止迁移 SQL 和 Prisma schema 漂移。
 
-注意：当前 API 主运行路径仍是 `.mawo` 文件持久化和进程内队列，Postgres/Redis 还没有切为 active backend；切换 `MAWO_STATE_BACKEND` 或 `MAWO_QUEUE_BACKEND` 前要看 `/readiness` 的 `runtime_backend` 结果。
+注意：默认 `MAWO_STATE_BACKEND=file` 仍使用 `.mawo` 文件持久化；设置 `MAWO_STATE_BACKEND=postgres` 并完成迁移后，workflow、job、仓库注册和审计事件会使用 Postgres。队列仍是进程内队列，`MAWO_QUEUE_BACKEND=redis` 还未实现；切换后端前要看 `/readiness` 的 `runtime_backend` 结果。
 
 停止服务：
 
@@ -322,16 +322,16 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
 - `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
 - 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；如果生产环境声明多 API 副本，`GET /readiness` 会通过 `deployment_topology` 阻塞上线。
-- workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
+- workflow、job history、仓库注册表和审计事件默认是文件持久化；`MAWO_STATE_BACKEND=postgres` 可切到 Postgres state store。队列仍是进程内队列，因此暂不支持多 API 副本并发运行 workflow。
 - job queue 运行器仍在单 API 进程内；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力，API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
-- Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue；如果把 `MAWO_STATE_BACKEND` 或 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
+- Docker Compose 里有 Postgres/Redis；Postgres state backend 已可通过 `MAWO_STATE_BACKEND=postgres` 启用，Redis queue 尚未实现。如果把 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
 - 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
 
 ## 路线图
 
 近期优先级：
 
-1. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+1. 队列层升级：把进程内 job queue 迁移到 Redis/worker，并补齐多 API 副本拓扑。
 4. 云平台部署模板：Render/Vercel/Cloudflare/本机服务脚本。
 
 ## 文档入口
