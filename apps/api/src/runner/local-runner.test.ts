@@ -1,0 +1,319 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { ShellAdapter } from "./shell-adapter.js";
+import { LocalRunner } from "./local-runner.js";
+
+const node = JSON.stringify(process.execPath);
+const shell = new ShellAdapter();
+const tempRoots: string[] = [];
+
+async function run(command: string, cwd: string) {
+  const result = await shell.run({ command, cwd });
+
+  if (result.status !== "passed") {
+    throw new Error(result.stderr || result.stdout || `Command failed: ${command}`);
+  }
+
+  return result;
+}
+
+async function createCommittedRepo() {
+  const repoPath = await mkdtemp(join(tmpdir(), "mawo-local-runner-test-"));
+  tempRoots.push(repoPath);
+
+  await run("git init -b main", repoPath);
+  await run('git config user.email "test@example.com"', repoPath);
+  await run('git config user.name "MAWO Test"', repoPath);
+  await writeFile(join(repoPath, "README.md"), "initial\n", "utf8");
+  await run("git add README.md", repoPath);
+  await run('git commit -m "initial commit"', repoPath);
+
+  return repoPath;
+}
+
+afterEach(async () => {
+  for (const root of tempRoots.splice(0)) {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+describe("LocalRunner", () => {
+  it("runs workflow tasks and quality gates into a review-ready report", async () => {
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Prove the local runner loop",
+      tasks: [
+        {
+          id: "plan",
+          title: "Plan work",
+          agent: "shell",
+          command: `${node} -e "console.log('planned')"`
+        },
+        {
+          id: "verify",
+          title: "Verify work",
+          agent: "shell",
+          dependsOn: ["plan"],
+          command: `${node} -e "console.log('verified')"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "unit",
+          title: "Unit tests",
+          command: `${node} -e "console.log('tests passed')"`
+        }
+      ]
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("needs_review");
+    expect(completed.tasks.map((task) => task.status)).toEqual([
+      "passed",
+      "passed"
+    ]);
+    expect(completed.qualityGates.map((gate) => gate.status)).toEqual([
+      "passed"
+    ]);
+    expect(report.summary).toContain("2/2 tasks passed");
+    expect(report.summary).toContain("1/1 gates passed");
+    expect(report.recommendation).toBe("ready_for_review");
+  });
+
+  it("stops on a failed quality gate and reports the failure", async () => {
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Catch gate failures",
+      tasks: [
+        {
+          id: "task",
+          title: "Do work",
+          agent: "shell",
+          command: `${node} -e "console.log('done')"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "lint",
+          title: "Lint",
+          command: `${node} -e "console.error('lint failed'); process.exit(2)"`
+        }
+      ]
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("gate_failed");
+    expect(completed.qualityGates[0]?.status).toBe("failed");
+    expect(report.recommendation).toBe("fix_failed_gates");
+    expect(report.failedGates).toEqual(["lint"]);
+  });
+
+  it("fails workflow tasks that exceed their timeout", async () => {
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Bound task runtime",
+      tasks: [
+        {
+          id: "slow-task",
+          title: "Slow task",
+          agent: "shell",
+          command: `${node} -e "setTimeout(() => console.log('too late'), 1000)"`,
+          timeoutMs: 50
+        }
+      ],
+      qualityGates: []
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("failed");
+    expect(completed.tasks[0]?.status).toBe("failed");
+    expect(completed.tasks[0]?.result?.metadata?.timedOut).toBe("true");
+    expect(report.recommendation).toBe("fix_failed_tasks");
+  });
+
+  it("fails quality gates that exceed their timeout", async () => {
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Bound gate runtime",
+      tasks: [
+        {
+          id: "task",
+          title: "Task",
+          agent: "shell",
+          command: `${node} -e "console.log('done')"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "slow-gate",
+          title: "Slow gate",
+          command: `${node} -e "setTimeout(() => console.log('too late'), 1000)"`,
+          timeoutMs: 50
+        }
+      ]
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("gate_failed");
+    expect(completed.qualityGates[0]?.status).toBe("failed");
+    expect(completed.qualityGates[0]?.result?.metadata?.timedOut).toBe("true");
+    expect(report.recommendation).toBe("fix_failed_gates");
+  });
+
+  it("resets a failed workflow so it can run again", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-retry-test-"));
+    tempRoots.push(root);
+    const counterPath = join(root, "attempts.txt").replace(/\\/g, "\\\\");
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Retry transient task failures",
+      tasks: [
+        {
+          id: "flaky-task",
+          title: "Flaky task",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); const p = '${counterPath}'; const n = fs.existsSync(p) ? Number(fs.readFileSync(p, 'utf8')) + 1 : 1; fs.writeFileSync(p, String(n)); console.log('attempt ' + n); if (n < 2) process.exit(7);"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "unit",
+          title: "Unit tests",
+          command: `${node} -e "console.log('tests passed')"`
+        }
+      ]
+    });
+
+    const failed = await runner.runWorkflow(run.id);
+    expect(failed.status).toBe("failed");
+
+    const retried = runner.retryWorkflow(run.id);
+    expect(retried.status).toBe("ready");
+    expect(retried.review).toBeUndefined();
+    expect(retried.tasks[0]?.status).toBe("waiting");
+    expect(retried.tasks[0]?.result).toBeUndefined();
+    expect(retried.tasks[0]?.workspace).toBeUndefined();
+    expect(retried.tasks[0]?.diff).toBeUndefined();
+    expect(retried.qualityGates[0]?.status).toBe("waiting");
+    expect(retried.qualityGates[0]?.result).toBeUndefined();
+
+    const completed = await runner.runWorkflow(run.id);
+
+    expect(completed.status).toBe("needs_review");
+    expect(completed.tasks[0]?.result?.stdout).toContain("attempt 2");
+    expect(completed.qualityGates[0]?.status).toBe("passed");
+  });
+
+  it("runs tasks inside git worktrees and includes diff artifacts in the report", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Capture task patch",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "edit-readme",
+          title: "Edit README",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'agent edit\\\\n')"`
+        }
+      ],
+      qualityGates: []
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("needs_review");
+    expect(completed.tasks[0]?.workspace?.path).toContain("edit-readme");
+    expect(completed.tasks[0]?.diff?.patch).toContain("+agent edit");
+    expect(report.taskResults[0]?.workspacePath).toContain("edit-readme");
+    expect(report.taskResults[0]?.patch).toContain("+agent edit");
+  });
+
+  it("runs configured CLI agent tasks inside worktrees and captures their patch", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner(undefined, {
+      cliAgents: [
+        {
+          id: "fake-agent",
+          label: "Fake Agent",
+          commandTemplate: `${node} {promptFile}`
+        }
+      ]
+    });
+
+    const run = runner.createWorkflow({
+      goal: "Let a CLI agent edit README",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "agent-edit",
+          title: "Agent edit",
+          agent: "fake-agent",
+          instructions:
+            "const fs = require('fs'); fs.appendFileSync('README.md', 'cli agent edit\\\\n'); console.log('agent wrote patch');"
+        }
+      ],
+      qualityGates: []
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("needs_review");
+    expect(completed.tasks[0]?.result?.metadata?.agentId).toBe("fake-agent");
+    expect(completed.tasks[0]?.result?.stdout).toContain("agent wrote patch");
+    expect(completed.tasks[0]?.diff?.patch).toContain("+cli agent edit");
+    expect(completed.tasks[0]?.diff?.patch).not.toContain(".mawo-prompts");
+    expect(report.taskResults[0]?.agentId).toBe("fake-agent");
+    expect(report.taskResults[0]?.patch).toContain("+cli agent edit");
+    expect(report.taskResults[0]?.patch).not.toContain(".mawo-prompts");
+  });
+
+  it("creates a merge candidate from passed worktree task patches", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Create a merge candidate",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "edit-readme",
+          title: "Edit README",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'candidate patch\\\\n')"`
+        }
+      ],
+      qualityGates: []
+    });
+
+    await runner.runWorkflow(run.id);
+    const candidate = runner.getMergeCandidate(run.id);
+
+    expect(candidate.status).toBe("ready");
+    expect(candidate.summary).toContain("1 task patch");
+    expect(candidate.sourceBranches[0]).toContain("edit-readme");
+    expect(candidate.patch).toContain("+candidate patch");
+  });
+});

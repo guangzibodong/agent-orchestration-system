@@ -1,0 +1,760 @@
+"use client";
+
+import {
+  Activity,
+  Bot,
+  CheckCircle2,
+  FolderGit2,
+  GitBranch,
+  Play,
+  Plus,
+  RotateCcw,
+  Square,
+  ShieldCheck,
+  XCircle
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  agentSummarySchema,
+  mergeCandidateSchema,
+  runReportSchema,
+  workflowJobSchema,
+  workflowRunSchema,
+  type AgentSummary,
+  type MergeCandidate,
+  type RunReport,
+  type WorkflowJob,
+  type WorkflowRun
+} from "@mawo/shared";
+import { buildMergeCandidateDisplay } from "@/components/merge-candidate-display";
+import {
+  buildRepositoryWorkflowPayload,
+  canCreateRepositoryWorkflow,
+  type RepositoryWorkflowFormState
+} from "@/components/repository-workflow-payload";
+import { buildWorkflowReviewPayload } from "@/components/workflow-review-payload";
+import { WorkflowCanvas } from "@/components/workflow-canvas";
+import {
+  canCancelJobStatus,
+  canRetryWorkflowStatus,
+  formatJobStatus,
+  parseWorkflowAlreadyRunningJob,
+  type WorkflowJobDisplayStatus
+} from "@/components/workflow-actions";
+
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
+const defaultRepositoryForm: RepositoryWorkflowFormState = {
+  goal: "Run a real repository workflow",
+  repositoryPath: process.env.NEXT_PUBLIC_REPOSITORY_PATH ?? "",
+  agent: "shell",
+  taskCommand: "git status --short",
+  taskTimeoutMs: "900000",
+  qualityGateCommand: "",
+  qualityGateTimeoutMs: "300000"
+};
+
+type ConsoleWorkflowJob = Omit<WorkflowJob, "status"> & {
+  status: WorkflowJobDisplayStatus;
+};
+
+class ApiResponseError extends Error {
+  readonly body: unknown;
+  readonly status: number;
+
+  constructor(status: number, path: string, body: unknown) {
+    super(`API ${status}: ${path}`);
+    this.name = "ApiResponseError";
+    this.body = body;
+    this.status = status;
+  }
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${apiUrl}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers
+    }
+  });
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  const body = text ? (JSON.parse(text) as unknown) : undefined;
+
+  if (!response.ok) {
+    throw new ApiResponseError(response.status, path, body);
+  }
+
+  return body as T;
+}
+
+export function RunConsole() {
+  const [workflow, setWorkflow] = useState<WorkflowRun>();
+  const [report, setReport] = useState<RunReport>();
+  const [job, setJob] = useState<ConsoleWorkflowJob>();
+  const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
+  const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
+  const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const metrics = useMemo(
+    () => [
+      {
+        label: "Agents",
+        value: String(new Set(workflow?.tasks.map((task) => task.agent)).size || 0),
+        icon: Activity
+      },
+      {
+        label: "Workflow Nodes",
+        value: String(
+          (workflow?.tasks.length ?? 0) + (workflow?.qualityGates.length ?? 0)
+        ),
+        icon: GitBranch
+      },
+      {
+        label: "Quality Gates",
+        value: String(workflow?.qualityGates.length ?? 0),
+        icon: ShieldCheck
+      }
+    ],
+    [workflow]
+  );
+  const canCreateRepositoryRun = useMemo(
+    () => canCreateRepositoryWorkflow(repositoryForm),
+    [repositoryForm]
+  );
+  const agentOptions = useMemo(
+    () => [{ id: "shell", label: "Shell" }, ...configuredAgents],
+    [configuredAgents]
+  );
+  const canRetryCurrentWorkflow = canRetryWorkflowStatus(workflow?.status);
+  const canCancelCurrentJob = canCancelJobStatus(job?.status);
+
+  const updateRepositoryForm = useCallback(
+    (field: keyof RepositoryWorkflowFormState, value: string) => {
+      setRepositoryForm((current) => ({
+        ...current,
+        [field]: value
+      }));
+    },
+    []
+  );
+
+  const createDemo = useCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+    setReport(undefined);
+    setJob(undefined);
+    setMergeCandidate(undefined);
+
+    try {
+      const next = await api<unknown>("/workflows/demo", {
+        method: "POST",
+        body: "{}"
+      });
+      setWorkflow(workflowRunSchema.parse(next));
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : "Create failed");
+    } finally {
+      setIsBusy(false);
+    }
+  }, []);
+
+  const createWorktreeDemo = useCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+    setReport(undefined);
+    setJob(undefined);
+    setMergeCandidate(undefined);
+
+    try {
+      const next = await api<unknown>("/workflows/worktree-demo", {
+        method: "POST",
+        body: "{}"
+      });
+      setWorkflow(workflowRunSchema.parse(next));
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error ? apiError.message : "Create worktree run failed"
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, []);
+
+  const createAgentDemo = useCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+    setReport(undefined);
+    setJob(undefined);
+    setMergeCandidate(undefined);
+
+    try {
+      const next = await api<unknown>("/workflows/agent-demo", {
+        method: "POST",
+        body: "{}"
+      });
+      setWorkflow(workflowRunSchema.parse(next));
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error ? apiError.message : "Create agent run failed"
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, []);
+
+  const createRepositoryWorkflow = useCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+    setReport(undefined);
+    setJob(undefined);
+    setMergeCandidate(undefined);
+
+    try {
+      const payload = buildRepositoryWorkflowPayload(repositoryForm);
+      const next = await api<unknown>("/workflows/repository", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      setWorkflow(workflowRunSchema.parse(next));
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error
+          ? apiError.message
+          : "Create repository run failed"
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, [repositoryForm]);
+
+  const loadLatestWorkflow = useCallback(async () => {
+    const workflows = await api<unknown[]>("/workflows");
+    const parsed = workflows.map((item) => workflowRunSchema.parse(item));
+
+    if (parsed.length > 0) {
+      setWorkflow(parsed.at(-1));
+      return;
+    }
+
+    await createDemo();
+  }, [createDemo]);
+
+  const loadConfiguredAgents = useCallback(async () => {
+    const agents = await api<unknown[]>("/agents");
+    setConfiguredAgents(agents.map((agent) => agentSummarySchema.parse(agent)));
+  }, []);
+
+  const loadMergeCandidate = useCallback(async (workflowId: string) => {
+    const candidate = await api<unknown>(
+      `/workflows/${workflowId}/merge-candidate`
+    );
+    setMergeCandidate(mergeCandidateSchema.parse(candidate));
+  }, []);
+
+  const refreshJobAndWorkflow = useCallback(
+    async (jobId: string, workflowId: string) => {
+      const [nextJob, nextWorkflow] = await Promise.all([
+        api<unknown>(`/jobs/${jobId}`),
+        api<unknown>(`/workflows/${workflowId}`)
+      ]);
+      setJob(parseWorkflowJob(nextJob));
+      setWorkflow(workflowRunSchema.parse(nextWorkflow));
+    },
+    []
+  );
+
+  const runWorkflow = useCallback(async () => {
+    if (!workflow) {
+      return;
+    }
+
+    setIsBusy(true);
+    setError(undefined);
+    setJob(undefined);
+
+    try {
+      let queuedJob: ConsoleWorkflowJob;
+
+      try {
+        const queued = await api<unknown>(`/workflows/${workflow.id}/enqueue`, {
+          method: "POST",
+          body: "{}"
+        });
+        queuedJob = parseWorkflowJob(queued);
+      } catch (apiError) {
+        const activeJob =
+          apiError instanceof ApiResponseError
+            ? parseWorkflowAlreadyRunningJob(apiError.body)
+            : undefined;
+
+        if (!activeJob) {
+          throw apiError;
+        }
+
+        queuedJob = parseWorkflowJob(activeJob);
+      }
+
+      setJob(queuedJob);
+
+      for (let attempt = 0; attempt < 80; attempt++) {
+        await delay(250);
+        const nextJob = parseWorkflowJob(
+          await api<unknown>(`/jobs/${queuedJob.id}`)
+        );
+        setJob(nextJob);
+        const nextWorkflow = workflowRunSchema.parse(
+          await api<unknown>(`/workflows/${workflow.id}`)
+        );
+        setWorkflow(nextWorkflow);
+
+        if (
+          nextJob.status === "completed" ||
+          nextJob.status === "failed" ||
+          nextJob.status === "canceled"
+        ) {
+          if (nextJob.status !== "canceled") {
+            const nextReport = await api<unknown>(
+              `/workflows/${workflow.id}/report`
+            );
+            setReport(runReportSchema.parse(nextReport));
+            await loadMergeCandidate(workflow.id);
+          }
+          break;
+        }
+      }
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : "Run failed");
+    } finally {
+      setIsBusy(false);
+    }
+  }, [loadMergeCandidate, workflow]);
+
+  const cancelJob = useCallback(async () => {
+    if (!job || !workflow || !canCancelJobStatus(job.status)) {
+      return;
+    }
+
+    setIsCanceling(true);
+    setError(undefined);
+
+    try {
+      await api<unknown>(`/jobs/${job.id}/cancel`, {
+        method: "POST",
+        body: "{}"
+      });
+      await refreshJobAndWorkflow(job.id, workflow.id);
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error
+          ? `Cancel failed: ${apiError.message}`
+          : "Cancel failed"
+      );
+      await refreshJobAndWorkflow(job.id, workflow.id).catch(() => undefined);
+    } finally {
+      setIsCanceling(false);
+    }
+  }, [job, refreshJobAndWorkflow, workflow]);
+
+  const retryWorkflow = useCallback(async () => {
+    if (!workflow || !canRetryWorkflowStatus(workflow.status)) {
+      return;
+    }
+
+    setIsBusy(true);
+    setError(undefined);
+    setReport(undefined);
+    setJob(undefined);
+    setMergeCandidate(undefined);
+
+    try {
+      const retried = await api<unknown>(`/workflows/${workflow.id}/retry`, {
+        method: "POST",
+        body: "{}"
+      });
+      setWorkflow(workflowRunSchema.parse(retried));
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : "Retry failed");
+    } finally {
+      setIsBusy(false);
+    }
+  }, [workflow]);
+
+  const reviewWorkflow = useCallback(
+    async (decision: "approve" | "reject") => {
+      if (!workflow) {
+        return;
+      }
+
+      setIsBusy(true);
+      setError(undefined);
+
+      try {
+        const reviewed = await api<unknown>(`/workflows/${workflow.id}/review`, {
+          method: "POST",
+          body: JSON.stringify(buildWorkflowReviewPayload(decision))
+        });
+        setWorkflow(workflowRunSchema.parse(reviewed));
+        if (decision === "approve") {
+          await loadMergeCandidate(workflow.id);
+        }
+      } catch (apiError) {
+        setError(apiError instanceof Error ? apiError.message : "Review failed");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [loadMergeCandidate, workflow]
+  );
+
+  useEffect(() => {
+    // Load the API-backed in-memory run after the browser can reach the API.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadLatestWorkflow().catch((apiError) => {
+      setError(apiError instanceof Error ? apiError.message : "Load failed");
+    });
+    loadConfiguredAgents().catch((apiError) => {
+      setError(apiError instanceof Error ? apiError.message : "Load agents failed");
+    });
+  }, [loadConfiguredAgents, loadLatestWorkflow]);
+
+  return (
+    <main className="shell">
+      <aside className="sidebar">
+        <div>
+          <p className="eyebrow">MAWO</p>
+          <h1>多 Agent 编排平台</h1>
+        </div>
+        <nav className="nav">
+          <button className="navItem active">Run Console</button>
+          <button className="navItem">Workflows</button>
+          <button className="navItem">Agents</button>
+          <button className="navItem">Quality Gates</button>
+        </nav>
+      </aside>
+
+      <section className="workspace">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">v0.1 Local Runner</p>
+            <h2>{workflow?.goal ?? "Local workflow"}</h2>
+          </div>
+          <div className="actions">
+            <button className="secondaryButton" disabled={isBusy} onClick={createDemo}>
+              <Plus aria-hidden="true" size={16} />
+              Shell Run
+            </button>
+            <button
+              className="secondaryButton"
+              disabled={isBusy}
+              onClick={createWorktreeDemo}
+            >
+              <GitBranch aria-hidden="true" size={16} />
+              Worktree Run
+            </button>
+            <button
+              className="secondaryButton"
+              disabled={isBusy}
+              onClick={createAgentDemo}
+            >
+              <Bot aria-hidden="true" size={16} />
+              Agent Run
+            </button>
+            <button
+              className="primaryButton"
+              disabled={isBusy || !workflow}
+              onClick={runWorkflow}
+            >
+              <Play aria-hidden="true" size={16} />
+              Run Workflow
+            </button>
+            <button
+              className="secondaryButton"
+              disabled={isBusy || !canRetryCurrentWorkflow}
+              onClick={retryWorkflow}
+            >
+              <RotateCcw aria-hidden="true" size={16} />
+              Retry
+            </button>
+          </div>
+        </header>
+
+        <div className="metrics">
+          {metrics.map((metric) => (
+            <div className="metric" key={metric.label}>
+              <metric.icon aria-hidden="true" size={18} />
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+            </div>
+          ))}
+        </div>
+
+        <form
+          className="repositoryPanel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createRepositoryWorkflow();
+          }}
+        >
+          <label className="field wide">
+            <span>Repository Path</span>
+            <input
+              value={repositoryForm.repositoryPath}
+              onChange={(event) =>
+                updateRepositoryForm("repositoryPath", event.target.value)
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Goal</span>
+            <input
+              value={repositoryForm.goal}
+              onChange={(event) => updateRepositoryForm("goal", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Agent</span>
+            <select
+              value={repositoryForm.agent}
+              onChange={(event) => updateRepositoryForm("agent", event.target.value)}
+            >
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Task Command</span>
+            <textarea
+              rows={2}
+              value={repositoryForm.taskCommand}
+              onChange={(event) =>
+                updateRepositoryForm("taskCommand", event.target.value)
+              }
+            />
+          </label>
+          <label className="field compact">
+            <span>Task Timeout</span>
+            <input
+              inputMode="numeric"
+              value={repositoryForm.taskTimeoutMs}
+              onChange={(event) =>
+                updateRepositoryForm("taskTimeoutMs", event.target.value)
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Quality Gate</span>
+            <textarea
+              rows={2}
+              value={repositoryForm.qualityGateCommand}
+              onChange={(event) =>
+                updateRepositoryForm("qualityGateCommand", event.target.value)
+              }
+            />
+          </label>
+          <label className="field compact">
+            <span>Gate Timeout</span>
+            <input
+              inputMode="numeric"
+              value={repositoryForm.qualityGateTimeoutMs}
+              onChange={(event) =>
+                updateRepositoryForm("qualityGateTimeoutMs", event.target.value)
+              }
+            />
+          </label>
+          <button
+            className="secondaryButton"
+            disabled={isBusy || !canCreateRepositoryRun}
+            type="submit"
+          >
+            <FolderGit2 aria-hidden="true" size={16} />
+            Repository Run
+          </button>
+        </form>
+
+        {error ? <p className="errorText">{error}</p> : null}
+        {job ? (
+          <div className={`jobBanner ${job.status}`}>
+            <div className="jobBannerMain">
+              <span>Job {job.id.slice(0, 8)}</span>
+              <strong>{formatJobStatus(job.status)}</strong>
+            </div>
+            {job.error ? <p>{job.error}</p> : null}
+            {canCancelCurrentJob ? (
+              <button
+                className="secondaryButton"
+                disabled={isCanceling}
+                onClick={() => void cancelJob()}
+                type="button"
+              >
+                <Square aria-hidden="true" size={15} />
+                {isCanceling ? "Canceling" : "Cancel"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="consoleGrid">
+          <WorkflowCanvas workflow={workflow} />
+          <aside className="inspector">
+            <div className={`statusPill ${workflow?.status ?? "draft"}`}>
+              {workflow?.status ?? "draft"}
+            </div>
+
+            <section className="inspectorSection">
+              <h3>Tasks</h3>
+              <div className="runList">
+                {workflow?.tasks.map((task) => (
+                  <article className="runItem" key={task.id}>
+                    <strong>{task.title}</strong>
+                    <span>{task.status}</span>
+                    {task.workspace ? (
+                      <dl className="artifactMeta">
+                        {task.result?.metadata?.agentId ? (
+                          <div>
+                            <dt>Agent</dt>
+                            <dd>
+                              {task.result.metadata.agentLabel ??
+                                task.result.metadata.agentId}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {task.result?.metadata?.promptFile ? (
+                          <div>
+                            <dt>Prompt File</dt>
+                            <dd>{task.result.metadata.promptFile}</dd>
+                          </div>
+                        ) : null}
+                        <div>
+                          <dt>Branch</dt>
+                          <dd>{task.workspace.branch}</dd>
+                        </div>
+                        <div>
+                          <dt>Workspace</dt>
+                          <dd>{task.workspace.path}</dd>
+                        </div>
+                      </dl>
+                    ) : null}
+                    {task.result?.stdout ? <pre>{task.result.stdout}</pre> : null}
+                    {task.result?.stderr ? <pre>{task.result.stderr}</pre> : null}
+                    {task.diff?.status ? (
+                      <pre className="patchBox">{task.diff.status}</pre>
+                    ) : null}
+                    {task.diff?.patch ? (
+                      <pre className="patchBox">{task.diff.patch}</pre>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="inspectorSection">
+              <h3>Quality Gates</h3>
+              <div className="runList">
+                {workflow?.qualityGates.map((gate) => (
+                  <article className="runItem" key={gate.id}>
+                    <strong>{gate.title}</strong>
+                    <span>{gate.status}</span>
+                    {gate.result?.stdout ? <pre>{gate.result.stdout}</pre> : null}
+                    {gate.result?.stderr ? <pre>{gate.result.stderr}</pre> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="inspectorSection">
+              <h3>Report</h3>
+              {report ? (
+                <div className="reportBox">
+                  <strong>{report.recommendation}</strong>
+                  <p>{report.summary}</p>
+                  {report.reportArtifactPath ? (
+                    <p>{report.reportArtifactPath}</p>
+                  ) : null}
+                  {workflow?.status === "needs_review" ? (
+                    <div className="reviewActions">
+                      <button
+                        className="primaryButton"
+                        disabled={isBusy}
+                        onClick={() => void reviewWorkflow("approve")}
+                        type="button"
+                      >
+                        <CheckCircle2 aria-hidden="true" size={16} />
+                        Approve
+                      </button>
+                      <button
+                        className="secondaryButton"
+                        disabled={isBusy}
+                        onClick={() => void reviewWorkflow("reject")}
+                        type="button"
+                      >
+                        <XCircle aria-hidden="true" size={16} />
+                        Reject
+                      </button>
+                    </div>
+                  ) : null}
+                  {workflow?.review ? (
+                    <p>
+                      {workflow.review.decision} / {workflow.review.reviewedAt}
+                    </p>
+                  ) : null}
+                  {mergeCandidate ? (
+                    <div className="mergeCandidateBox">
+                      {buildMergeCandidateDisplay(mergeCandidate).lines.map(
+                        (line) => (
+                          <p key={line}>{line}</p>
+                        )
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="reportBox muted">No report</div>
+              )}
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseWorkflowJob(value: unknown): ConsoleWorkflowJob {
+  if (isCanceledWorkflowJob(value)) {
+    return value;
+  }
+
+  return workflowJobSchema.parse(value);
+}
+
+function isCanceledWorkflowJob(value: unknown): value is ConsoleWorkflowJob {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const job = value as Partial<Record<keyof ConsoleWorkflowJob, unknown>>;
+  return (
+    job.status === "canceled" &&
+    typeof job.id === "string" &&
+    typeof job.workflowId === "string" &&
+    typeof job.createdAt === "string" &&
+    typeof job.updatedAt === "string" &&
+    (job.startedAt === undefined || typeof job.startedAt === "string") &&
+    (job.finishedAt === undefined || typeof job.finishedAt === "string") &&
+    (job.error === undefined || typeof job.error === "string")
+  );
+}

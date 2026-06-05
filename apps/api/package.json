@@ -1,0 +1,25 @@
+{
+  "name": "@mawo/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/cors": "latest",
+    "@mawo/shared": "0.1.0",
+    "@prisma/adapter-pg": "latest",
+    "@prisma/client": "latest",
+    "fastify": "latest",
+    "pg": "latest",
+    "pino": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/pg": "latest"
+  }
+}

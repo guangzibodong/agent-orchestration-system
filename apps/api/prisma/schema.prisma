@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model WorkflowRun {
+  id        String   @id @default(cuid())
+  goal      String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     TaskRun[]
+}
+
+model TaskRun {
+  id            String      @id @default(cuid())
+  workflowRunId String
+  title         String
+  status        String
+  agent         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,42 @@
+{
+  "name": "multi-agent-workflow-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first orchestration platform for coordinating multiple AI coding agents with quality gates.",
+  "packageManager": "npm@11.13.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-env.ps1",
+    "dev": "concurrently -n web,api -c cyan,green \"npm run dev -w @mawo/web\" \"npm run dev -w @mawo/api\"",
+    "dev:web": "npm run dev -w @mawo/web",
+    "dev:api": "npm run dev -w @mawo/api",
+    "build": "npm run build -w @mawo/shared && npm run build -w @mawo/api && npm run build -w @mawo/web",
+    "typecheck": "npm run typecheck -w @mawo/shared && npm run typecheck -w @mawo/api && npm run typecheck -w @mawo/web",
+    "test": "vitest run",
+    "smoke:api": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-api-repository.ps1",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "prisma generate --schema apps/api/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema apps/api/prisma/schema.prisma",
+    "playwright:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "latest",
+    "@types/node": "latest",
+    "@typescript-eslint/eslint-plugin": "latest",
+    "@typescript-eslint/parser": "latest",
+    "concurrently": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "prettier": "latest",
+    "prisma": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}
