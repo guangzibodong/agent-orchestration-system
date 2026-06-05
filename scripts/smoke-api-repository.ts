@@ -230,6 +230,10 @@ async function main() {
       create.body.status === "ready",
       `Created workflow status was ${String(create.body.status)}`,
     );
+    assert(
+      create.body.repositoryId === repositoryId,
+      "Created workflow did not keep the registered repository id.",
+    );
     const workflowId = create.body.id;
     log(`created repository workflow ${workflowId} from registered repository`);
 
@@ -311,7 +315,24 @@ async function main() {
         filteredWorkflowRows[0]?.id === workflowId,
       "Filtered workflow history did not return the review-ready repository workflow.",
     );
-    log("workflow history filters isolate repository runs by status");
+    const filteredRepositoryWorkflows = await request(
+      baseUrl,
+      "GET",
+      `/workflows?status=needs_review&repositoryId=${repositoryId}&limit=1`,
+    );
+    assert(
+      filteredRepositoryWorkflows.status === 200,
+      `Repository id workflow filter returned ${filteredRepositoryWorkflows.status}`,
+    );
+    const filteredRepositoryWorkflowRows =
+      filteredRepositoryWorkflows.body as unknown as Array<JsonObject>;
+    assert(
+      filteredRepositoryWorkflowRows.length === 1 &&
+        filteredRepositoryWorkflowRows[0]?.id === workflowId &&
+        filteredRepositoryWorkflowRows[0]?.repositoryId === repositoryId,
+      "Repository id workflow filter did not return the registered repository workflow.",
+    );
+    log("workflow history filters isolate repository runs by status and repository id");
 
     const report = await request(
       baseUrl,
@@ -648,6 +669,24 @@ async function main() {
       "audit events recorded operator actions plus task and gate lifecycle",
     );
 
+    const filteredWorkflowCreatedAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=workflow.created&repositoryId=${repositoryId}&limit=1`,
+    );
+    assert(
+      filteredWorkflowCreatedAudit.status === 200,
+      `Filtered workflow created audit returned ${filteredWorkflowCreatedAudit.status}`,
+    );
+    assert(
+      (filteredWorkflowCreatedAudit.body as unknown as Array<JsonObject>).some(
+        (event) =>
+          event.type === "workflow.created" &&
+          event.workflowId === workflowId &&
+          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+      ),
+      "Filtered workflow created audit did not include the registered repository id.",
+    );
     const filteredRepositoryAudit = await request(
       baseUrl,
       "GET",

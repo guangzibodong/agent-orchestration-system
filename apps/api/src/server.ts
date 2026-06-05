@@ -162,6 +162,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.get<{
     Querystring: {
       limit?: string;
+      repositoryId?: string;
       repositoryPath?: string;
       status?: string;
     };
@@ -182,6 +183,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       : undefined;
     const workflows = activeRunner.listWorkflows().filter((workflow) => {
       if (workflowStatus?.data && workflow.status !== workflowStatus.data) {
+        return false;
+      }
+
+      if (
+        request.query.repositoryId &&
+        workflow.repositoryId !== request.query.repositoryId
+      ) {
         return false;
       }
 
@@ -422,6 +430,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         workflowId: run.id,
         metadata: {
           source: "repository",
+          repositoryId: run.repositoryId ?? "",
           repositoryPath: run.repositoryPath ?? ""
         }
       });

@@ -38,6 +38,7 @@ export async function createRepositoryWorkflowDefinition(
   return {
     goal: input.goal,
     executionMode: "worktree",
+    repositoryId: input.repositoryId,
     repositoryPath: input.repositoryPath,
     worktreeRoot:
       input.worktreeRoot ??

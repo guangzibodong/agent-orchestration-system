@@ -1289,6 +1289,17 @@ describe("runner API", () => {
       }
     });
     const created = createResponse.json();
+    const unrelatedReadyWorkflow = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+    const filteredWorkflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows?status=ready&repositoryId=${repository.id}&limit=10`
+    });
+    const workflowCreatedAuditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?type=workflow.created&repositoryId=${repository.id}`
+    });
     const runResponse = await app.inject({
       method: "POST",
       url: `/workflows/${created.id}/run`
@@ -1296,12 +1307,34 @@ describe("runner API", () => {
     const completed = runResponse.json();
 
     expect(createResponse.statusCode).toBe(201);
+    expect(created.repositoryId).toBe(repository.id);
     expect(created.repositoryPath).toBe(repoPath);
     expect(created.qualityGates[0]).toMatchObject({
       id: "readme-gate",
       title: "README has registered marker"
     });
+    expect(filteredWorkflowResponse.statusCode).toBe(200);
+    expect(
+      filteredWorkflowResponse.json().map((workflow: { id: string }) => workflow.id)
+    ).toEqual([created.id]);
+    expect(filteredWorkflowResponse.json()).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: unrelatedReadyWorkflow.id })
+      ])
+    );
+    expect(workflowCreatedAuditResponse.statusCode).toBe(200);
+    expect(workflowCreatedAuditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "workflow.created",
+        workflowId: created.id,
+        metadata: expect.objectContaining({
+          repositoryId: repository.id,
+          repositoryPath: repoPath
+        })
+      })
+    );
     expect(runResponse.statusCode).toBe(200);
+    expect(completed.repositoryId).toBe(repository.id);
     expect(completed.status).toBe("needs_review");
     expect(completed.qualityGates[0].status).toBe("passed");
   });

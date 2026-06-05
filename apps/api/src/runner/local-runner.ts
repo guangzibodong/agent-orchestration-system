@@ -55,6 +55,7 @@ export type QualityGateDefinition = {
 export type WorkflowDefinition = {
   goal: string;
   executionMode?: "direct" | "worktree";
+  repositoryId?: string;
   repositoryPath?: string;
   worktreeRoot?: string;
   tasks: WorkflowTaskDefinition[];
@@ -86,6 +87,7 @@ export type LocalWorkflowRun = {
   goal: string;
   status: RunnerWorkflowStatus;
   executionMode: "direct" | "worktree";
+  repositoryId?: string;
   repositoryPath?: string;
   worktreeRoot?: string;
   createdAt: string;
@@ -234,6 +236,7 @@ export class LocalRunner {
       goal: definition.goal,
       status: "ready",
       executionMode: definition.executionMode ?? "direct",
+      repositoryId: definition.repositoryId,
       repositoryPath: definition.repositoryPath,
       worktreeRoot: definition.worktreeRoot,
       createdAt: now,

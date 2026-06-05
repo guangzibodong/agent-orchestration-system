@@ -63,6 +63,7 @@ describe("workflowRunSchema", () => {
       goal: "Run in a worktree",
       status: "needs_review",
       executionMode: "worktree",
+      repositoryId: "repo_1",
       repositoryPath: "C:/repo",
       tasks: [
         {
@@ -85,6 +86,7 @@ describe("workflowRunSchema", () => {
     });
 
     expect(run.executionMode).toBe("worktree");
+    expect(run.repositoryId).toBe("repo_1");
     expect(run.tasks[0]?.workspace?.branch).toBe("mawo/run/task");
     expect(run.tasks[0]?.diff?.patch).toContain("worktree runner");
   });

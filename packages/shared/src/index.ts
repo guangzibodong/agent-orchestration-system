@@ -78,6 +78,7 @@ export const workflowRunSchema = z.object({
   goal: z.string(),
   status: workflowStatusSchema,
   executionMode: z.enum(["direct", "worktree"]).optional(),
+  repositoryId: z.string().optional(),
   repositoryPath: z.string().optional(),
   worktreeRoot: z.string().optional(),
   createdAt: z.string().optional(),
