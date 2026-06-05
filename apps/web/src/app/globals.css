@@ -475,7 +475,9 @@ h2 {
 .agentHealthItem,
 .auditEventItem,
 .jobHistoryItem,
+.jobTimelineItem,
 .workflowHistoryItem,
+.timelineSummary,
 .reportBox {
   display: grid;
   gap: 6px;
@@ -490,7 +492,9 @@ h2 {
 .agentHealthItem strong,
 .auditEventItem strong,
 .jobHistoryItem strong,
+.jobTimelineItem strong,
 .workflowHistoryItem strong,
+.timelineSummary strong,
 .reportBox strong {
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -500,7 +504,9 @@ h2 {
 .agentHealthItem p,
 .auditEventItem p,
 .jobHistoryItem p,
+.jobTimelineItem p,
 .workflowHistoryItem p,
+.timelineSummary p,
 .reportBox p,
 .reportBox.muted {
   margin: 0;
@@ -533,6 +539,15 @@ h2 {
   min-width: 0;
 }
 
+.jobTimelineItem > div:first-child,
+.timelineSummary > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .workflowHistoryItem > div:first-child {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -541,6 +556,7 @@ h2 {
   min-width: 0;
 }
 
+.jobHistoryItem > .secondaryButton,
 .workflowHistoryItem > .secondaryButton {
   justify-self: end;
   min-height: 32px;
@@ -702,6 +718,27 @@ h2 {
   margin: 0;
   color: var(--danger);
   overflow-wrap: anywhere;
+}
+
+.jobBannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.timelinePanel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.timelineList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  min-width: 0;
 }
 
 .reviewActions {

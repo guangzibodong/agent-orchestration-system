@@ -4,6 +4,7 @@ import {
   Activity,
   Bot,
   CheckCircle2,
+  Clock3,
   FileText,
   FolderGit2,
   GitBranch,
@@ -63,6 +64,11 @@ import {
   buildJobHistoryDisplay,
   summarizeJobHistory
 } from "@/components/job-history-display";
+import {
+  buildJobTimelineDisplay,
+  loadJobTimeline,
+  type JobTimelineResponse
+} from "@/components/job-timeline-display";
 import {
   buildArtifactPreviewDisplay,
   buildArtifactPreviewPath,
@@ -163,9 +169,11 @@ export function RunConsole() {
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
+  const [jobTimeline, setJobTimeline] = useState<JobTimelineResponse>();
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
   const [error, setError] = useState<string>();
 
   const agentHealthSummary = useMemo(
@@ -199,6 +207,10 @@ export function RunConsole() {
   const jobHistoryDisplay = useMemo(
     () => buildJobHistoryDisplay(jobHistory).slice(0, 8),
     [jobHistory]
+  );
+  const jobTimelineDisplay = useMemo(
+    () => (jobTimeline ? buildJobTimelineDisplay(jobTimeline) : undefined),
+    [jobTimeline]
   );
   const workflowListSummary = useMemo(
     () => summarizeWorkflowList(workflowList),
@@ -329,6 +341,7 @@ export function RunConsole() {
     setReport(undefined);
     setArtifactPreview(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
     setMergeCandidate(undefined);
 
     try {
@@ -351,6 +364,7 @@ export function RunConsole() {
     setReport(undefined);
     setArtifactPreview(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
     setMergeCandidate(undefined);
 
     try {
@@ -375,6 +389,7 @@ export function RunConsole() {
     setReport(undefined);
     setArtifactPreview(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
     setMergeCandidate(undefined);
 
     try {
@@ -399,6 +414,7 @@ export function RunConsole() {
     setReport(undefined);
     setArtifactPreview(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
     setMergeCandidate(undefined);
 
     try {
@@ -436,6 +452,7 @@ export function RunConsole() {
     setReport(undefined);
     setArtifactPreview(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
     setMergeCandidate(undefined);
 
     try {
@@ -538,6 +555,23 @@ export function RunConsole() {
     setMergeCandidate(mergeCandidateSchema.parse(candidate));
   }, []);
 
+  const loadTimelineForJob = useCallback(async (jobId: string) => {
+    setIsLoadingTimeline(true);
+    setError(undefined);
+
+    try {
+      setJobTimeline(await loadJobTimeline(api, jobId));
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error
+          ? `Load job timeline failed: ${apiError.message}`
+          : "Load job timeline failed"
+      );
+    } finally {
+      setIsLoadingTimeline(false);
+    }
+  }, []);
+
   const previewReportArtifact = useCallback(async () => {
     if (!workflow || !report?.reportArtifactPath) {
       return;
@@ -585,6 +619,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
 
     try {
       let queuedJob: ConsoleWorkflowJob;
@@ -635,6 +670,7 @@ export function RunConsole() {
           }
           await loadWorkflowList();
           await refreshOperationsSnapshot();
+          await loadTimelineForJob(nextJob.id);
           break;
         }
       }
@@ -643,7 +679,13 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [loadMergeCandidate, loadWorkflowList, refreshOperationsSnapshot, workflow]);
+  }, [
+    loadMergeCandidate,
+    loadTimelineForJob,
+    loadWorkflowList,
+    refreshOperationsSnapshot,
+    workflow
+  ]);
 
   const cancelJob = useCallback(async () => {
     if (!job || !workflow || !canCancelJobStatus(job.status)) {
@@ -661,6 +703,7 @@ export function RunConsole() {
       await refreshJobAndWorkflow(job.id, workflow.id);
       await loadWorkflowList();
       await refreshOperationsSnapshot();
+      await loadTimelineForJob(job.id);
     } catch (apiError) {
       setError(
         apiError instanceof Error
@@ -673,6 +716,7 @@ export function RunConsole() {
     }
   }, [
     job,
+    loadTimelineForJob,
     loadWorkflowList,
     refreshJobAndWorkflow,
     refreshOperationsSnapshot,
@@ -689,6 +733,7 @@ export function RunConsole() {
     setReport(undefined);
     setArtifactPreview(undefined);
     setJob(undefined);
+    setJobTimeline(undefined);
     setMergeCandidate(undefined);
 
     try {
@@ -1098,18 +1143,77 @@ export function RunConsole() {
               <strong>{formatJobStatus(job.status)}</strong>
             </div>
             {job.error ? <p>{job.error}</p> : null}
-            {canCancelCurrentJob ? (
+            <div className="jobBannerActions">
               <button
                 className="secondaryButton"
-                disabled={isCanceling}
-                onClick={() => void cancelJob()}
+                disabled={isLoadingTimeline}
+                onClick={() => void loadTimelineForJob(job.id)}
                 type="button"
               >
-                <Square aria-hidden="true" size={15} />
-                {isCanceling ? "Canceling" : "Cancel"}
+                <Clock3 aria-hidden="true" size={15} />
+                {isLoadingTimeline ? "Loading" : "Timeline"}
               </button>
-            ) : null}
+              {canCancelCurrentJob ? (
+                <button
+                  className="secondaryButton"
+                  disabled={isCanceling}
+                  onClick={() => void cancelJob()}
+                  type="button"
+                >
+                  <Square aria-hidden="true" size={15} />
+                  {isCanceling ? "Canceling" : "Cancel"}
+                </button>
+              ) : null}
+            </div>
           </div>
+        ) : null}
+
+        {jobTimelineDisplay ? (
+          <section className="timelinePanel">
+            <div className="sectionHeader">
+              <h3>Job Timeline</h3>
+              <span>
+                {jobTimelineDisplay.statusLabel} /{" "}
+                {jobTimelineDisplay.events.length} events
+              </span>
+            </div>
+            <div className="timelineSummary">
+              <div>
+                <strong>{jobTimelineDisplay.jobLabel}</strong>
+                <span className={`healthBadge ${jobTimelineDisplay.statusSeverity}`}>
+                  {jobTimelineDisplay.recommendationLabel}
+                </span>
+              </div>
+              <p>{jobTimelineDisplay.summaryLabel}</p>
+              {jobTimelineDisplay.failureLabel ? (
+                <p>{jobTimelineDisplay.failureLabel}</p>
+              ) : null}
+              <dl className="artifactMeta">
+                <div>
+                  <dt>Workflow</dt>
+                  <dd>{jobTimelineDisplay.workflowLabel}</dd>
+                </div>
+                <div>
+                  <dt>Repository</dt>
+                  <dd>{jobTimelineDisplay.repositoryLabel}</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="timelineList">
+              {jobTimelineDisplay.events.map((event) => (
+                <article className="jobTimelineItem" key={event.id}>
+                  <div>
+                    <strong>{event.label}</strong>
+                    <span className={`healthBadge ${event.severity}`}>
+                      {event.actorLabel}
+                    </span>
+                  </div>
+                  <p>{event.createdAt}</p>
+                  <p>{event.metadataLabel}</p>
+                </article>
+              ))}
+            </div>
+          </section>
         ) : null}
 
         <div className="consoleGrid">
@@ -1277,6 +1381,15 @@ export function RunConsole() {
                       </div>
                     </dl>
                     {historyJob.errorLabel ? <p>{historyJob.errorLabel}</p> : null}
+                    <button
+                      className="secondaryButton"
+                      disabled={isLoadingTimeline}
+                      onClick={() => void loadTimelineForJob(historyJob.id)}
+                      type="button"
+                    >
+                      <Clock3 aria-hidden="true" size={16} />
+                      Timeline
+                    </button>
                   </article>
                 ))}
                 {jobHistoryDisplay.length === 0 ? (

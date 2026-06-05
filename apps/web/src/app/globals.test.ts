@@ -23,6 +23,7 @@ describe("global layout resilience styles", () => {
     const selectors = [
       "h2",
       ".jobBanner",
+      ".jobTimelineItem p",
       ".reportBox p",
       ".runItem pre",
       ".workflowNode"
