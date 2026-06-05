@@ -363,6 +363,21 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHeader span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .runList {
   display: grid;
   gap: 8px;
@@ -370,6 +385,7 @@ h2 {
 }
 
 .runItem,
+.agentHealthItem,
 .reportBox {
   display: grid;
   gap: 6px;
@@ -381,18 +397,54 @@ h2 {
 }
 
 .runItem strong,
+.agentHealthItem strong,
 .reportBox strong {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 
 .runItem span,
+.agentHealthItem p,
 .reportBox p,
 .reportBox.muted {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.agentHealthItem > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.healthBadge {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.2;
+  max-width: 130px;
+  padding: 4px 8px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.healthBadge.healthy {
+  background: #e5f6ee;
+  color: var(--success);
+}
+
+.healthBadge.warning {
+  background: #fff3df;
+  color: var(--warning);
+}
+
+.healthBadge.danger {
+  background: #fbe8e8;
+  color: var(--danger);
 }
 
 .runItem pre {

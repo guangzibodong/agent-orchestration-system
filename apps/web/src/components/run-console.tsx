@@ -16,10 +16,12 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   agentSummarySchema,
+  agentHealthSchema,
   mergeCandidateSchema,
   runReportSchema,
   workflowJobSchema,
   workflowRunSchema,
+  type AgentHealth,
   type AgentSummary,
   type MergeCandidate,
   type RunReport,
@@ -35,6 +37,10 @@ import {
 import { buildWorkflowReviewPayload } from "@/components/workflow-review-payload";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { buildApiHeaders } from "@/components/api-auth";
+import {
+  buildAgentHealthDisplay,
+  summarizeAgentHealth
+} from "@/components/agent-health-display";
 import {
   canCancelJobStatus,
   canCleanupWorkflowStatus,
@@ -108,16 +114,31 @@ export function RunConsole() {
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
+  const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [error, setError] = useState<string>();
 
+  const agentHealthSummary = useMemo(
+    () => summarizeAgentHealth(agentHealth),
+    [agentHealth]
+  );
+  const agentHealthDisplay = useMemo(
+    () => buildAgentHealthDisplay(agentHealth),
+    [agentHealth]
+  );
+
   const metrics = useMemo(
     () => [
       {
         label: "Agents",
-        value: String(new Set(workflow?.tasks.map((task) => task.agent)).size || 0),
+        value:
+          agentHealthSummary.total > 0
+            ? `${agentHealthSummary.healthy}/${agentHealthSummary.total}`
+            : String(
+                new Set(workflow?.tasks.map((task) => task.agent)).size || 0
+              ),
         icon: Activity
       },
       {
@@ -133,7 +154,7 @@ export function RunConsole() {
         icon: ShieldCheck
       }
     ],
-    [workflow]
+    [agentHealthSummary, workflow]
   );
   const canCreateRepositoryRun = useMemo(
     () => canCreateRepositoryWorkflow(repositoryForm),
@@ -271,6 +292,11 @@ export function RunConsole() {
   const loadConfiguredAgents = useCallback(async () => {
     const agents = await api<unknown[]>("/agents");
     setConfiguredAgents(agents.map((agent) => agentSummarySchema.parse(agent)));
+  }, []);
+
+  const loadAgentHealth = useCallback(async () => {
+    const health = await api<unknown[]>("/agents/health");
+    setAgentHealth(health.map((agent) => agentHealthSchema.parse(agent)));
   }, []);
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
@@ -462,7 +488,12 @@ export function RunConsole() {
     loadConfiguredAgents().catch((apiError) => {
       setError(apiError instanceof Error ? apiError.message : "Load agents failed");
     });
-  }, [loadConfiguredAgents, loadLatestWorkflow]);
+    loadAgentHealth().catch((apiError) => {
+      setError(
+        apiError instanceof Error ? apiError.message : "Load agent health failed"
+      );
+    });
+  }, [loadAgentHealth, loadConfiguredAgents, loadLatestWorkflow]);
 
   return (
     <main className="shell">
@@ -659,6 +690,45 @@ export function RunConsole() {
             <div className={`statusPill ${workflow?.status ?? "draft"}`}>
               {workflow?.status ?? "draft"}
             </div>
+
+            <section className="inspectorSection">
+              <div className="sectionHeader">
+                <h3>Agents</h3>
+                <span>
+                  {agentHealthSummary.needsAttention > 0
+                    ? `${agentHealthSummary.needsAttention} need attention`
+                    : "Ready"}
+                </span>
+              </div>
+              <div className="runList">
+                {agentHealthDisplay.map((agent) => (
+                  <article className="agentHealthItem" key={agent.id}>
+                    <div>
+                      <strong>{agent.label}</strong>
+                      <span className={`healthBadge ${agent.severity}`}>
+                        {agent.statusLabel}
+                      </span>
+                    </div>
+                    <p>{agent.message}</p>
+                    {agent.command ? (
+                      <dl className="artifactMeta">
+                        <div>
+                          <dt>Command</dt>
+                          <dd>{agent.command}</dd>
+                        </div>
+                        <div>
+                          <dt>Checked</dt>
+                          <dd>{agent.checkedAt}</dd>
+                        </div>
+                      </dl>
+                    ) : null}
+                  </article>
+                ))}
+                {agentHealthDisplay.length === 0 ? (
+                  <div className="reportBox muted">No agent health checks</div>
+                ) : null}
+              </div>
+            </section>
 
             <section className="inspectorSection">
               <h3>Tasks</h3>
