@@ -11,6 +11,12 @@ const retryableStatuses = new Set<WorkflowStatus>([
   "aborted"
 ]);
 
+const cleanupWorkflowStatuses = new Set<WorkflowStatus>([
+  "completed",
+  "aborted",
+  "archived"
+]);
+
 export type WorkflowJobDisplayStatus = WorkflowJobStatus | "canceled";
 
 const cancelableJobStatuses = new Set<WorkflowJobDisplayStatus>([
@@ -28,6 +34,10 @@ const jobStatusLabels: Record<WorkflowJobDisplayStatus, string> = {
 
 export function canRetryWorkflowStatus(status?: WorkflowStatus): boolean {
   return status ? retryableStatuses.has(status) : false;
+}
+
+export function canCleanupWorkflowStatus(status?: WorkflowStatus): boolean {
+  return status ? cleanupWorkflowStatuses.has(status) : false;
 }
 
 export function canCancelJobStatus(

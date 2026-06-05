@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canCancelJobStatus,
+  canCleanupWorkflowStatus,
   canRetryWorkflowStatus,
   formatJobStatus,
   parseWorkflowAlreadyRunningJob
@@ -24,6 +25,16 @@ describe("workflow actions", () => {
     expect(canCancelJobStatus("failed")).toBe(false);
     expect(canCancelJobStatus("canceled")).toBe(false);
     expect(canCancelJobStatus(undefined)).toBe(false);
+  });
+
+  it("allows workspace cleanup only after terminal cleanable workflow states", () => {
+    expect(canCleanupWorkflowStatus("completed")).toBe(true);
+    expect(canCleanupWorkflowStatus("aborted")).toBe(true);
+    expect(canCleanupWorkflowStatus("archived")).toBe(true);
+    expect(canCleanupWorkflowStatus("needs_review")).toBe(false);
+    expect(canCleanupWorkflowStatus("failed")).toBe(false);
+    expect(canCleanupWorkflowStatus("running")).toBe(false);
+    expect(canCleanupWorkflowStatus(undefined)).toBe(false);
   });
 
   it("formats job status with clear production labels", () => {

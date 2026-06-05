@@ -37,11 +37,13 @@ import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { buildApiHeaders } from "@/components/api-auth";
 import {
   canCancelJobStatus,
+  canCleanupWorkflowStatus,
   canRetryWorkflowStatus,
   formatJobStatus,
   parseWorkflowAlreadyRunningJob,
   type WorkflowJobDisplayStatus
 } from "@/components/workflow-actions";
+import { cleanupWorkflowWorkspaces } from "@/components/workflow-workspaces";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
@@ -142,6 +144,7 @@ export function RunConsole() {
     [configuredAgents]
   );
   const canRetryCurrentWorkflow = canRetryWorkflowStatus(workflow?.status);
+  const canCleanupCurrentWorkflow = canCleanupWorkflowStatus(workflow?.status);
   const canCancelCurrentJob = canCancelJobStatus(job?.status);
 
   const updateApiToken = useCallback((value: string) => {
@@ -431,6 +434,24 @@ export function RunConsole() {
     },
     [loadMergeCandidate, workflow]
   );
+
+  const cleanupWorkspaces = useCallback(async () => {
+    if (!workflow || !canCleanupWorkflowStatus(workflow.status)) {
+      return;
+    }
+
+    setIsBusy(true);
+    setError(undefined);
+
+    try {
+      const refreshed = await cleanupWorkflowWorkspaces(api, workflow);
+      setWorkflow(refreshed);
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : "Cleanup failed");
+    } finally {
+      setIsBusy(false);
+    }
+  }, [workflow]);
 
   useEffect(() => {
     // Load the API-backed in-memory run after the browser can reach the API.
@@ -735,6 +756,17 @@ export function RunConsole() {
                     <p>
                       {workflow.review.decision} / {workflow.review.reviewedAt}
                     </p>
+                  ) : null}
+                  {canCleanupCurrentWorkflow ? (
+                    <button
+                      className="secondaryButton"
+                      disabled={isBusy}
+                      onClick={() => void cleanupWorkspaces()}
+                      type="button"
+                    >
+                      <FolderGit2 aria-hidden="true" size={16} />
+                      Clean Workspaces
+                    </button>
                   ) : null}
                   {mergeCandidate ? (
                     <div className="mergeCandidateBox">
