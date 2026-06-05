@@ -48,6 +48,14 @@ describe("deployment manifests", () => {
     expect(env).toContain("MAWO_CODEX_AUTH_PROBE_COMMAND=");
   });
 
+  it("ignores runtime logs and generated verification artifacts", () => {
+    const gitignore = read(".gitignore");
+
+    expect(gitignore).toContain(".logs/");
+    expect(gitignore).toContain("output/");
+    expect(gitignore).toContain(".mawo/");
+  });
+
   it("runs the production verification suite in GitHub Actions", () => {
     const workflow = read(".github/workflows/ci.yml");
 

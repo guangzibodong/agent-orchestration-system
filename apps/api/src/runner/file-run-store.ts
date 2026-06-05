@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { writeJsonFileAtomically } from "./atomic-json-file.js";
 import type { LocalWorkflowRun } from "./local-runner.js";
 
 export type RunStore = {
@@ -40,9 +40,6 @@ export class FileRunStore implements RunStore {
       runs.push(run);
     }
 
-    mkdirSync(dirname(this.stateFile), { recursive: true });
-    const tempFile = `${this.stateFile}.tmp`;
-    writeFileSync(tempFile, JSON.stringify(runs, null, 2), "utf8");
-    renameSync(tempFile, this.stateFile);
+    writeJsonFileAtomically(this.stateFile, runs);
   }
 }

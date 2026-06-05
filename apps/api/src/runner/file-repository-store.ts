@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   repositoryRecordSchema,
   type RepositoryRecord,
   type RepositoryRegistrationRequest
 } from "@mawo/shared";
+import { writeJsonFileAtomically } from "./atomic-json-file.js";
 
 export type RepositoryUpsertResult = {
   repository: RepositoryRecord;
@@ -111,9 +112,6 @@ export class FileRepositoryStore implements RepositoryStore {
   }
 
   private write(repositories: RepositoryRecord[]): void {
-    mkdirSync(dirname(this.stateFile), { recursive: true });
-    const tempFile = `${this.stateFile}.tmp`;
-    writeFileSync(tempFile, JSON.stringify(repositories, null, 2), "utf8");
-    renameSync(tempFile, this.stateFile);
+    writeJsonFileAtomically(this.stateFile, repositories);
   }
 }

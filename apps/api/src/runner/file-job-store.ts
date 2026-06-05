@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
 import { workflowJobSchema, type WorkflowJob } from "@mawo/shared";
+import { writeJsonFileAtomically } from "./atomic-json-file.js";
 
 export type JobStore = {
   list(): WorkflowJob[];
@@ -41,9 +41,6 @@ export class FileJobStore implements JobStore {
       jobs.push(job);
     }
 
-    mkdirSync(dirname(this.stateFile), { recursive: true });
-    const tempFile = `${this.stateFile}.tmp`;
-    writeFileSync(tempFile, JSON.stringify(jobs, null, 2), "utf8");
-    renameSync(tempFile, this.stateFile);
+    writeJsonFileAtomically(this.stateFile, jobs);
   }
 }

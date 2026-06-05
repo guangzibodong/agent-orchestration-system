@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
 import {
   auditEventSchema,
   type AuditEvent,
   type AuditEventType
 } from "@mawo/shared";
+import { writeJsonFileAtomically } from "./atomic-json-file.js";
 
 export type AuditEventInput = Omit<AuditEvent, "id" | "createdAt"> & {
   id?: string;
@@ -79,10 +79,7 @@ export class FileAuditStore implements AuditStore {
     });
     const events = [...this.readAll(), event];
 
-    mkdirSync(dirname(this.stateFile), { recursive: true });
-    const tempFile = `${this.stateFile}.tmp`;
-    writeFileSync(tempFile, JSON.stringify(events, null, 2), "utf8");
-    renameSync(tempFile, this.stateFile);
+    writeJsonFileAtomically(this.stateFile, events);
 
     return event;
   }
