@@ -40,7 +40,12 @@ async function request(
 ) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: payload ? { "content-type": "application/json" } : undefined,
+    headers: {
+      ...(payload ? { "content-type": "application/json" } : {}),
+      ...(process.env.MAWO_API_TOKEN
+        ? { authorization: `Bearer ${process.env.MAWO_API_TOKEN}` }
+        : {}),
+    },
     body: payload ? JSON.stringify(payload) : undefined,
   });
   const text = await response.text();

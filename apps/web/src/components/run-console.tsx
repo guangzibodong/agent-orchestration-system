@@ -34,6 +34,7 @@ import {
 } from "@/components/repository-workflow-payload";
 import { buildWorkflowReviewPayload } from "@/components/workflow-review-payload";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
+import { buildApiHeaders } from "@/components/api-auth";
 import {
   canCancelJobStatus,
   canRetryWorkflowStatus,
@@ -43,6 +44,7 @@ import {
 } from "@/components/workflow-actions";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
+const apiTokenStorageKey = "mawo-api-token";
 const defaultRepositoryForm: RepositoryWorkflowFormState = {
   goal: "Run a real repository workflow",
   repositoryPath: process.env.NEXT_PUBLIC_REPOSITORY_PATH ?? "",
@@ -69,13 +71,18 @@ class ApiResponseError extends Error {
   }
 }
 
+function getStoredApiToken(): string | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return window.localStorage.getItem(apiTokenStorageKey) ?? undefined;
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers
-    }
+    headers: buildApiHeaders(getStoredApiToken(), init?.headers)
   });
 
   if (response.status === 204) {
@@ -99,6 +106,7 @@ export function RunConsole() {
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
+  const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [error, setError] = useState<string>();
@@ -135,6 +143,16 @@ export function RunConsole() {
   );
   const canRetryCurrentWorkflow = canRetryWorkflowStatus(workflow?.status);
   const canCancelCurrentJob = canCancelJobStatus(job?.status);
+
+  const updateApiToken = useCallback((value: string) => {
+    setApiToken(value);
+    if (value.trim()) {
+      window.localStorage.setItem(apiTokenStorageKey, value.trim());
+      return;
+    }
+
+    window.localStorage.removeItem(apiTokenStorageKey);
+  }, []);
 
   const updateRepositoryForm = useCallback(
     (field: keyof RepositoryWorkflowFormState, value: string) => {
@@ -447,6 +465,16 @@ export function RunConsole() {
             <h2>{workflow?.goal ?? "Local workflow"}</h2>
           </div>
           <div className="actions">
+            <label className="tokenField">
+              <ShieldCheck aria-hidden="true" size={16} />
+              <input
+                autoComplete="off"
+                placeholder="API token"
+                type="password"
+                value={apiToken}
+                onChange={(event) => updateApiToken(event.target.value)}
+              />
+            </label>
             <button className="secondaryButton" disabled={isBusy} onClick={createDemo}>
               <Plus aria-hidden="true" size={16} />
               Shell Run

@@ -49,7 +49,9 @@ export type BuildAppOptions = {
 
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const root = options.demoRoot ?? process.cwd();
-  const cliAgents = createConfiguredAgentConfigs(options.env);
+  const env = options.env ?? process.env;
+  const apiToken = env.MAWO_API_TOKEN?.trim();
+  const cliAgents = createConfiguredAgentConfigs(env);
   const auditStore =
     options.auditStore ??
     new FileAuditStore({
@@ -103,6 +105,22 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.register(cors, {
     origin: true
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    if (!apiToken || request.method === "OPTIONS" || request.url === "/health") {
+      return;
+    }
+
+    const authorization = request.headers.authorization ?? "";
+    if (authorization === `Bearer ${apiToken}`) {
+      return;
+    }
+
+    return reply
+      .code(401)
+      .header("www-authenticate", "Bearer")
+      .send({ error: "unauthorized" });
   });
 
   app.get("/health", async () => {

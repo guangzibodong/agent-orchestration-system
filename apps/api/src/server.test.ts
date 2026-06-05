@@ -44,6 +44,37 @@ afterEach(async () => {
 });
 
 describe("runner API", () => {
+  it("requires bearer auth for protected endpoints when an API token is configured", async () => {
+    const app = buildApp(undefined, {
+      env: {
+        MAWO_API_TOKEN: "secret-token"
+      }
+    });
+
+    const healthResponse = await app.inject({
+      method: "GET",
+      url: "/health"
+    });
+    const rejectedResponse = await app.inject({
+      method: "GET",
+      url: "/workflows"
+    });
+    const acceptedResponse = await app.inject({
+      method: "GET",
+      url: "/workflows",
+      headers: {
+        authorization: "Bearer secret-token"
+      }
+    });
+
+    expect(healthResponse.statusCode).toBe(200);
+    expect(rejectedResponse.statusCode).toBe(401);
+    expect(rejectedResponse.json()).toMatchObject({
+      error: "unauthorized"
+    });
+    expect(acceptedResponse.statusCode).toBe(200);
+  });
+
   it("lists configured agents without exposing command templates", async () => {
     const app = buildApp(undefined, {
       env: {

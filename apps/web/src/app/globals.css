@@ -134,6 +134,29 @@ h2 {
   min-width: 0;
 }
 
+.tokenField {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  max-width: 210px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 0 10px;
+}
+
+.tokenField input {
+  width: 136px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
 .primaryButton,
 .secondaryButton {
   display: inline-flex;

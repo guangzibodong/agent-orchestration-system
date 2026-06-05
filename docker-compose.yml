@@ -8,6 +8,7 @@ services:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
+      MAWO_API_TOKEN: ${MAWO_API_TOKEN:-change-me-before-production}
       DATABASE_URL: postgresql://mawo:mawo@postgres:5432/mawo?schema=public
       REDIS_URL: redis://redis:6379
       MAWO_CODEX_COMMAND_TEMPLATE: ${MAWO_CODEX_COMMAND_TEMPLATE:-}

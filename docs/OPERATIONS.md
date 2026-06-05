@@ -37,6 +37,8 @@ Required for normal local operation:
 - `API_HOST`: API bind host. Use `127.0.0.1` for local-only access. Use
   `0.0.0.0` on a server only when a firewall or reverse proxy controls access.
 - `API_PORT`: API port. Default `4000`.
+- `MAWO_API_TOKEN`: bearer token for all API routes except `GET /health`.
+  Set a long random value before shared or production use.
 - `NEXT_PUBLIC_API_URL`: browser-visible API URL. For local use:
   `http://127.0.0.1:4000`. For server use, set the public or reverse-proxied
   API origin.
@@ -145,8 +147,8 @@ it deletes the named `.mawo`, Postgres, and Redis volumes.
 ## 5. Server Startup
 
 Use a dedicated checkout or release directory on the server. The app should run
-behind a firewall or reverse proxy because the current API has permissive CORS
-and no built-in authentication.
+behind a firewall or reverse proxy. `MAWO_API_TOKEN` protects direct API calls,
+but it is not a replacement for TLS, network controls, or operator identity.
 
 One-time setup:
 
@@ -164,6 +166,7 @@ For server access, set at minimum:
 ```text
 API_HOST="0.0.0.0"
 API_PORT="4000"
+MAWO_API_TOKEN="<long-random-token>"
 NEXT_PUBLIC_API_URL="https://<your-api-host-or-proxy>"
 ```
 
@@ -320,8 +323,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 
 ## 10. Security Notes
 
-- Do not expose the API directly to the public internet without an auth layer,
-  VPN, IP allowlist, or reverse proxy access control.
+- Do not expose the API directly to the public internet without
+  `MAWO_API_TOKEN`, TLS, VPN, IP allowlist, or reverse proxy access control.
 - The API can execute repository workflow commands; treat users with API access
   as trusted operators.
 - Keep `.env`, `.mawo`, `.logs`, and backups out of git and public file shares.
@@ -335,7 +338,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 
 ## 11. Known Limits
 
-- No built-in authentication or authorization.
+- API token auth exists, but there are no user accounts, roles, or tenant
+  isolation.
 - CORS currently allows all origins.
 - Workflow state is file-based under `.mawo`, so concurrent multi-host API
   replicas are not supported.
@@ -353,6 +357,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 ## 12. Pre-Launch Checklist
 
 - [ ] `.env` exists on the target host and matches the intended API/web URLs.
+- [ ] `MAWO_API_TOKEN` is set to a long random value and is not the example
+      value.
 - [ ] `npm run env` passes on the host.
 - [ ] `npm install` completed successfully.
 - [ ] `npm run typecheck` passes.
@@ -369,8 +375,8 @@ back the web process first while keeping the API and `.mawo` untouched.
       `POST /workflows/:id/workspaces/cleanup`.
 - [ ] `.mawo` backup was created and restore path was tested at least once.
 - [ ] Logs are captured by `.logs`, service manager, or hosting provider.
-- [ ] API access is protected by firewall, VPN, reverse proxy auth, or IP
-      allowlist.
+- [ ] API access is protected by bearer token, firewall, VPN, reverse proxy
+      auth, or IP allowlist.
 - [ ] CLI agent templates are reviewed and only trusted operators can trigger
       workflows.
 - [ ] Rollback release and matching `.mawo` backup are available.
