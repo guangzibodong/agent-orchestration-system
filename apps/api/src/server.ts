@@ -23,7 +23,8 @@ import {
   createDemoWorkflowDefinition,
   LocalRunner,
   WorkflowNotRetryableError,
-  WorkflowNotReviewReadyError
+  WorkflowNotReviewReadyError,
+  WorkflowWorkspacesNotCleanableError
 } from "./runner/local-runner.js";
 import {
   createAgentDemoWorkflowDefinition,
@@ -302,6 +303,41 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (error instanceof WorkflowNotReviewReadyError) {
         return reply.code(409).send({
           error: "workflow_not_review_ready",
+          message: error.message
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+  }>("/workflows/:id/workspaces/cleanup", async (request, reply) => {
+    if (!activeRunner.getWorkflow(request.params.id)) {
+      return reply.code(404).send({ error: "workflow_not_found" });
+    }
+
+    try {
+      const cleanup = await activeRunner.cleanupWorkflowWorkspaces(
+        request.params.id
+      );
+
+      auditStore.append({
+        type: "workflow.workspaces_cleaned",
+        actor: "operator",
+        workflowId: cleanup.workflowId,
+        metadata: {
+          status: cleanup.status,
+          cleanedCount: String(cleanup.cleaned.length)
+        }
+      });
+
+      return cleanup;
+    } catch (error) {
+      if (error instanceof WorkflowWorkspacesNotCleanableError) {
+        return reply.code(409).send({
+          error: "workflow_workspaces_not_cleanable",
           message: error.message
         });
       }

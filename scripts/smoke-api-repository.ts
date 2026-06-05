@@ -307,6 +307,28 @@ async function main() {
     );
     log("review approval completed the workflow");
 
+    const workspacePath = passedTasks[0]?.workspace as JsonObject | undefined;
+    const cleanup = await request(
+      baseUrl,
+      "POST",
+      `/workflows/${workflowId}/workspaces/cleanup`,
+    );
+    assert(cleanup.status === 200, `Workspace cleanup returned ${cleanup.status}`);
+    assert(
+      cleanup.body.status === "cleaned",
+      `Workspace cleanup status was ${String(cleanup.body.status)}`,
+    );
+    const cleanedWorkspaces = cleanup.body.cleaned as Array<JsonObject>;
+    assert(
+      cleanedWorkspaces.some((workspace) => workspace.taskId === "flaky-task"),
+      "Workspace cleanup did not include the main workflow task.",
+    );
+    assert(
+      typeof workspacePath?.path === "string" && !existsSync(workspacePath.path),
+      "Workspace cleanup did not remove the task worktree path.",
+    );
+    log("completed workflow workspaces were cleaned after review");
+
     const slowMarkerPath = join(smokeRoot, "slow-marker.txt").replace(
       /\\/g,
       "/",
@@ -438,6 +460,7 @@ async function main() {
       "workflow.created",
       "workflow.retry_requested",
       "workflow.reviewed",
+      "workflow.workspaces_cleaned",
       "workflow.enqueued",
       "job.canceled",
     ]) {
@@ -452,11 +475,19 @@ async function main() {
     );
     assert(
       events.some(
+        (event) =>
+          event.type === "workflow.workspaces_cleaned" &&
+          event.workflowId === workflowId,
+      ),
+      "Audit log did not include workspace cleanup event for the main workflow.",
+    );
+    assert(
+      events.some(
         (event) => event.type === "job.canceled" && event.jobId === cancelJobId,
       ),
       "Audit log did not include cancel event for the canceled job.",
     );
-    log("audit events recorded create, retry, review, enqueue, and cancel");
+    log("audit events recorded create, retry, review, cleanup, enqueue, and cancel");
 
     const jobs = await request(baseUrl, "GET", "/jobs");
     assert(jobs.status === 200, `Jobs endpoint returned ${jobs.status}`);
@@ -477,6 +508,7 @@ async function main() {
           repositoryPath,
           report: report.body.summary,
           mergeCandidate: mergeCandidate.body.summary,
+          workspaceCleanup: cleanup.body.status,
           canceledJobId: cancelJobId,
         },
         null,

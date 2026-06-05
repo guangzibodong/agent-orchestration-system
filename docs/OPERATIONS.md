@@ -218,6 +218,15 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:4000/workflows/$($workflow.id)/
 Invoke-RestMethod http://127.0.0.1:4000/jobs
 ```
 
+Completed or aborted worktree workflow cleanup:
+
+```powershell
+Invoke-RestMethod -Method Post "http://127.0.0.1:4000/workflows/<workflow-id>/workspaces/cleanup"
+```
+
+Cleanup is intentionally rejected for `needs_review` and `failed` workflows so
+operators can inspect patches and failure state before removing worktrees.
+
 ## 7. Logs and Data Locations
 
 Runtime logs:
@@ -236,7 +245,8 @@ Persistent workflow data:
 - `.mawo/state/repositories.json`: registered repositories and their default
   quality gates.
 - `.mawo/state/audit-events.json`: append-only operator action trail for
-  workflow creation, enqueue, retry, review, and job cancellation.
+  workflow creation, enqueue, retry, review, workspace cleanup, and job
+  cancellation.
 - `.mawo/artifacts/`: task stdout/stderr, patches, reports, and merge
   candidates.
 - Worktree paths may appear inside workflow artifacts and reports.
@@ -343,6 +353,8 @@ back the web process first while keeping the API and `.mawo` untouched.
       configured production agent reports `missing_command`.
 - [ ] Web starts and can reach the configured API URL from the browser.
 - [ ] A demo workflow can be created and enqueued.
+- [ ] A completed worktree workflow can be cleaned with
+      `POST /workflows/:id/workspaces/cleanup`.
 - [ ] `.mawo` backup was created and restore path was tested at least once.
 - [ ] Logs are captured by `.logs`, service manager, or hosting provider.
 - [ ] API access is protected by firewall, VPN, reverse proxy auth, or IP

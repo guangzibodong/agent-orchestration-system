@@ -145,6 +145,19 @@ export type MergeCandidate = {
   createdAt: string;
 };
 
+export type WorkspaceCleanupItem = {
+  taskId: string;
+  path: string;
+  branch: string;
+};
+
+export type WorkspaceCleanupResult = {
+  workflowId: string;
+  status: "cleaned" | "empty";
+  cleanedAt: string;
+  cleaned: WorkspaceCleanupItem[];
+};
+
 export type LocalRunnerOptions = {
   cliAgents?: CliAgentConfig[];
   runStore?: RunStore;
@@ -166,6 +179,15 @@ export class WorkflowNotRetryableError extends Error {
   constructor(status: RunnerWorkflowStatus) {
     super(`Workflow is ${status}, not retryable.`);
     this.name = "WorkflowNotRetryableError";
+  }
+}
+
+export class WorkflowWorkspacesNotCleanableError extends Error {
+  constructor(status: RunnerWorkflowStatus) {
+    super(
+      `Workflow is ${status}; workspaces can only be cleaned after completion or abort.`
+    );
+    this.name = "WorkflowWorkspacesNotCleanableError";
   }
 }
 
@@ -250,6 +272,41 @@ export class LocalRunner {
     };
 
     return this.artifactStore?.persistMergeCandidate(run, candidate) ?? candidate;
+  }
+
+  async cleanupWorkflowWorkspaces(id: string): Promise<WorkspaceCleanupResult> {
+    const run = this.mustGetWorkflow(id);
+
+    if (!["completed", "aborted", "archived"].includes(run.status)) {
+      throw new WorkflowWorkspacesNotCleanableError(run.status);
+    }
+
+    const cleaned: WorkspaceCleanupItem[] = [];
+
+    for (const task of run.tasks) {
+      if (!task.workspace) {
+        continue;
+      }
+
+      await new GitWorktreeManager({
+        repoPath: task.workspace.repoPath,
+        worktreeRoot: run.worktreeRoot,
+        shell: this.shell
+      }).removeWorkspace(task.workspace);
+
+      cleaned.push({
+        taskId: task.id,
+        path: task.workspace.path,
+        branch: task.workspace.branch
+      });
+    }
+
+    return {
+      workflowId: run.id,
+      status: cleaned.length > 0 ? "cleaned" : "empty",
+      cleanedAt: new Date().toISOString(),
+      cleaned
+    };
   }
 
   reviewWorkflow(

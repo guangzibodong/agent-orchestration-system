@@ -179,6 +179,7 @@ POST /workflows/:id/enqueue
 POST /workflows/:id/run
 POST /workflows/:id/retry
 POST /workflows/:id/review
+POST /workflows/:id/workspaces/cleanup
 GET  /workflows/:id/report
 GET  /workflows/:id/merge-candidate
 GET  /jobs
@@ -227,6 +228,14 @@ $env:MAWO_CURSOR_COMMAND_TEMPLATE = "cursor-agent {promptFile}"
 
 prompt 文件写在 worktree 外部，避免内部编排文件污染任务 diff。
 
+workflow 审批完成或中止后，可以清理任务 worktree：
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:4000/workflows/<id>/workspaces/cleanup
+```
+
+`needs_review` 和 `failed` 阶段默认不允许清理，避免 review 证据和失败现场被误删。清理会删除任务 worktree 和对应临时分支，并写入 `workflow.workspaces_cleaned` 审计事件。
+
 可以用健康检查接口确认已注册 agent 是否可执行：
 
 ```powershell
@@ -248,12 +257,11 @@ Invoke-RestMethod http://127.0.0.1:4000/agents/health
 
 近期优先级：
 
-1. 工作区清理策略：保留、清理、归档、失败保留。
-2. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
-3. 更完整的审计和运行历史：每次 task/gate 开始、结束、失败都可追踪。
-4. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
-5. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
-6. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+1. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
+2. 更完整的审计和运行历史：每次 task/gate 开始、结束、失败都可追踪。
+3. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
+4. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
+5. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
 
 ## 文档入口
 

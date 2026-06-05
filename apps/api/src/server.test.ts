@@ -740,6 +740,53 @@ describe("runner API", () => {
     expect(candidate.applyCommand).toContain("git -C");
   });
 
+  it("cleans completed workflow workspaces through the API", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-cleanup-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/worktree-demo"
+    });
+    const created = createResponse.json();
+    const runResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const reviewReady = runResponse.json();
+    const blockedCleanupResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/workspaces/cleanup`
+    });
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/review`,
+      payload: {
+        decision: "approve",
+        note: "Clean it"
+      }
+    });
+    const cleanupResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/workspaces/cleanup`
+    });
+    const cleanup = cleanupResponse.json();
+
+    expect(blockedCleanupResponse.statusCode).toBe(409);
+    expect(cleanupResponse.statusCode).toBe(200);
+    expect(cleanup).toMatchObject({
+      workflowId: created.id,
+      status: "cleaned",
+      cleaned: [
+        expect.objectContaining({
+          taskId: "worktree-edit",
+          path: reviewReady.tasks[0].workspace.path
+        })
+      ]
+    });
+  });
+
   it("rejects review decisions before a workflow is review-ready", async () => {
     const app = buildApp();
     const createResponse = await app.inject({

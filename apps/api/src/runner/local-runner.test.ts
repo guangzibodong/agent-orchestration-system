@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -315,5 +316,57 @@ describe("LocalRunner", () => {
     expect(candidate.summary).toContain("1 task patch");
     expect(candidate.sourceBranches[0]).toContain("edit-readme");
     expect(candidate.patch).toContain("+candidate patch");
+  });
+
+  it("cleans worktree workspaces only after workflow review is completed", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Clean completed worktree workspaces",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "edit-readme",
+          title: "Edit README",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'cleanup patch\\\\n')"`
+        }
+      ],
+      qualityGates: []
+    });
+
+    const reviewReady = await runner.runWorkflow(run.id);
+    const workspacePath = reviewReady.tasks[0]?.workspace?.path;
+    const branch = reviewReady.tasks[0]?.workspace?.branch;
+
+    expect(workspacePath).toBeTruthy();
+    expect(branch).toBeTruthy();
+    expect(existsSync(workspacePath ?? "")).toBe(true);
+    await expect(runner.cleanupWorkflowWorkspaces(run.id)).rejects.toThrow(
+      "Workflow is needs_review"
+    );
+
+    runner.reviewWorkflow(run.id, { decision: "approve" });
+    const cleanup = await runner.cleanupWorkflowWorkspaces(run.id);
+    const branchCheck = await shell.run({
+      command: `git branch --list ${JSON.stringify(branch)}`,
+      cwd: repoPath
+    });
+
+    expect(cleanup).toMatchObject({
+      workflowId: run.id,
+      status: "cleaned"
+    });
+    expect(cleanup.cleaned).toEqual([
+      expect.objectContaining({
+        taskId: "edit-readme",
+        path: workspacePath,
+        branch
+      })
+    ]);
+    expect(existsSync(workspacePath ?? "")).toBe(false);
+    expect(branchCheck.stdout.trim()).toBe("");
   });
 });

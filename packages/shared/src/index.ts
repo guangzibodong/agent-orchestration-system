@@ -169,6 +169,19 @@ export const mergeCandidateSchema = z.object({
   createdAt: z.string()
 });
 
+export const workspaceCleanupItemSchema = z.object({
+  taskId: z.string(),
+  path: z.string(),
+  branch: z.string()
+});
+
+export const workspaceCleanupResultSchema = z.object({
+  workflowId: z.string(),
+  status: z.enum(["cleaned", "empty"]),
+  cleanedAt: z.string(),
+  cleaned: z.array(workspaceCleanupItemSchema)
+});
+
 export const runReportSchema = z.object({
   workflowId: z.string(),
   reportArtifactPath: z.string().optional(),
@@ -235,6 +248,7 @@ export const auditEventTypeSchema = z.enum([
   "workflow.enqueued",
   "workflow.retry_requested",
   "workflow.reviewed",
+  "workflow.workspaces_cleaned",
   "job.canceled"
 ]);
 
@@ -277,3 +291,6 @@ export type WorkflowReviewRequest = z.infer<
   typeof workflowReviewRequestSchema
 >;
 export type MergeCandidate = z.infer<typeof mergeCandidateSchema>;
+export type WorkspaceCleanupResult = z.infer<
+  typeof workspaceCleanupResultSchema
+>;

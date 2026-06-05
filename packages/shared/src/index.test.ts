@@ -342,18 +342,18 @@ describe("workflowRunSchema", () => {
   it("accepts workflow audit events", () => {
     const event = auditEventSchema.parse({
       id: "audit_1",
-      type: "workflow.enqueued",
+      type: "workflow.workspaces_cleaned",
       createdAt: "2026-06-05T00:00:00.000Z",
       workflowId: "run_1",
-      jobId: "job_1",
       actor: "operator",
       metadata: {
-        status: "queued"
+        status: "cleaned",
+        cleanedCount: "1"
       }
     });
 
-    expect(event.type).toBe("workflow.enqueued");
+    expect(event.type).toBe("workflow.workspaces_cleaned");
     expect(event.workflowId).toBe("run_1");
-    expect(event.jobId).toBe("job_1");
+    expect(event.metadata?.cleanedCount).toBe("1");
   });
 });

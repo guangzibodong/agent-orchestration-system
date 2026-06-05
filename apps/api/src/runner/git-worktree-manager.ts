@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { ShellAdapter } from "./shell-adapter.js";
@@ -67,6 +68,15 @@ export class GitWorktreeManager {
     };
   }
 
+  async removeWorkspace(workspace: WorktreeWorkspace): Promise<void> {
+    if (existsSync(workspace.path)) {
+      await this.git(`worktree remove --force ${quote(workspace.path)}`);
+    }
+
+    await this.deleteBranchIfPresent(workspace.branch);
+    await this.git("worktree prune");
+  }
+
   private async assertCommittedHead(): Promise<void> {
     const result = await this.shell.run({
       command: "git rev-parse --verify HEAD",
@@ -91,6 +101,16 @@ export class GitWorktreeManager {
     }
 
     return result;
+  }
+
+  private async deleteBranchIfPresent(branch: string): Promise<void> {
+    const branchList = await this.git(`branch --list ${quote(branch)}`);
+
+    if (!branchList.stdout.trim()) {
+      return;
+    }
+
+    await this.git(`branch -D ${quote(branch)}`);
   }
 }
 
