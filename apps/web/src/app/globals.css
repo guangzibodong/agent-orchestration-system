@@ -231,6 +231,7 @@ h2 {
   color: var(--text);
 }
 
+.operationsScopePanel,
 .repositoryPanel,
 .repositoryRegistrationPanel {
   display: grid;
@@ -244,6 +245,7 @@ h2 {
   padding: 14px;
 }
 
+.operationsScopePanel > .field,
 .repositoryPanel > .secondaryButton,
 .repositoryRegistrationPanel > .primaryButton {
   align-self: end;
@@ -259,6 +261,7 @@ h2 {
   padding: 14px;
 }
 
+.operationsScopePanel h3,
 .repositoryRegistry h3 {
   margin: 0;
   font-size: 14px;

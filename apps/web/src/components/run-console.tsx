@@ -79,6 +79,7 @@ import {
   buildWorkflowListDisplay,
   summarizeWorkflowList
 } from "@/components/workflow-list-display";
+import { loadWorkflowRuns } from "@/components/workflow-list-loader";
 import {
   canCancelJobStatus,
   canCleanupWorkflowStatus,
@@ -170,6 +171,7 @@ export function RunConsole() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
   const [jobTimeline, setJobTimeline] = useState<JobTimelineResponse>();
+  const [operationsRepositoryId, setOperationsRepositoryId] = useState("");
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -192,6 +194,16 @@ export function RunConsole() {
     () => buildRepositoryDisplay(repositories),
     [repositories]
   );
+  const selectedOperationsRepository = useMemo(
+    () =>
+      repositories.find(
+        (repository) => repository.id === operationsRepositoryId
+      ),
+    [operationsRepositoryId, repositories]
+  );
+  const operationsScopeLabel = selectedOperationsRepository
+    ? selectedOperationsRepository.name
+    : "All repositories";
   const auditEventSummary = useMemo(
     () => summarizeAuditEvents(auditEvents),
     [auditEvents]
@@ -328,12 +340,18 @@ export function RunConsole() {
     }));
   }, []);
 
+  const updateOperationsRepositoryScope = useCallback((repositoryId: string) => {
+    setOperationsRepositoryId(repositoryId);
+    setJobTimeline(undefined);
+  }, []);
+
   const loadWorkflowList = useCallback(async () => {
-    const workflows = await api<unknown[]>("/workflows");
-    const parsed = workflows.map((item) => workflowRunSchema.parse(item));
+    const parsed = await loadWorkflowRuns(api, {
+      repositoryId: operationsRepositoryId || undefined
+    });
     setWorkflowList(parsed);
     return parsed;
-  }, []);
+  }, [operationsRepositoryId]);
 
   const createDemo = useCallback(async () => {
     setIsBusy(true);
@@ -437,14 +455,14 @@ export function RunConsole() {
   }, [loadWorkflowList, repositoryForm]);
 
   const loadLatestWorkflow = useCallback(async () => {
-    const parsed = await loadWorkflowList();
+    const parsed = await loadWorkflowRuns(api);
     if (parsed.length > 0) {
       setWorkflow(parsed.at(-1));
       return;
     }
 
     await createDemo();
-  }, [createDemo, loadWorkflowList]);
+  }, [createDemo]);
 
   const openWorkflow = useCallback(async (workflowId: string) => {
     setIsBusy(true);
@@ -517,10 +535,12 @@ export function RunConsole() {
   }, []);
 
   const refreshOperationsSnapshot = useCallback(async () => {
-    const snapshot = await loadOperationsSnapshot(api);
+    const snapshot = await loadOperationsSnapshot(api, {
+      repositoryId: operationsRepositoryId || undefined
+    });
     setAuditEvents(snapshot.auditEvents);
     setJobHistory(snapshot.jobs);
-  }, []);
+  }, [operationsRepositoryId]);
 
   const deleteRepository = useCallback(
     async (repository: RepositoryRecord) => {
@@ -531,10 +551,17 @@ export function RunConsole() {
         await api<unknown>(`/repositories/${repository.id}`, {
           method: "DELETE"
         });
+        const nextOperationsRepositoryId =
+          operationsRepositoryId === repository.id ? "" : operationsRepositoryId;
         setRepositories((current) =>
           current.filter((item) => item.id !== repository.id)
         );
-        await refreshOperationsSnapshot();
+        setOperationsRepositoryId(nextOperationsRepositoryId);
+        const snapshot = await loadOperationsSnapshot(api, {
+          repositoryId: nextOperationsRepositoryId || undefined
+        });
+        setAuditEvents(snapshot.auditEvents);
+        setJobHistory(snapshot.jobs);
       } catch (apiError) {
         setError(
           apiError instanceof Error
@@ -545,7 +572,7 @@ export function RunConsole() {
         setIsBusy(false);
       }
     },
-    [refreshOperationsSnapshot]
+    [operationsRepositoryId]
   );
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
@@ -814,13 +841,6 @@ export function RunConsole() {
         apiError instanceof Error ? apiError.message : "Load repositories failed"
       );
     });
-    refreshOperationsSnapshot().catch((apiError) => {
-      setError(
-        apiError instanceof Error
-          ? apiError.message
-          : "Load operations snapshot failed"
-      );
-    });
     loadAgentHealth().catch((apiError) => {
       setError(
         apiError instanceof Error ? apiError.message : "Load agent health failed"
@@ -830,8 +850,25 @@ export function RunConsole() {
     loadAgentHealth,
     loadConfiguredAgents,
     loadLatestWorkflow,
+    loadRepositories
+  ]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadWorkflowList().catch((apiError) => {
+      setError(
+        apiError instanceof Error ? apiError.message : "Load workflows failed"
+      );
+    });
+    refreshOperationsSnapshot().catch((apiError) => {
+      setError(
+        apiError instanceof Error
+          ? apiError.message
+          : "Load operations snapshot failed"
+      );
+    });
+  }, [
     loadWorkflowList,
-    loadRepositories,
     refreshOperationsSnapshot
   ]);
 
@@ -915,6 +952,29 @@ export function RunConsole() {
             </div>
           ))}
         </div>
+
+        <section className="operationsScopePanel">
+          <div className="sectionHeader">
+            <h3>Operations Scope</h3>
+            <span>{operationsScopeLabel}</span>
+          </div>
+          <label className="field">
+            <span>Repository</span>
+            <select
+              value={operationsRepositoryId}
+              onChange={(event) =>
+                updateOperationsRepositoryScope(event.target.value)
+              }
+            >
+              <option value="">All repositories</option>
+              {repositories.map((repository) => (
+                <option key={repository.id} value={repository.id}>
+                  {repository.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
 
         <form
           className="repositoryPanel"

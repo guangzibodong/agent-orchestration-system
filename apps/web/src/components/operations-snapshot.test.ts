@@ -34,4 +34,20 @@ describe("operations snapshot", () => {
     expect(snapshot.auditEvents[0]?.type).toBe("workflow.enqueued");
     expect(snapshot.jobs[0]?.status).toBe("queued");
   });
+
+  it("scopes audit and job history to a selected repository", async () => {
+    const requests: string[] = [];
+    await loadOperationsSnapshot(
+      async (path) => {
+        requests.push(path);
+        return [];
+      },
+      { repositoryId: "repo 1" }
+    );
+
+    expect(requests).toEqual([
+      "/audit-events?limit=8&repositoryId=repo+1",
+      "/jobs?limit=8&repositoryId=repo+1"
+    ]);
+  });
 });
