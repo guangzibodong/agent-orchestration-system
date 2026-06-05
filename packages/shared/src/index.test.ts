@@ -5,6 +5,7 @@ import {
   createRepositoryWorkflowRequestSchema,
   repositoryRegistrationRequestSchema,
   repositoryRecordSchema,
+  readinessResponseSchema,
   mergeCandidateSchema,
   runReportSchema,
   workflowReviewRequestSchema,
@@ -313,6 +314,40 @@ describe("workflowRunSchema", () => {
     });
 
     expect(agent.label).toBe("Codex CLI");
+  });
+
+  it("accepts deployment readiness responses with production blockers", () => {
+    const readiness = readinessResponseSchema.parse({
+      ok: false,
+      service: "mawo-api",
+      checkedAt: "2026-06-05T19:54:24.148Z",
+      deploymentMode: "production",
+      protectedByToken: true,
+      root: "C:/mawo",
+      activeJobs: 2,
+      checks: [
+        {
+          id: "state_store",
+          label: "State store",
+          ok: true,
+          status: "ready"
+        },
+        {
+          id: "production_config",
+          label: "Production security config",
+          ok: false,
+          status: "blocked",
+          deploymentMode: "production",
+          protectedByToken: true,
+          allowedRepositoryRootsConfigured: false,
+          missing: ["MAWO_ALLOWED_REPOSITORY_ROOTS"]
+        }
+      ]
+    });
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.deploymentMode).toBe("production");
+    expect(readiness.checks[1]?.status).toBe("blocked");
   });
 
   it("accepts workflow review decisions", () => {

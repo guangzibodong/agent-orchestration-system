@@ -19,6 +19,19 @@ describe("operations snapshot", () => {
         ];
       }
 
+      if (path === "/readiness") {
+        return {
+          ok: true,
+          service: "mawo-api",
+          checkedAt: "2026-06-05T19:54:24.148Z",
+          deploymentMode: "development",
+          protectedByToken: false,
+          root: "C:/mawo",
+          activeJobs: 0,
+          checks: []
+        };
+      }
+
       return [
         {
           id: "job-1",
@@ -30,9 +43,14 @@ describe("operations snapshot", () => {
       ];
     });
 
-    expect(requests).toEqual(["/audit-events?limit=8", "/jobs?limit=8"]);
+    expect(requests).toEqual([
+      "/audit-events?limit=8",
+      "/jobs?limit=8",
+      "/readiness"
+    ]);
     expect(snapshot.auditEvents[0]?.type).toBe("workflow.enqueued");
     expect(snapshot.jobs[0]?.status).toBe("queued");
+    expect(snapshot.readiness.ok).toBe(true);
   });
 
   it("scopes audit and job history to a selected repository", async () => {
@@ -40,6 +58,19 @@ describe("operations snapshot", () => {
     await loadOperationsSnapshot(
       async (path) => {
         requests.push(path);
+        if (path === "/readiness") {
+          return {
+            ok: true,
+            service: "mawo-api",
+            checkedAt: "2026-06-05T19:54:24.148Z",
+            deploymentMode: "development",
+            protectedByToken: false,
+            root: "C:/mawo",
+            activeJobs: 0,
+            checks: []
+          };
+        }
+
         return [];
       },
       { repositoryId: "repo 1" }
@@ -47,7 +78,8 @@ describe("operations snapshot", () => {
 
     expect(requests).toEqual([
       "/audit-events?limit=8&repositoryId=repo+1",
-      "/jobs?limit=8&repositoryId=repo+1"
+      "/jobs?limit=8&repositoryId=repo+1",
+      "/readiness"
     ]);
   });
 });

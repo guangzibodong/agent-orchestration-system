@@ -1,7 +1,9 @@
 import {
   auditEventSchema,
+  readinessResponseSchema,
   workflowJobSchema,
   type AuditEvent,
+  type ReadinessResponse,
   type WorkflowJob
 } from "@mawo/shared";
 
@@ -14,6 +16,7 @@ export type OperationsSnapshotOptions = {
 export type OperationsSnapshot = {
   auditEvents: AuditEvent[];
   jobs: WorkflowJob[];
+  readiness: ReadinessResponse;
 };
 
 export async function loadOperationsSnapshot(
@@ -21,23 +24,26 @@ export async function loadOperationsSnapshot(
   options: OperationsSnapshotOptions = {}
 ): Promise<OperationsSnapshot> {
   const paths = buildOperationsSnapshotPaths(options);
-  const [auditEvents, jobs] = await Promise.all([
+  const [auditEvents, jobs, readiness] = await Promise.all([
     api(paths.auditEventsPath),
-    api(paths.jobsPath)
+    api(paths.jobsPath),
+    api(paths.readinessPath)
   ]);
 
   return {
     auditEvents: auditEventSchema.array().parse(auditEvents),
-    jobs: workflowJobSchema.array().parse(jobs)
+    jobs: workflowJobSchema.array().parse(jobs),
+    readiness: readinessResponseSchema.parse(readiness)
   };
 }
 
 export function buildOperationsSnapshotPaths(
   options: OperationsSnapshotOptions = {}
-): { auditEventsPath: string; jobsPath: string } {
+): { auditEventsPath: string; jobsPath: string; readinessPath: string } {
   return {
     auditEventsPath: buildPath("/audit-events", options),
-    jobsPath: buildPath("/jobs", options)
+    jobsPath: buildPath("/jobs", options),
+    readinessPath: "/readiness"
   };
 }
 

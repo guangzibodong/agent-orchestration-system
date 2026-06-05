@@ -154,6 +154,28 @@ export const agentHealthSchema = agentSummarySchema.extend({
   checkedAt: z.string()
 });
 
+export const readinessCheckSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    ok: z.boolean(),
+    status: z.enum(["ready", "degraded", "blocked", "failed"]),
+    message: z.string().optional(),
+    missing: z.array(z.string()).optional()
+  })
+  .passthrough();
+
+export const readinessResponseSchema = z.object({
+  ok: z.boolean(),
+  service: z.string().min(1),
+  checkedAt: z.string(),
+  deploymentMode: z.enum(["development", "production"]),
+  protectedByToken: z.boolean(),
+  root: z.string(),
+  activeJobs: z.number().int().nonnegative(),
+  checks: z.array(readinessCheckSchema)
+});
+
 export const workflowReviewRequestSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   note: z.string().min(1).optional()
@@ -318,6 +340,8 @@ export type CreateRepositoryWorkflowRequest = z.infer<
 >;
 export type AgentSummary = z.infer<typeof agentSummarySchema>;
 export type AgentHealth = z.infer<typeof agentHealthSchema>;
+export type ReadinessCheck = z.infer<typeof readinessCheckSchema>;
+export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type WorkflowReviewRequest = z.infer<
   typeof workflowReviewRequestSchema
 >;

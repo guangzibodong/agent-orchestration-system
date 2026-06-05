@@ -232,6 +232,7 @@ h2 {
 }
 
 .operationsScopePanel,
+.readinessPanel,
 .repositoryPanel,
 .repositoryRegistrationPanel {
   display: grid;
@@ -262,9 +263,84 @@ h2 {
 }
 
 .operationsScopePanel h3,
+.readinessPanel h3,
 .repositoryRegistry h3 {
   margin: 0;
   font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.readinessPanel {
+  align-items: stretch;
+}
+
+.readinessPanel > .sectionHeader,
+.readinessPanel > .readinessMeta,
+.readinessPanel > .readinessList {
+  grid-column: 1 / -1;
+}
+
+.readinessMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.readinessMeta div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.readinessMeta dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.readinessMeta dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.readinessList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.readinessItem {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 10px;
+}
+
+.readinessItem > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.readinessItem strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.readinessItem p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 

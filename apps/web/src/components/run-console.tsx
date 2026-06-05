@@ -29,6 +29,7 @@ import {
   type AgentHealth,
   type AgentSummary,
   type MergeCandidate,
+  type ReadinessResponse,
   type RepositoryRecord,
   type RunReport,
   type WorkflowJob,
@@ -63,6 +64,10 @@ import {
   buildAgentHealthDisplay,
   summarizeAgentHealth
 } from "@/components/agent-health-display";
+import {
+  buildReadinessCheckDisplay,
+  summarizeReadiness
+} from "@/components/readiness-display";
 import {
   buildAuditEventDisplay,
   summarizeAuditEvents
@@ -183,6 +188,7 @@ export function RunConsole() {
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
+  const [readiness, setReadiness] = useState<ReadinessResponse>();
   const [jobTimeline, setJobTimeline] = useState<JobTimelineResponse>();
   const [workspaceCleanupPreview, setWorkspaceCleanupPreview] =
     useState<WorkspaceCleanupPreview>();
@@ -236,6 +242,15 @@ export function RunConsole() {
   const jobHistoryDisplay = useMemo(
     () => buildJobHistoryDisplay(jobHistory).slice(0, 8),
     [jobHistory]
+  );
+  const readinessSummary = useMemo(
+    () => (readiness ? summarizeReadiness(readiness) : undefined),
+    [readiness]
+  );
+  const readinessCheckDisplay = useMemo(
+    () =>
+      readiness ? buildReadinessCheckDisplay(readiness.checks) : [],
+    [readiness]
   );
   const jobTimelineDisplay = useMemo(
     () => (jobTimeline ? buildJobTimelineDisplay(jobTimeline) : undefined),
@@ -304,12 +319,18 @@ export function RunConsole() {
         label: "Jobs",
         value: String(jobHistorySummary.total),
         icon: Play
+      },
+      {
+        label: "Readiness",
+        value: readinessSummary?.statusLabel ?? "Unknown",
+        icon: CheckCircle2
       }
     ],
     [
       agentHealthSummary,
       auditEventSummary,
       jobHistorySummary,
+      readinessSummary,
       repositorySummary,
       workflow,
       workflowListSummary
@@ -574,6 +595,7 @@ export function RunConsole() {
     });
     setAuditEvents(snapshot.auditEvents);
     setJobHistory(snapshot.jobs);
+    setReadiness(snapshot.readiness);
   }, [operationsRepositoryId]);
 
   const deleteRepository = useCallback(
@@ -1065,6 +1087,50 @@ export function RunConsole() {
             </select>
           </label>
         </section>
+
+        {readiness && readinessSummary ? (
+          <section className="readinessPanel">
+            <div className="sectionHeader">
+              <h3>Deployment Readiness</h3>
+              <span className={`healthBadge ${readinessSummary.severity}`}>
+                {readinessSummary.statusLabel}
+              </span>
+            </div>
+            <dl className="readinessMeta">
+              <div>
+                <dt>Mode</dt>
+                <dd>{readinessSummary.deploymentLabel}</dd>
+              </div>
+              <div>
+                <dt>Auth</dt>
+                <dd>{readinessSummary.protectedByTokenLabel}</dd>
+              </div>
+              <div>
+                <dt>Queue</dt>
+                <dd>{readinessSummary.activeJobsLabel}</dd>
+              </div>
+              <div>
+                <dt>Checks</dt>
+                <dd>
+                  {readinessSummary.readyChecks}/{readinessSummary.totalChecks} ready
+                </dd>
+              </div>
+            </dl>
+            <div className="readinessList">
+              {readinessCheckDisplay.map((check) => (
+                <article className="readinessItem" key={check.id}>
+                  <div>
+                    <strong>{check.label}</strong>
+                    <span className={`healthBadge ${check.severity}`}>
+                      {check.statusLabel}
+                    </span>
+                  </div>
+                  <p>{check.detail}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <form
           className="repositoryPanel"
