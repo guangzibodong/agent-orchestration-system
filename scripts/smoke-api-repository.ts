@@ -448,7 +448,7 @@ async function main() {
     );
     const slowRun = await request(baseUrl, "POST", "/workflows/repository", {
       goal: "Smoke test job cancellation",
-      repositoryPath,
+      repositoryId: String(repositoryId),
       tasks: [
         {
           id: "slow-task",
@@ -467,6 +467,10 @@ async function main() {
     assert(
       typeof slowRun.body.id === "string",
       "Cancel smoke workflow did not include an id.",
+    );
+    assert(
+      slowRun.body.repositoryId === repositoryId,
+      "Cancel smoke workflow did not keep the registered repository id.",
     );
     const cancelWorkflowId = slowRun.body.id;
     const queuedJob = await request(
@@ -672,7 +676,7 @@ async function main() {
     const filteredWorkflowCreatedAudit = await request(
       baseUrl,
       "GET",
-      `/audit-events?type=workflow.created&repositoryId=${repositoryId}&limit=1`,
+      `/audit-events?type=workflow.created&repositoryId=${repositoryId}`,
     );
     assert(
       filteredWorkflowCreatedAudit.status === 200,
@@ -708,7 +712,7 @@ async function main() {
     const filteredJobAudit = await request(
       baseUrl,
       "GET",
-      `/audit-events?type=job.canceled&actor=operator&jobId=${cancelJobId}`,
+      `/audit-events?type=job.canceled&actor=operator&jobId=${cancelJobId}&repositoryId=${repositoryId}`,
     );
     assert(
       filteredJobAudit.status === 200,
@@ -716,9 +720,30 @@ async function main() {
     );
     assert(
       (filteredJobAudit.body as unknown as Array<JsonObject>).some(
-        (event) => event.type === "job.canceled" && event.jobId === cancelJobId,
+        (event) =>
+          event.type === "job.canceled" &&
+          event.jobId === cancelJobId &&
+          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
       ),
       "Filtered job audit did not return the canceled job event.",
+    );
+    const filteredEnqueuedAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=workflow.enqueued&actor=operator&repositoryId=${repositoryId}&limit=1`,
+    );
+    assert(
+      filteredEnqueuedAudit.status === 200,
+      `Filtered enqueue audit returned ${filteredEnqueuedAudit.status}`,
+    );
+    assert(
+      (filteredEnqueuedAudit.body as unknown as Array<JsonObject>).some(
+        (event) =>
+          event.type === "workflow.enqueued" &&
+          event.jobId === cancelJobId &&
+          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+      ),
+      "Filtered enqueue audit did not return the repository job event.",
     );
     log("audit filters isolate repository and job operator actions");
 
@@ -781,6 +806,23 @@ async function main() {
         filteredJobHistory[0]?.workflowId === cancelWorkflowId &&
         filteredJobHistory[0]?.status === "canceled",
       "Filtered job history did not isolate the canceled workflow job.",
+    );
+    const repositoryJobs = await request(
+      baseUrl,
+      "GET",
+      `/jobs?status=canceled&repositoryId=${repositoryId}&limit=1`,
+    );
+    assert(
+      repositoryJobs.status === 200,
+      `Repository jobs endpoint returned ${repositoryJobs.status}`,
+    );
+    const repositoryJobHistory =
+      repositoryJobs.body as unknown as Array<JsonObject>;
+    assert(
+      repositoryJobHistory.length === 1 &&
+        repositoryJobHistory[0]?.id === cancelJobId &&
+        repositoryJobHistory[0]?.workflowId === cancelWorkflowId,
+      "Repository job history did not isolate the canceled repository job.",
     );
     const invalidJobStatus = await request(baseUrl, "GET", "/jobs?status=not-real");
     assert(

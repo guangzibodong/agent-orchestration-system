@@ -893,6 +893,136 @@ describe("runner API", () => {
     );
   });
 
+  it("filters job history and job audit events by registered repository id", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-repository-filter-test-"));
+    const firstRepoPath = await createCommittedRepo();
+    const secondRepoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const firstRepository = (
+      await app.inject({
+        method: "POST",
+        url: "/repositories",
+        payload: {
+          name: "First job repo",
+          path: firstRepoPath,
+          qualityGates: []
+        }
+      })
+    ).json();
+    const secondRepository = (
+      await app.inject({
+        method: "POST",
+        url: "/repositories",
+        payload: {
+          name: "Second job repo",
+          path: secondRepoPath,
+          qualityGates: []
+        }
+      })
+    ).json();
+    const firstWorkflow = (
+      await app.inject({
+        method: "POST",
+        url: "/workflows/repository",
+        payload: {
+          goal: "Queue first repository workflow",
+          repositoryId: firstRepository.id,
+          tasks: [
+            {
+              id: "first-task",
+              agent: "shell",
+              command: `${node} -e "console.log('first')"`
+            }
+          ]
+        }
+      })
+    ).json();
+    const secondWorkflow = (
+      await app.inject({
+        method: "POST",
+        url: "/workflows/repository",
+        payload: {
+          goal: "Queue second repository workflow",
+          repositoryId: secondRepository.id,
+          tasks: [
+            {
+              id: "second-task",
+              agent: "shell",
+              command: `${node} -e "console.log('second')"`
+            }
+          ]
+        }
+      })
+    ).json();
+
+    vi.useFakeTimers();
+    const firstJob = (
+      await app.inject({
+        method: "POST",
+        url: `/workflows/${firstWorkflow.id}/enqueue`
+      })
+    ).json();
+    await app.inject({ method: "POST", url: `/jobs/${firstJob.id}/cancel` });
+    const secondJob = (
+      await app.inject({
+        method: "POST",
+        url: `/workflows/${secondWorkflow.id}/enqueue`
+      })
+    ).json();
+    await app.inject({ method: "POST", url: `/jobs/${secondJob.id}/cancel` });
+
+    const repositoryJobsResponse = await app.inject({
+      method: "GET",
+      url: `/jobs?status=canceled&repositoryId=${firstRepository.id}&limit=1`
+    });
+    const enqueuedAuditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?type=workflow.enqueued&repositoryId=${firstRepository.id}`
+    });
+    const canceledAuditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?type=job.canceled&repositoryId=${firstRepository.id}`
+    });
+
+    expect(repositoryJobsResponse.statusCode).toBe(200);
+    expect(repositoryJobsResponse.json()).toEqual([
+      expect.objectContaining({
+        id: firstJob.id,
+        workflowId: firstWorkflow.id,
+        status: "canceled"
+      })
+    ]);
+    expect(repositoryJobsResponse.json()).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: secondJob.id })])
+    );
+    expect(enqueuedAuditResponse.statusCode).toBe(200);
+    expect(enqueuedAuditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "workflow.enqueued",
+        workflowId: firstWorkflow.id,
+        jobId: firstJob.id,
+        metadata: expect.objectContaining({
+          repositoryId: firstRepository.id,
+          repositoryPath: firstRepoPath
+        })
+      })
+    );
+    expect(canceledAuditResponse.statusCode).toBe(200);
+    expect(canceledAuditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "job.canceled",
+        workflowId: firstWorkflow.id,
+        jobId: firstJob.id,
+        metadata: expect.objectContaining({
+          repositoryId: firstRepository.id,
+          repositoryPath: firstRepoPath
+        })
+      })
+    );
+  });
+
   it("rejects invalid job history statuses", async () => {
     const app = buildApp();
 

@@ -209,7 +209,7 @@ POST /workflows/:id/workspaces/cleanup
 GET  /workflows/:id/report
 GET  /workflows/:id/merge-candidate
 GET  /jobs
-GET  /jobs?status=<status>&workflowId=<workflowId>&limit=<n>
+GET  /jobs?status=<status>&workflowId=<workflowId>&repositoryId=<repositoryId>&limit=<n>
 GET  /jobs/:id
 POST /jobs/:id/cancel
 ```

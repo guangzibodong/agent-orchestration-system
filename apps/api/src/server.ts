@@ -584,7 +584,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.post<{
     Params: { id: string };
   }>("/workflows/:id/enqueue", async (request, reply) => {
-    if (!activeRunner.getWorkflow(request.params.id)) {
+    const workflow = activeRunner.getWorkflow(request.params.id);
+    if (!workflow) {
       return reply.code(404).send({ error: "workflow_not_found" });
     }
 
@@ -597,6 +598,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         workflowId: job.workflowId,
         jobId: job.id,
         metadata: {
+          repositoryId: workflow.repositoryId ?? "",
+          repositoryPath: workflow.repositoryPath ?? "",
           status: job.status
         }
       });
@@ -616,7 +619,12 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   app.get<{
-    Querystring: { limit?: string; status?: string; workflowId?: string };
+    Querystring: {
+      limit?: string;
+      repositoryId?: string;
+      status?: string;
+      workflowId?: string;
+    };
   }>("/jobs", async (request, reply) => {
     const jobStatus = request.query.status
       ? workflowJobStatusSchema.safeParse(request.query.status)
@@ -638,6 +646,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         return false;
       }
 
+      if (request.query.repositoryId) {
+        const workflow = activeRunner.getWorkflow(job.workflowId);
+        if (workflow?.repositoryId !== request.query.repositoryId) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -653,12 +668,15 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       return reply.code(404).send({ error: "job_not_found" });
     }
 
+    const workflow = activeRunner.getWorkflow(job.workflowId);
     auditStore.append({
       type: "job.canceled",
       actor: "operator",
       workflowId: job.workflowId,
       jobId: job.id,
       metadata: {
+        repositoryId: workflow?.repositoryId ?? "",
+        repositoryPath: workflow?.repositoryPath ?? "",
         status: job.status
       }
     });
