@@ -137,10 +137,11 @@ template. Real agents can be `healthy`, `auth_unchecked`, `auth_failed`, or
 ```
 
 Expected readiness response includes deployability checks for `.mawo/state`,
-`.mawo/artifacts`, Git CLI availability, agent health, token protection, and
-active queue pressure. In production it also enforces a `production_config`
-gate for `MAWO_API_TOKEN` and `MAWO_ALLOWED_REPOSITORY_ROOTS`; treat `ok=false`
-as a deployment blocker until each degraded check is resolved:
+`.mawo/artifacts`, Git CLI availability, agent health, token protection,
+deployment topology, and active queue pressure. In production it also enforces
+`production_config` for `MAWO_API_TOKEN` and `MAWO_ALLOWED_REPOSITORY_ROOTS`,
+plus `deployment_topology` for the current file-backed runtime. Treat
+`ok=false` as a deployment blocker until each degraded check is resolved:
 
 ```json
 {
@@ -154,7 +155,8 @@ as a deployment blocker until each degraded check is resolved:
     { "id": "artifact_store", "ok": true, "status": "ready" },
     { "id": "git_cli", "ok": true, "status": "ready" },
     { "id": "agents", "ok": true, "status": "ready" },
-    { "id": "production_config", "ok": true, "status": "ready" }
+    { "id": "production_config", "ok": true, "status": "ready" },
+    { "id": "deployment_topology", "ok": true, "status": "ready" }
   ]
 }
 ```
@@ -220,6 +222,7 @@ Start API and web in separate supervised processes. Minimal PowerShell example:
 ```powershell
 New-Item -ItemType Directory -Force .logs
 $env:NODE_ENV = "production"
+$env:MAWO_API_REPLICA_COUNT = "1"
 
 Start-Process -WindowStyle Hidden -FilePath ".\.tools\node\npm.cmd" `
   -ArgumentList "run start -w @mawo/api" `
@@ -429,7 +432,9 @@ back the web process first while keeping the API and `.mawo` untouched.
   isolation.
 - CORS currently allows all origins.
 - Workflow state is file-based under `.mawo`, so concurrent multi-host API
-  replicas are not supported.
+  replicas are not supported. Set `MAWO_API_REPLICA_COUNT=1`; `/readiness`
+  blocks production if the configured count is higher while the runtime remains
+  file-backed and in-process.
 - The background worker is still in the API process. Job history is persisted,
   but queued/running jobs found after API restart are marked failed. Matching
   running workflows are recovered to `aborted` with interrupted task/gate
@@ -461,7 +466,7 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /readiness` returns `ok=true`, reports token protection, and marks
       `state_store`, `artifact_store`, `git_cli`, `agents`, and
-      `production_config` as ready.
+      `production_config`, `deployment_topology` as ready.
 - [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
       configured production agent reports `missing_command` or `auth_failed`.
 - [ ] Web starts and can reach the configured API URL from the browser.

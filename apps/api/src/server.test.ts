@@ -230,6 +230,46 @@ describe("runner API", () => {
     expect(JSON.stringify(readiness)).not.toContain("change-me-before-production");
   });
 
+  it("blocks production readiness when file-backed runtime is scaled past one API replica", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-topology-test-"));
+    tempRoots.push(demoRoot);
+    const token = "production-token-1234567890";
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        NODE_ENV: "production",
+        MAWO_API_TOKEN: token,
+        MAWO_ALLOWED_REPOSITORY_ROOTS: demoRoot,
+        MAWO_API_REPLICA_COUNT: "2"
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/readiness",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    const readiness = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(readiness).toMatchObject({
+      ok: false,
+      deploymentMode: "production"
+    });
+    expect(readiness.checks).toContainEqual(
+      expect.objectContaining({
+        id: "deployment_topology",
+        ok: false,
+        status: "blocked",
+        apiReplicaCount: 2,
+        stateBackend: "file",
+        queueBackend: "in_process"
+      })
+    );
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

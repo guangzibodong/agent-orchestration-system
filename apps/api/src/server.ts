@@ -76,6 +76,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const apiToken = env.MAWO_API_TOKEN?.trim();
   const deploymentMode =
     env.NODE_ENV === "production" ? "production" : "development";
+  const apiReplicaCount = parseApiReplicaCount(env.MAWO_API_REPLICA_COUNT);
   const allowedRepositoryRoots = parseAllowedRepositoryRoots(
     env.MAWO_ALLOWED_REPOSITORY_ROOTS
   );
@@ -217,11 +218,16 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       apiToken,
       allowedRepositoryRoots
     });
+    const deploymentTopologyCheck = createDeploymentTopologyCheck({
+      deploymentMode,
+      apiReplicaCount
+    });
     const checks = [
       ...storeChecks,
       gitCheck,
       agentsCheck,
-      productionConfigCheck
+      productionConfigCheck,
+      deploymentTopologyCheck
     ];
 
     return {
@@ -1123,6 +1129,49 @@ function createProductionConfigCheck(input: {
   };
 }
 
+function createDeploymentTopologyCheck(input: {
+  deploymentMode: "development" | "production";
+  apiReplicaCount: number;
+}) {
+  const stateBackend = "file";
+  const queueBackend = "in_process";
+  const maxSupportedApiReplicas = 1;
+
+  if (!Number.isInteger(input.apiReplicaCount) || input.apiReplicaCount < 1) {
+    return {
+      id: "deployment_topology",
+      label: "Deployment topology",
+      ok: false,
+      status: "blocked",
+      deploymentMode: input.deploymentMode,
+      apiReplicaCount: input.apiReplicaCount,
+      maxSupportedApiReplicas,
+      stateBackend,
+      queueBackend,
+      message: "MAWO_API_REPLICA_COUNT must be a positive integer."
+    };
+  }
+
+  const scaledPastFileRuntimeLimit =
+    input.deploymentMode === "production" &&
+    input.apiReplicaCount > maxSupportedApiReplicas;
+
+  return {
+    id: "deployment_topology",
+    label: "Deployment topology",
+    ok: !scaledPastFileRuntimeLimit,
+    status: scaledPastFileRuntimeLimit ? "blocked" : "ready",
+    deploymentMode: input.deploymentMode,
+    apiReplicaCount: input.apiReplicaCount,
+    maxSupportedApiReplicas,
+    stateBackend,
+    queueBackend,
+    message: scaledPastFileRuntimeLimit
+      ? "File-backed state and in-process queue support one API replica. Set MAWO_API_REPLICA_COUNT=1 or migrate state and queue backends before scaling."
+      : "Runtime topology is compatible with the configured API replica count."
+  };
+}
+
 function isProductionApiToken(apiToken?: string): boolean {
   if (!apiToken) {
     return false;
@@ -1133,4 +1182,12 @@ function isProductionApiToken(apiToken?: string): boolean {
   }
 
   return apiToken.length >= 20;
+}
+
+function parseApiReplicaCount(value?: string): number {
+  if (!value?.trim()) {
+    return 1;
+  }
+
+  return Number(value);
 }

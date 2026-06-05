@@ -24,6 +24,7 @@ describe("deployment manifests", () => {
     expect(compose).toContain("target: api");
     expect(compose).toContain("target: web");
     expect(compose).toContain("API_HOST: 0.0.0.0");
+    expect(compose).toContain("MAWO_API_REPLICA_COUNT: ${MAWO_API_REPLICA_COUNT:-1}");
     expect(compose).toContain("MAWO_API_TOKEN: ${MAWO_API_TOKEN:?");
     expect(compose).toContain(
       "MAWO_ALLOWED_REPOSITORY_ROOTS: ${MAWO_ALLOWED_REPOSITORY_ROOTS:?"
@@ -39,6 +40,7 @@ describe("deployment manifests", () => {
 
     expect(env).toContain("API_HOST=0.0.0.0");
     expect(env).toContain("API_PORT=4000");
+    expect(env).toContain("MAWO_API_REPLICA_COUNT=1");
     expect(env).toContain("MAWO_API_TOKEN=");
     expect(env).toContain("MAWO_ALLOWED_REPOSITORY_ROOTS=");
     expect(env).toContain("POSTGRES_PASSWORD=");
