@@ -16,6 +16,7 @@ const eventLabels: Record<AuditEventType, string> = {
   "workflow.enqueued": "Workflow Enqueued",
   "workflow.retry_requested": "Retry Requested",
   "workflow.reviewed": "Workflow Reviewed",
+  "workflow.artifact_read": "Artifact Read",
   "workflow.workspaces_cleaned": "Workspaces Cleaned",
   "workflow.task_started": "Task Started",
   "workflow.task_completed": "Task Completed",

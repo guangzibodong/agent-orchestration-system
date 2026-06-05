@@ -300,6 +300,54 @@ describe("runner API", () => {
     expect(artifact.content).toContain('"recommendation": "ready_for_review"');
   });
 
+  it("records audit events when workflow artifacts are read", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-audit-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/worktree-demo"
+    });
+    const created = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const reportResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/report`
+    });
+    const report = reportResponse.json();
+
+    await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/artifact?maxBytes=128&path=${encodeURIComponent(
+        report.reportArtifactPath
+      )}`
+    });
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?workflowId=${created.id}`
+    });
+    const artifactRead = auditResponse
+      .json()
+      .find((event: { type: string }) => event.type === "workflow.artifact_read");
+
+    expect(auditResponse.statusCode).toBe(200);
+    expect(artifactRead).toMatchObject({
+      type: "workflow.artifact_read",
+      actor: "operator",
+      workflowId: created.id,
+      metadata: {
+        artifactPath: report.reportArtifactPath,
+        maxBytes: "128",
+        truncated: "true"
+      }
+    });
+    expect(Number(artifactRead.metadata.sizeBytes)).toBeGreaterThan(128);
+  });
+
   it("rejects artifact reads outside the workflow artifact directory", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-guard-test-"));
     tempRoots.push(demoRoot);

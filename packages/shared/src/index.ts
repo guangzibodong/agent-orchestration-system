@@ -250,6 +250,7 @@ export const auditEventTypeSchema = z.enum([
   "workflow.enqueued",
   "workflow.retry_requested",
   "workflow.reviewed",
+  "workflow.artifact_read",
   "workflow.workspaces_cleaned",
   "workflow.task_started",
   "workflow.task_completed",

@@ -509,6 +509,7 @@ async function main() {
       "workflow.created",
       "workflow.retry_requested",
       "workflow.reviewed",
+      "workflow.artifact_read",
       "workflow.workspaces_cleaned",
       "workflow.task_started",
       "workflow.task_completed",
@@ -559,6 +560,19 @@ async function main() {
         );
       }),
       "Audit log did not include the idempotent empty cleanup event.",
+    );
+    assert(
+      events.some((event) => {
+        const metadata = event.metadata as JsonObject | undefined;
+        return (
+          event.type === "workflow.artifact_read" &&
+          event.workflowId === workflowId &&
+          typeof metadata?.artifactPath === "string" &&
+          metadata.artifactPath.includes("report.json") &&
+          metadata.truncated === "false"
+        );
+      }),
+      "Audit log did not include report artifact read metadata.",
     );
     assert(
       events.some(

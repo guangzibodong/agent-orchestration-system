@@ -601,6 +601,18 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const truncated = sizeBytes > maxBytes;
     const content = readArtifactPrefix(artifactPath, maxBytes);
 
+    auditStore.append({
+      type: "workflow.artifact_read",
+      actor: "operator",
+      workflowId: request.params.id,
+      metadata: {
+        artifactPath,
+        maxBytes: String(maxBytes),
+        sizeBytes: String(sizeBytes),
+        truncated: String(truncated)
+      }
+    });
+
     return {
       workflowId: request.params.id,
       path: artifactPath,

@@ -44,6 +44,19 @@ const events: AuditEvent[] = [
       previousStatus: "running",
       recoveredStatus: "failed"
     }
+  },
+  {
+    id: "event-5",
+    type: "workflow.artifact_read",
+    createdAt: "2026-06-05T10:32:10.513Z",
+    actor: "operator",
+    workflowId: "workflow-artifact",
+    metadata: {
+      artifactPath:
+        "C:/mawo/artifacts/workflow-artifact/report.json",
+      maxBytes: "65536",
+      truncated: "false"
+    }
   }
 ];
 
@@ -85,14 +98,24 @@ describe("audit event display", () => {
         workflowLabel: "workflow-",
         jobLabel: "job-recov",
         metadataLabel: "previousStatus=running, recoveredStatus=failed"
+      },
+      {
+        id: "event-5",
+        label: "Artifact Read",
+        actor: "operator",
+        createdAt: "2026-06-05T10:32:10.513Z",
+        workflowLabel: "workflow-",
+        jobLabel: undefined,
+        metadataLabel:
+          "artifactPath=C:/mawo/artifacts/workflow-artifact/report.json, maxBytes=65536, truncated=false"
       }
     ]);
   });
 
   it("summarizes audit activity for the console header", () => {
     expect(summarizeAuditEvents(events)).toEqual({
-      total: 4,
-      operatorActions: 2
+      total: 5,
+      operatorActions: 3
     });
   });
 
