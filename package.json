@@ -16,7 +16,7 @@
     "build": "npm run build -w @mawo/shared && npm run build -w @mawo/api && npm run build -w @mawo/web",
     "typecheck": "npm run typecheck -w @mawo/shared && npm run typecheck -w @mawo/api && npm run typecheck -w @mawo/web",
     "test": "vitest run",
-    "smoke:api": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-api-repository.ps1",
+    "smoke:api": "node scripts/smoke-api-repository.mjs",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
