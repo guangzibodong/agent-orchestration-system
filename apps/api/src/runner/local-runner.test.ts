@@ -188,7 +188,7 @@ describe("LocalRunner", () => {
           id: "slow-task",
           title: "Slow task",
           agent: "shell",
-          command: `${node} -e "setTimeout(() => console.log('too late'), 1000)"`,
+          command: `${node} -e "setTimeout(() => console.log('too late'), 5000)"`,
           timeoutMs: 50
         }
       ],
@@ -221,7 +221,7 @@ describe("LocalRunner", () => {
         {
           id: "slow-gate",
           title: "Slow gate",
-          command: `${node} -e "setTimeout(() => console.log('too late'), 1000)"`,
+          command: `${node} -e "setTimeout(() => console.log('too late'), 5000)"`,
           timeoutMs: 50
         }
       ]

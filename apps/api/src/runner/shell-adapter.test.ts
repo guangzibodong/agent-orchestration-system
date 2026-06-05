@@ -62,7 +62,7 @@ describe("ShellAdapter", () => {
     const controller = new AbortController();
 
     const resultPromise = adapter.run({
-      command: `${node} -e "setTimeout(() => require('fs').writeFileSync(process.argv[1], 'done'), 700)" ${JSON.stringify(markerPath)}`,
+      command: `${node} -e "setTimeout(() => require('fs').writeFileSync(process.argv[1], 'done'), 5000)" ${JSON.stringify(markerPath)}`,
       signal: controller.signal
     });
 

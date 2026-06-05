@@ -50,6 +50,7 @@ describe("deployment manifests", () => {
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("node-version: 26");
     expect(workflow).toContain("npm ci");
+    expect(workflow).toContain("npm run db:generate");
     expect(workflow).toContain("npm run test");
     expect(workflow).toContain("npm run typecheck");
     expect(workflow).toContain("npm run lint");
