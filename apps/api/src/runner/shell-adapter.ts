@@ -27,10 +27,14 @@ export class ShellAdapter {
     const started = Date.now();
     const startedAt = new Date(started).toISOString();
 
+    if (input.signal?.aborted) {
+      return createCanceledShellResult(input.command, started, startedAt);
+    }
+
     return new Promise((resolve, reject) => {
       let settled = false;
       let timedOut = false;
-      let canceled = input.signal?.aborted ?? false;
+      let canceled = false;
       const child = spawn(input.command, {
         cwd: input.cwd,
         env: {
@@ -150,4 +154,26 @@ function killProcessTree(pid?: number): void {
       // The process may already have exited.
     }
   }
+}
+
+function createCanceledShellResult(
+  command: string,
+  started: number,
+  startedAt: string
+): ShellRunResult {
+  const finished = Date.now();
+
+  return {
+    command,
+    status: "canceled",
+    exitCode: 1,
+    stdout: "",
+    stderr: "Command canceled.",
+    durationMs: finished - started,
+    startedAt,
+    finishedAt: new Date(finished).toISOString(),
+    metadata: {
+      canceled: "true"
+    }
+  };
 }

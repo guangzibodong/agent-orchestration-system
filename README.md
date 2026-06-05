@@ -164,6 +164,7 @@ Invoke-RestMethod -Method Post `
 ```text
 GET  /health
 GET  /agents
+GET  /agents/health
 GET  /workflows
 GET  /repositories
 POST /repositories
@@ -226,26 +227,33 @@ $env:MAWO_CURSOR_COMMAND_TEMPLATE = "cursor-agent {promptFile}"
 
 prompt 文件写在 worktree 外部，避免内部编排文件污染任务 diff。
 
+可以用健康检查接口确认已注册 agent 是否可执行：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:4000/agents/health
+```
+
+该接口会返回 agent id、label、状态、检查时间和解析出的命令名，不返回完整 command template，避免泄露 prompt/workspace 模板。
+
 ## 当前限制
 
 - 目前是 local-first 系统，没有内置登录、权限、租户隔离。
 - API 可以执行命令，不应直接暴露到公网。
-- workflow 状态和审计事件是文件持久化，暂不支持多 API 副本并发写。
-- job queue 仍是内存队列，API 重启后 queued/running job 不会恢复。
+- workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
+- job queue 运行器仍在单 API 进程内；API 重启后历史会恢复，但重启前 queued/running job 会被标记为 failed，需要人工重试。
 - Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
-- 真实 CLI agent 是否可用取决于本机是否安装对应 CLI、是否登录、是否有权限。
+- 真实 CLI agent 健康检查会确认命令是否存在，但不会执行登录态/授权探针；是否已登录仍需要运维侧确认。
 
 ## 路线图
 
 近期优先级：
 
-1. 持久化队列：job 状态跨 API 重启恢复。
-2. 仓库注册表：保存可运行仓库、默认 gate、允许路径。
-3. 工作区清理策略：保留、清理、归档、失败保留。
-4. Agent 健康检查：检查 Codex/Claude/Cursor CLI 是否可执行、是否已授权。
-5. 更完整的审计和运行历史：每次 task/gate 开始、结束、失败都可追踪。
-6. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
-7. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
+1. 工作区清理策略：保留、清理、归档、失败保留。
+2. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
+3. 更完整的审计和运行历史：每次 task/gate 开始、结束、失败都可追踪。
+4. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
+5. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
+6. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
 
 ## 文档入口
 

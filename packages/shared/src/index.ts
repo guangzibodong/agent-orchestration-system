@@ -143,6 +143,15 @@ export const agentSummarySchema = z.object({
   label: z.string().min(1)
 });
 
+export const agentHealthSchema = agentSummarySchema.extend({
+  configured: z.boolean(),
+  healthy: z.boolean(),
+  status: z.enum(["healthy", "missing_command"]),
+  message: z.string(),
+  command: z.string().optional(),
+  checkedAt: z.string()
+});
+
 export const workflowReviewRequestSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   note: z.string().min(1).optional()
@@ -263,6 +272,7 @@ export type CreateRepositoryWorkflowRequest = z.infer<
   typeof createRepositoryWorkflowRequestSchema
 >;
 export type AgentSummary = z.infer<typeof agentSummarySchema>;
+export type AgentHealth = z.infer<typeof agentHealthSchema>;
 export type WorkflowReviewRequest = z.infer<
   typeof workflowReviewRequestSchema
 >;

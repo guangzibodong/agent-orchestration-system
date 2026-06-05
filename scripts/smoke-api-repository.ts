@@ -109,6 +109,27 @@ async function main() {
     assert(health.body.ok === true, "GET /health did not return ok=true");
     log("health endpoint returned ok=true");
 
+    const agentHealth = await request(baseUrl, "GET", "/agents/health");
+    assert(
+      agentHealth.status === 200,
+      `GET /agents/health returned ${agentHealth.status}`,
+    );
+    const agentHealthRows = agentHealth.body as unknown as Array<JsonObject>;
+    assert(
+      agentHealthRows.some(
+        (agent) =>
+          agent.id === "fake-agent" &&
+          agent.healthy === true &&
+          agent.status === "healthy",
+      ),
+      "Agent health did not report the built-in fake agent as healthy.",
+    );
+    assert(
+      !JSON.stringify(agentHealthRows).includes("{promptFile}"),
+      "Agent health leaked a command template.",
+    );
+    log("agent health endpoint reports configured agents without leaking templates");
+
     const taskCommand = [
       `${node} -e "`,
       "const fs=require('fs');",

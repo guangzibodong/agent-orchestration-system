@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createAgentHealthChecks,
   createAgentSummaries,
   createConfiguredAgentConfigs
 } from "./agent-config.js";
@@ -33,5 +34,45 @@ describe("agent config", () => {
       { id: "fake-agent", label: "Fake CLI Agent" },
       { id: "cursor", label: "Cursor CLI" }
     ]);
+  });
+
+  it("reports fake agents as healthy without shell checks", async () => {
+    const health = await createAgentHealthChecks(createConfiguredAgentConfigs({}));
+
+    expect(health).toEqual([
+      expect.objectContaining({
+        id: "fake-agent",
+        label: "Fake CLI Agent",
+        configured: true,
+        healthy: true,
+        status: "healthy",
+        message: "Built-in demo agent is available."
+      })
+    ]);
+  });
+
+  it("checks configured CLI command availability without exposing templates", async () => {
+    const health = await createAgentHealthChecks(
+      createConfiguredAgentConfigs({
+        MAWO_CODEX_COMMAND_TEMPLATE: "missing-codex-binary run --prompt-file {promptFile}"
+      }),
+      async (command) => command === "missing-codex-binary" ? false : true
+    );
+
+    expect(health).toEqual([
+      expect.objectContaining({
+        id: "fake-agent",
+        healthy: true
+      }),
+      expect.objectContaining({
+        id: "codex",
+        label: "Codex CLI",
+        configured: true,
+        healthy: false,
+        status: "missing_command",
+        command: "missing-codex-binary"
+      })
+    ]);
+    expect(JSON.stringify(health)).not.toContain("{promptFile}");
   });
 });

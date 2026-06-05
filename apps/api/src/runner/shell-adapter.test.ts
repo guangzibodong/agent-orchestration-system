@@ -78,4 +78,23 @@ describe("ShellAdapter", () => {
     expect(result.stderr).toContain("Command canceled");
     expect(existsSync(markerPath)).toBe(false);
   });
+
+  it("does not start commands when the abort signal is already canceled", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-shell-pre-cancel-test-"));
+    tempRoots.push(root);
+    const markerPath = join(root, "done.txt");
+    const adapter = new ShellAdapter();
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await adapter.run({
+      command: `${node} -e "require('fs').writeFileSync(process.argv[1], 'done')" ${JSON.stringify(markerPath)}`,
+      signal: controller.signal
+    });
+
+    expect(result.status).toBe("canceled");
+    expect(result.metadata?.canceled).toBe("true");
+    expect(result.stderr).toContain("Command canceled");
+    expect(existsSync(markerPath)).toBe(false);
+  });
 });

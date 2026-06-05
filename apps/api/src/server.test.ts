@@ -63,6 +63,36 @@ describe("runner API", () => {
     ]);
   });
 
+  it("exposes agent health without exposing command templates", async () => {
+    const app = buildApp(undefined, {
+      env: {
+        MAWO_CODEX_COMMAND_TEMPLATE: "missing-codex-binary run --prompt-file {promptFile}"
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/agents/health"
+    });
+    const health = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(health).toEqual([
+      expect.objectContaining({
+        id: "fake-agent",
+        healthy: true,
+        status: "healthy"
+      }),
+      expect.objectContaining({
+        id: "codex",
+        healthy: false,
+        status: "missing_command",
+        command: "missing-codex-binary"
+      })
+    ]);
+    expect(JSON.stringify(health)).not.toContain("{promptFile}");
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

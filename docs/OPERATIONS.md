@@ -80,12 +80,14 @@ Open:
 
 - Web: `http://127.0.0.1:3000`
 - API health: `http://127.0.0.1:4000/health`
+- Agent health: `http://127.0.0.1:4000/agents/health`
 
 PowerShell health check:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:4000/health
 Invoke-RestMethod http://127.0.0.1:4000/agents
+Invoke-RestMethod http://127.0.0.1:4000/agents/health
 ```
 
 Expected health response:
@@ -95,6 +97,22 @@ Expected health response:
   "ok": true,
   "service": "mawo-api"
 }
+```
+
+Expected agent health includes the built-in fake agent and any configured CLI
+agents. The endpoint returns only the parsed command name, never the full command
+template:
+
+```json
+[
+  {
+    "id": "fake-agent",
+    "label": "Fake CLI Agent",
+    "configured": true,
+    "healthy": true,
+    "status": "healthy"
+  }
+]
 ```
 
 ## 4. Optional Docker Infrastructure
@@ -321,6 +339,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `npm run lint` passes or approved lint exceptions are documented.
 - [ ] `npm run build` passes.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
+- [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
+      configured production agent reports `missing_command`.
 - [ ] Web starts and can reach the configured API URL from the browser.
 - [ ] A demo workflow can be created and enqueued.
 - [ ] `.mawo` backup was created and restore path was tested at least once.

@@ -15,6 +15,7 @@ import {
 } from "./runner/file-repository-store.js";
 import { FileRunStore } from "./runner/file-run-store.js";
 import {
+  createAgentHealthChecks,
   createAgentSummaries,
   createConfiguredAgentConfigs
 } from "./runner/agent-config.js";
@@ -94,6 +95,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.get("/agents", async () => {
     return createAgentSummaries(cliAgents);
+  });
+
+  app.get("/agents/health", async () => {
+    return createAgentHealthChecks(cliAgents);
   });
 
   app.get("/workflows", async () => {
