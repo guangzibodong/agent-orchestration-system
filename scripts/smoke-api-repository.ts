@@ -280,6 +280,32 @@ async function main() {
       report.body.recommendation === "ready_for_review",
       "Report was not ready_for_review.",
     );
+    assert(
+      typeof report.body.reportArtifactPath === "string",
+      "Report did not include a persisted artifact path.",
+    );
+
+    const reportArtifact = await request(
+      baseUrl,
+      "GET",
+      `/workflows/${workflowId}/artifact?path=${encodeURIComponent(
+        report.body.reportArtifactPath,
+      )}`,
+    );
+    assert(
+      reportArtifact.status === 200,
+      `Report artifact returned ${reportArtifact.status}`,
+    );
+    assert(
+      reportArtifact.body.truncated === false,
+      "Report artifact should not be truncated in smoke.",
+    );
+    assert(
+      typeof reportArtifact.body.content === "string" &&
+        reportArtifact.body.content.includes('"recommendation": "ready_for_review"'),
+      "Report artifact content did not include the ready recommendation.",
+    );
+    log("report artifact is readable through the API");
 
     const mergeCandidate = await request(
       baseUrl,

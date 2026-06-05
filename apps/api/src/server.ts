@@ -5,7 +5,8 @@ import {
   workflowReviewRequestSchema
 } from "@mawo/shared";
 import Fastify from "fastify";
-import { resolve, sep, join } from "node:path";
+import { existsSync, statSync, readFileSync } from "node:fs";
+import { resolve, sep, join, isAbsolute } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
 import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
@@ -49,6 +50,7 @@ export type BuildAppOptions = {
 
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const root = options.demoRoot ?? process.cwd();
+  const artifactRoot = join(root, ".mawo", "artifacts");
   const env = options.env ?? process.env;
   const apiToken = env.MAWO_API_TOKEN?.trim();
   const allowedRepositoryRoots = parseAllowedRepositoryRoots(
@@ -68,7 +70,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         stateFile: join(root, ".mawo", "state", "workflows.json")
       }),
       artifactStore: new FileArtifactStore({
-        root: join(root, ".mawo", "artifacts")
+        root: artifactRoot
       }),
       eventSink: (event) => {
         auditStore.append({
@@ -567,6 +569,51 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.get<{
     Params: { id: string };
+    Querystring: { path?: string; maxBytes?: string };
+  }>("/workflows/:id/artifact", async (request, reply) => {
+    if (!activeRunner.getWorkflow(request.params.id)) {
+      return reply.code(404).send({ error: "workflow_not_found" });
+    }
+
+    if (!request.query.path) {
+      return reply.code(400).send({ error: "artifact_path_required" });
+    }
+
+    const workflowArtifactRoot = resolve(artifactRoot, request.params.id);
+    const artifactPath = resolveArtifactPath(
+      request.query.path,
+      workflowArtifactRoot
+    );
+
+    if (!isPathWithin(artifactPath, workflowArtifactRoot)) {
+      return reply.code(403).send({
+        error: "artifact_path_not_allowed",
+        message: "Artifact path is outside this workflow artifact directory."
+      });
+    }
+
+    if (!existsSync(artifactPath) || !statSync(artifactPath).isFile()) {
+      return reply.code(404).send({ error: "artifact_not_found" });
+    }
+
+    const sizeBytes = statSync(artifactPath).size;
+    const maxBytes = parseArtifactMaxBytes(request.query.maxBytes);
+    const content = readFileSync(artifactPath, "utf8");
+    const truncated = Buffer.byteLength(content, "utf8") > maxBytes;
+
+    return {
+      workflowId: request.params.id,
+      path: artifactPath,
+      content: truncated ? content.slice(0, maxBytes) : content,
+      contentType: "text/plain; charset=utf-8",
+      sizeBytes,
+      maxBytes,
+      truncated
+    };
+  });
+
+  app.get<{
+    Params: { id: string };
   }>("/workflows/:id/merge-candidate", async (request, reply) => {
     try {
       return activeRunner.getMergeCandidate(request.params.id);
@@ -614,4 +661,34 @@ function limitToRecent<T>(items: T[], value?: string): T[] {
   }
 
   return items.slice(-Math.min(parsed, 100));
+}
+
+function resolveArtifactPath(path: string, workflowArtifactRoot: string): string {
+  return isAbsolute(path) ? resolve(path) : resolve(workflowArtifactRoot, path);
+}
+
+function isPathWithin(path: string, root: string): boolean {
+  const candidate = resolve(path);
+  const normalizedRoot = resolve(root);
+
+  return (
+    candidate === normalizedRoot ||
+    candidate.startsWith(`${normalizedRoot}${sep}`)
+  );
+}
+
+function parseArtifactMaxBytes(value?: string): number {
+  const defaultMaxBytes = 64 * 1024;
+
+  if (!value) {
+    return defaultMaxBytes;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return defaultMaxBytes;
+  }
+
+  return Math.min(parsed, defaultMaxBytes);
 }

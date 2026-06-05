@@ -249,6 +249,17 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:4000/workflows/<workflow-id>/wo
 Cleanup is intentionally rejected for `needs_review` and `failed` workflows so
 operators can inspect patches and failure state before removing worktrees.
 
+Read a persisted workflow artifact without shelling into the host:
+
+```powershell
+$report = Invoke-RestMethod "http://127.0.0.1:4000/workflows/<workflow-id>/report"
+$artifact = Invoke-RestMethod "http://127.0.0.1:4000/workflows/<workflow-id>/artifact?path=$([uri]::EscapeDataString($report.reportArtifactPath))"
+$artifact.content
+```
+
+The artifact endpoint only serves files under `.mawo/artifacts/<workflow-id>/`
+and caps returned text at 64 KiB by default.
+
 ## 7. Logs and Data Locations
 
 Runtime logs:

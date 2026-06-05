@@ -261,6 +261,73 @@ describe("runner API", () => {
     expect(report.taskResults[0].patch).toContain("+worktree runner");
   });
 
+  it("serves persisted workflow artifacts through a bounded API endpoint", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/worktree-demo"
+    });
+    const created = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const reportResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/report`
+    });
+    const report = reportResponse.json();
+
+    const artifactResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/artifact?path=${encodeURIComponent(
+        report.reportArtifactPath
+      )}`
+    });
+    const artifact = artifactResponse.json();
+
+    expect(artifactResponse.statusCode).toBe(200);
+    expect(artifact).toMatchObject({
+      workflowId: created.id,
+      contentType: "text/plain; charset=utf-8",
+      truncated: false
+    });
+    expect(artifact.path).toContain("report.json");
+    expect(artifact.sizeBytes).toBeGreaterThan(0);
+    expect(artifact.content).toContain('"recommendation": "ready_for_review"');
+  });
+
+  it("rejects artifact reads outside the workflow artifact directory", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-guard-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/worktree-demo"
+    });
+    const created = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+
+    const artifactResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/artifact?path=${encodeURIComponent(
+        join(demoRoot, ".mawo", "state", "workflows.json")
+      )}`
+    });
+
+    expect(artifactResponse.statusCode).toBe(403);
+    expect(artifactResponse.json()).toMatchObject({
+      error: "artifact_path_not_allowed"
+    });
+  });
+
   it("persists audit events for operator workflow actions across API rebuilds", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-audit-test-"));
     const repoPath = await createCommittedRepo();
