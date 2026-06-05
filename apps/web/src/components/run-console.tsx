@@ -38,6 +38,11 @@ import {
   type RepositoryWorkflowFormState
 } from "@/components/repository-workflow-payload";
 import {
+  buildRepositoryRegistrationPayload,
+  canRegisterRepository,
+  type RepositoryRegistrationFormState
+} from "@/components/repository-registration-payload";
+import {
   buildRepositoryDisplay,
   summarizeRepositories
 } from "@/components/repository-display";
@@ -81,6 +86,13 @@ const defaultRepositoryForm: RepositoryWorkflowFormState = {
   taskTimeoutMs: "900000",
   qualityGateCommand: "",
   qualityGateTimeoutMs: "300000"
+};
+const defaultRepositoryRegistrationForm: RepositoryRegistrationFormState = {
+  name: "",
+  path: process.env.NEXT_PUBLIC_REPOSITORY_PATH ?? "",
+  defaultBranch: "main",
+  qualityGateCommand: "npm run test",
+  qualityGateTimeoutMs: "600000"
 };
 
 type ConsoleWorkflowJob = Omit<WorkflowJob, "status"> & {
@@ -134,6 +146,9 @@ export function RunConsole() {
   const [job, setJob] = useState<ConsoleWorkflowJob>();
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
+  const [repositoryRegistrationForm, setRepositoryRegistrationForm] = useState(
+    defaultRepositoryRegistrationForm
+  );
   const [repositories, setRepositories] = useState<RepositoryRecord[]>([]);
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
@@ -243,6 +258,10 @@ export function RunConsole() {
     () => canCreateRepositoryWorkflow(repositoryForm),
     [repositoryForm]
   );
+  const canSubmitRepositoryRegistration = useMemo(
+    () => canRegisterRepository(repositoryRegistrationForm),
+    [repositoryRegistrationForm]
+  );
   const agentOptions = useMemo(
     () => [{ id: "shell", label: "Shell" }, ...configuredAgents],
     [configuredAgents]
@@ -264,6 +283,16 @@ export function RunConsole() {
   const updateRepositoryForm = useCallback(
     (field: keyof RepositoryWorkflowFormState, value: string) => {
       setRepositoryForm((current) => ({
+        ...current,
+        [field]: value
+      }));
+    },
+    []
+  );
+
+  const updateRepositoryRegistrationForm = useCallback(
+    (field: keyof RepositoryRegistrationFormState, value: string) => {
+      setRepositoryRegistrationForm((current) => ({
         ...current,
         [field]: value
       }));
@@ -414,6 +443,42 @@ export function RunConsole() {
     const records = await api<unknown[]>("/repositories");
     setRepositories(records.map((record) => repositoryRecordSchema.parse(record)));
   }, []);
+
+  const registerRepository = useCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+
+    try {
+      const payload = buildRepositoryRegistrationPayload(
+        repositoryRegistrationForm
+      );
+      const created = repositoryRecordSchema.parse(
+        await api<unknown>("/repositories", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        })
+      );
+      setRepositoryRegistrationForm((current) => ({
+        ...current,
+        name: "",
+        path: created.path
+      }));
+      selectRegisteredRepository(created.path);
+      await loadRepositories();
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error
+          ? `Register repository failed: ${apiError.message}`
+          : "Register repository failed"
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, [
+    loadRepositories,
+    repositoryRegistrationForm,
+    selectRegisteredRepository
+  ]);
 
   const loadAgentHealth = useCallback(async () => {
     const health = await api<unknown[]>("/agents/health");
@@ -821,6 +886,79 @@ export function RunConsole() {
           >
             <FolderGit2 aria-hidden="true" size={16} />
             Repository Run
+          </button>
+        </form>
+
+        <form
+          className="repositoryRegistrationPanel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void registerRepository();
+          }}
+        >
+          <label className="field">
+            <span>Repository Name</span>
+            <input
+              value={repositoryRegistrationForm.name}
+              onChange={(event) =>
+                updateRepositoryRegistrationForm("name", event.target.value)
+              }
+            />
+          </label>
+          <label className="field wide">
+            <span>Repository Path</span>
+            <input
+              value={repositoryRegistrationForm.path}
+              onChange={(event) =>
+                updateRepositoryRegistrationForm("path", event.target.value)
+              }
+            />
+          </label>
+          <label className="field compact">
+            <span>Default Branch</span>
+            <input
+              value={repositoryRegistrationForm.defaultBranch}
+              onChange={(event) =>
+                updateRepositoryRegistrationForm(
+                  "defaultBranch",
+                  event.target.value
+                )
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Registration Gate</span>
+            <textarea
+              rows={2}
+              value={repositoryRegistrationForm.qualityGateCommand}
+              onChange={(event) =>
+                updateRepositoryRegistrationForm(
+                  "qualityGateCommand",
+                  event.target.value
+                )
+              }
+            />
+          </label>
+          <label className="field compact">
+            <span>Gate Timeout</span>
+            <input
+              inputMode="numeric"
+              value={repositoryRegistrationForm.qualityGateTimeoutMs}
+              onChange={(event) =>
+                updateRepositoryRegistrationForm(
+                  "qualityGateTimeoutMs",
+                  event.target.value
+                )
+              }
+            />
+          </label>
+          <button
+            className="primaryButton"
+            disabled={isBusy || !canSubmitRepositoryRegistration}
+            type="submit"
+          >
+            <Plus aria-hidden="true" size={16} />
+            Register Repository
           </button>
         </form>
 

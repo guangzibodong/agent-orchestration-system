@@ -227,7 +227,8 @@ h2 {
   color: var(--text);
 }
 
-.repositoryPanel {
+.repositoryPanel,
+.repositoryRegistrationPanel {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   align-items: end;
@@ -239,7 +240,8 @@ h2 {
   padding: 14px;
 }
 
-.repositoryPanel > .secondaryButton {
+.repositoryPanel > .secondaryButton,
+.repositoryRegistrationPanel > .primaryButton {
   align-self: end;
 }
 
@@ -778,7 +780,8 @@ h2 {
     padding: 16px;
   }
 
-  .repositoryPanel {
+  .repositoryPanel,
+  .repositoryRegistrationPanel {
     grid-template-columns: 1fr;
   }
 
