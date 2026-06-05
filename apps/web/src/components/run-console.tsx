@@ -18,12 +18,14 @@ import {
   agentSummarySchema,
   agentHealthSchema,
   mergeCandidateSchema,
+  repositoryRecordSchema,
   runReportSchema,
   workflowJobSchema,
   workflowRunSchema,
   type AgentHealth,
   type AgentSummary,
   type MergeCandidate,
+  type RepositoryRecord,
   type RunReport,
   type WorkflowJob,
   type WorkflowRun
@@ -34,6 +36,10 @@ import {
   canCreateRepositoryWorkflow,
   type RepositoryWorkflowFormState
 } from "@/components/repository-workflow-payload";
+import {
+  buildRepositoryDisplay,
+  summarizeRepositories
+} from "@/components/repository-display";
 import { buildWorkflowReviewPayload } from "@/components/workflow-review-payload";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { buildApiHeaders } from "@/components/api-auth";
@@ -113,6 +119,7 @@ export function RunConsole() {
   const [job, setJob] = useState<ConsoleWorkflowJob>();
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
+  const [repositories, setRepositories] = useState<RepositoryRecord[]>([]);
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
@@ -128,9 +135,22 @@ export function RunConsole() {
     () => buildAgentHealthDisplay(agentHealth),
     [agentHealth]
   );
+  const repositorySummary = useMemo(
+    () => summarizeRepositories(repositories),
+    [repositories]
+  );
+  const repositoryDisplay = useMemo(
+    () => buildRepositoryDisplay(repositories),
+    [repositories]
+  );
 
   const metrics = useMemo(
     () => [
+      {
+        label: "Repositories",
+        value: String(repositorySummary.total),
+        icon: FolderGit2
+      },
       {
         label: "Agents",
         value:
@@ -154,7 +174,7 @@ export function RunConsole() {
         icon: ShieldCheck
       }
     ],
-    [agentHealthSummary, workflow]
+    [agentHealthSummary, repositorySummary, workflow]
   );
   const canCreateRepositoryRun = useMemo(
     () => canCreateRepositoryWorkflow(repositoryForm),
@@ -187,6 +207,13 @@ export function RunConsole() {
     },
     []
   );
+
+  const selectRegisteredRepository = useCallback((repositoryPath: string) => {
+    setRepositoryForm((current) => ({
+      ...current,
+      repositoryPath
+    }));
+  }, []);
 
   const createDemo = useCallback(async () => {
     setIsBusy(true);
@@ -292,6 +319,11 @@ export function RunConsole() {
   const loadConfiguredAgents = useCallback(async () => {
     const agents = await api<unknown[]>("/agents");
     setConfiguredAgents(agents.map((agent) => agentSummarySchema.parse(agent)));
+  }, []);
+
+  const loadRepositories = useCallback(async () => {
+    const records = await api<unknown[]>("/repositories");
+    setRepositories(records.map((record) => repositoryRecordSchema.parse(record)));
   }, []);
 
   const loadAgentHealth = useCallback(async () => {
@@ -488,12 +520,17 @@ export function RunConsole() {
     loadConfiguredAgents().catch((apiError) => {
       setError(apiError instanceof Error ? apiError.message : "Load agents failed");
     });
+    loadRepositories().catch((apiError) => {
+      setError(
+        apiError instanceof Error ? apiError.message : "Load repositories failed"
+      );
+    });
     loadAgentHealth().catch((apiError) => {
       setError(
         apiError instanceof Error ? apiError.message : "Load agent health failed"
       );
     });
-  }, [loadAgentHealth, loadConfiguredAgents, loadLatestWorkflow]);
+  }, [loadAgentHealth, loadConfiguredAgents, loadLatestWorkflow, loadRepositories]);
 
   return (
     <main className="shell">
@@ -661,6 +698,47 @@ export function RunConsole() {
             Repository Run
           </button>
         </form>
+
+        <section className="repositoryRegistry">
+          <div className="sectionHeader">
+            <h3>Repositories</h3>
+            <span>
+              {repositorySummary.withQualityGates}/{repositorySummary.total} gated
+            </span>
+          </div>
+          <div className="repositoryList">
+            {repositoryDisplay.map((repository) => (
+              <article className="repositoryItem" key={repository.id}>
+                <div>
+                  <strong>{repository.name}</strong>
+                  <span>{repository.defaultBranch}</span>
+                </div>
+                <p>{repository.path}</p>
+                <dl className="artifactMeta">
+                  <div>
+                    <dt>Quality Gates</dt>
+                    <dd>{repository.qualityGateLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Updated</dt>
+                    <dd>{repository.updatedAt}</dd>
+                  </div>
+                </dl>
+                <button
+                  className="secondaryButton"
+                  onClick={() => selectRegisteredRepository(repository.path)}
+                  type="button"
+                >
+                  <FolderGit2 aria-hidden="true" size={16} />
+                  Use
+                </button>
+              </article>
+            ))}
+            {repositoryDisplay.length === 0 ? (
+              <div className="reportBox muted">No repositories registered</div>
+            ) : null}
+          </div>
+        </section>
 
         {error ? <p className="errorText">{error}</p> : null}
         {job ? (

@@ -107,7 +107,7 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(520px, 1fr);
+  grid-template-rows: auto auto auto auto auto minmax(520px, 1fr);
   gap: 18px;
   min-width: 0;
   padding: 24px;
@@ -198,7 +198,7 @@ h2 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 12px;
   min-width: 0;
 }
@@ -241,6 +241,79 @@ h2 {
 
 .repositoryPanel > .secondaryButton {
   align-self: end;
+}
+
+.repositoryRegistry {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px;
+}
+
+.repositoryRegistry h3 {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.repositoryList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.repositoryItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 10px;
+}
+
+.repositoryItem > div:first-child,
+.repositoryItem p,
+.repositoryItem .artifactMeta {
+  grid-column: 1 / -1;
+}
+
+.repositoryItem > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.repositoryItem strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.repositoryItem span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.repositoryItem p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.repositoryItem > .secondaryButton {
+  justify-self: end;
+  min-height: 32px;
+  padding: 0 12px;
 }
 
 .field {
