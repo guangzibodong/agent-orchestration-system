@@ -277,10 +277,16 @@ Authorization: Bearer <MAWO_API_TOKEN>
 
 Web 控制台右上角可以输入 API token，token 只保存在当前浏览器的 localStorage 中。生产环境仍建议放在 VPN、防火墙或反向代理认证后面，并启用 TLS。
 
+设置 `MAWO_ALLOWED_REPOSITORY_ROOTS` 后，仓库注册和 repository workflow 只能使用这些根目录下面的 git 仓库。多个根目录用分号或换行分隔：
+
+```text
+MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
+```
+
 ## 当前限制
 
 - 目前是 local-first 系统，有 API token 保护，但没有用户账号、角色权限、租户隔离。
-- API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist。
+- API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
 - workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
 - job queue 运行器仍在单 API 进程内；API 重启后历史会恢复，但重启前 queued/running job 会被标记为 failed，需要人工重试。
 - Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
@@ -291,8 +297,7 @@ Web 控制台右上角可以输入 API token，token 只保存在当前浏览器
 近期优先级：
 
 1. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
-2. 路径 allowlist 和仓库访问策略：限制 API 能操作哪些本地仓库。
-3. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+2. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
 4. 云平台部署模板：Render/Vercel/Cloudflare/本机服务脚本。
 
 ## 文档入口

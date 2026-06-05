@@ -44,6 +44,9 @@ Required for normal local operation:
   API origin.
 - `NEXT_PUBLIC_REPOSITORY_PATH`: optional repository path prefilled in the web
   console.
+- `MAWO_ALLOWED_REPOSITORY_ROOTS`: optional semicolon- or newline-separated
+  absolute root paths. When set, repository registration and repository
+  workflows outside these roots are rejected.
 - `MAWO_CODEX_COMMAND_TEMPLATE`, `MAWO_CLAUDE_COMMAND_TEMPLATE`,
   `MAWO_CURSOR_COMMAND_TEMPLATE`: optional real CLI agent command templates.
   Leave empty to expose only the demo/fake agent.
@@ -168,6 +171,7 @@ API_HOST="0.0.0.0"
 API_PORT="4000"
 MAWO_API_TOKEN="<long-random-token>"
 NEXT_PUBLIC_API_URL="https://<your-api-host-or-proxy>"
+MAWO_ALLOWED_REPOSITORY_ROOTS="C:\work\repos;D:\client-repos"
 ```
 
 Start API and web in separate supervised processes. Minimal PowerShell example:
@@ -332,7 +336,7 @@ back the web process first while keeping the API and `.mawo` untouched.
 - Use least-privilege OS users for the service account. Avoid running the app as
   Administrator/root.
 - Restrict repository paths that operators can submit. Prefer a dedicated parent
-  directory for allowed repositories.
+  directory for allowed repositories and set `MAWO_ALLOWED_REPOSITORY_ROOTS`.
 - Backups can contain prompts, patches, stdout/stderr, repository paths, and
   secrets printed by commands. Store them accordingly.
 
@@ -359,6 +363,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `.env` exists on the target host and matches the intended API/web URLs.
 - [ ] `MAWO_API_TOKEN` is set to a long random value and is not the example
       value.
+- [ ] `MAWO_ALLOWED_REPOSITORY_ROOTS` is set to the smallest practical set of
+      repository parent directories.
 - [ ] `npm run env` passes on the host.
 - [ ] `npm install` completed successfully.
 - [ ] `npm run typecheck` passes.

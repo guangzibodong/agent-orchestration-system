@@ -5,7 +5,7 @@ import {
   workflowReviewRequestSchema
 } from "@mawo/shared";
 import Fastify from "fastify";
-import { join } from "node:path";
+import { resolve, sep, join } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
 import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
@@ -51,6 +51,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const root = options.demoRoot ?? process.cwd();
   const env = options.env ?? process.env;
   const apiToken = env.MAWO_API_TOKEN?.trim();
+  const allowedRepositoryRoots = parseAllowedRepositoryRoots(
+    env.MAWO_ALLOWED_REPOSITORY_ROOTS
+  );
   const cliAgents = createConfiguredAgentConfigs(env);
   const auditStore =
     options.auditStore ??
@@ -165,6 +168,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
+      if (!isRepositoryPathAllowed(parsed.data.path, allowedRepositoryRoots)) {
+        return reply.code(403).send({
+          error: "repository_path_not_allowed",
+          message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS."
+        });
+      }
+
       await createRepositoryWorkflowDefinition(
         {
           goal: "Validate repository registration",
@@ -265,6 +275,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (!repositoryPath) {
         return reply.code(400).send({
           error: "repository_path_required"
+        });
+      }
+
+      if (!isRepositoryPathAllowed(repositoryPath, allowedRepositoryRoots)) {
+        return reply.code(403).send({
+          error: "repository_path_not_allowed",
+          message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS."
         });
       }
 
@@ -529,4 +546,28 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   return app;
+}
+
+function parseAllowedRepositoryRoots(value?: string): string[] {
+  return (value ?? "")
+    .split(/[;\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => resolve(entry));
+}
+
+function isRepositoryPathAllowed(path: string, allowedRoots: string[]): boolean {
+  if (allowedRoots.length === 0) {
+    return true;
+  }
+
+  const candidate = resolve(path);
+
+  return allowedRoots.some((root) => {
+    const normalizedRoot = resolve(root);
+    return (
+      candidate === normalizedRoot ||
+      candidate.startsWith(`${normalizedRoot}${sep}`)
+    );
+  });
 }

@@ -519,6 +519,68 @@ describe("runner API", () => {
     ]);
   });
 
+  it("rejects repository registration outside configured allowed roots", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-allowlist-test-"));
+    const allowedRoot = await mkdtemp(join(tmpdir(), "mawo-api-allowed-root-"));
+    const disallowedRepo = await createCommittedRepo();
+    tempRoots.push(demoRoot, allowedRoot);
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRoot
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Disallowed repo",
+        path: disallowedRepo
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: "repository_path_not_allowed"
+    });
+  });
+
+  it("rejects direct repository workflows outside configured allowed roots", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-allowlist-test-"));
+    const allowedRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-allowed-root-"));
+    const disallowedRepo = await createCommittedRepo();
+    tempRoots.push(demoRoot, allowedRoot);
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRoot
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "Should be blocked",
+        repositoryPath: disallowedRepo,
+        tasks: [
+          {
+            id: "noop",
+            agent: "shell",
+            command: `${node} -e "console.log('noop')"`
+          }
+        ],
+        qualityGates: []
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: "repository_path_not_allowed"
+    });
+  });
+
   it("creates repository workflows from a registered repository id", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-registered-workflow-test-"));
     const repoPath = await createCommittedRepo();
