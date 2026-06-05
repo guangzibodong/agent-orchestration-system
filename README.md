@@ -239,8 +239,11 @@ POST /jobs/:id/cancel
 
 ```powershell
 $env:MAWO_CODEX_COMMAND_TEMPLATE = "codex run --prompt-file {promptFile}"
+$env:MAWO_CODEX_AUTH_PROBE_COMMAND = "codex auth status"
 $env:MAWO_CLAUDE_COMMAND_TEMPLATE = "claude -p @{promptFile}"
+$env:MAWO_CLAUDE_AUTH_PROBE_COMMAND = "claude --version"
 $env:MAWO_CURSOR_COMMAND_TEMPLATE = "cursor-agent {promptFile}"
+$env:MAWO_CURSOR_AUTH_PROBE_COMMAND = "cursor-agent --version"
 ```
 
 支持的占位符：
@@ -265,7 +268,7 @@ Invoke-RestMethod -Method Post http://127.0.0.1:4000/workflows/<id>/workspaces/c
 Invoke-RestMethod http://127.0.0.1:4000/agents/health
 ```
 
-该接口会返回 agent id、label、状态、检查时间和解析出的命令名，不返回完整 command template，避免泄露 prompt/workspace 模板。
+该接口会返回 agent id、label、状态、检查时间、是否配置授权探针和解析出的命令名，不返回完整 command template，避免泄露 prompt/workspace 模板。未配置授权探针的真实 agent 会显示 `auth_unchecked`；探针失败会显示 `auth_failed`。
 
 ## API 访问控制
 
@@ -290,14 +293,13 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
 - job queue 运行器仍在单 API 进程内；API 重启后历史会恢复，但重启前 queued/running job 会被标记为 failed，需要人工重试。
 - Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
-- 真实 CLI agent 健康检查会确认命令是否存在，但不会执行登录态/授权探针；是否已登录仍需要运维侧确认。
+- 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
 
 ## 路线图
 
 近期优先级：
 
-1. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
-2. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+1. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
 4. 云平台部署模板：Render/Vercel/Cloudflare/本机服务脚本。
 
 ## 文档入口

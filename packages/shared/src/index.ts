@@ -146,9 +146,10 @@ export const agentSummarySchema = z.object({
 export const agentHealthSchema = agentSummarySchema.extend({
   configured: z.boolean(),
   healthy: z.boolean(),
-  status: z.enum(["healthy", "missing_command"]),
+  status: z.enum(["healthy", "missing_command", "auth_unchecked", "auth_failed"]),
   message: z.string(),
   command: z.string().optional(),
+  authProbeConfigured: z.boolean().optional(),
   checkedAt: z.string()
 });
 

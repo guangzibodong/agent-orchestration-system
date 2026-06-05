@@ -12,29 +12,34 @@ export type AgentSummary = {
 export type AgentHealth = AgentSummary & {
   configured: boolean;
   healthy: boolean;
-  status: "healthy" | "missing_command";
+  status: "healthy" | "missing_command" | "auth_unchecked" | "auth_failed";
   message: string;
   command?: string;
+  authProbeConfigured?: boolean;
   checkedAt: string;
 };
 
 export type CommandAvailabilityCheck = (command: string) => Promise<boolean> | boolean;
+export type AuthProbeCheck = (command: string) => Promise<boolean> | boolean;
 
 const configuredAgents = [
   {
     id: "codex",
     label: "Codex CLI",
-    envKey: "MAWO_CODEX_COMMAND_TEMPLATE"
+    envKey: "MAWO_CODEX_COMMAND_TEMPLATE",
+    authProbeEnvKey: "MAWO_CODEX_AUTH_PROBE_COMMAND"
   },
   {
     id: "claude",
     label: "Claude Code CLI",
-    envKey: "MAWO_CLAUDE_COMMAND_TEMPLATE"
+    envKey: "MAWO_CLAUDE_COMMAND_TEMPLATE",
+    authProbeEnvKey: "MAWO_CLAUDE_AUTH_PROBE_COMMAND"
   },
   {
     id: "cursor",
     label: "Cursor CLI",
-    envKey: "MAWO_CURSOR_COMMAND_TEMPLATE"
+    envKey: "MAWO_CURSOR_COMMAND_TEMPLATE",
+    authProbeEnvKey: "MAWO_CURSOR_AUTH_PROBE_COMMAND"
   }
 ] as const;
 
@@ -53,7 +58,8 @@ export function createConfiguredAgentConfigs(
     configs.push({
       id: agent.id,
       label: agent.label,
-      commandTemplate
+      commandTemplate,
+      authProbeCommand: env[agent.authProbeEnvKey]?.trim() || undefined
     });
   }
 
@@ -71,7 +77,8 @@ export function createAgentSummaries(
 
 export async function createAgentHealthChecks(
   configs: CliAgentConfig[],
-  commandExists: CommandAvailabilityCheck = defaultCommandExists
+  commandExists: CommandAvailabilityCheck = defaultCommandExists,
+  authProbePasses: AuthProbeCheck = defaultAuthProbePasses
 ): Promise<AgentHealth[]> {
   const checkedAt = new Date().toISOString();
   const checks: AgentHealth[] = [];
@@ -91,23 +98,54 @@ export async function createAgentHealthChecks(
     }
 
     const command = extractCommandToken(config.commandTemplate);
-    const healthy = command ? await commandExists(command) : false;
+    const commandHealthy = command ? await commandExists(command) : false;
+    const authProbeConfigured = Boolean(config.authProbeCommand);
+    const authProbeHealthy =
+      commandHealthy && config.authProbeCommand
+        ? await authProbePasses(config.authProbeCommand)
+        : undefined;
+    const healthy = commandHealthy && authProbeHealthy !== false;
+    const status = !commandHealthy
+      ? "missing_command"
+      : authProbeHealthy === false
+        ? "auth_failed"
+        : authProbeConfigured
+          ? "healthy"
+          : "auth_unchecked";
 
     checks.push({
       id: config.id,
       label: config.label,
       configured: true,
       healthy,
-      status: healthy ? "healthy" : "missing_command",
-      message: healthy
-        ? `${config.label} command is available.`
-        : `${config.label} command was not found on PATH.`,
+      status,
+      message: createHealthMessage(config.label, status),
       command,
+      authProbeConfigured,
       checkedAt
     });
   }
 
   return checks;
+}
+
+function createHealthMessage(
+  label: string,
+  status: AgentHealth["status"]
+): string {
+  if (status === "healthy") {
+    return `${label} command and auth probe are available.`;
+  }
+
+  if (status === "auth_failed") {
+    return `${label} auth probe failed.`;
+  }
+
+  if (status === "auth_unchecked") {
+    return `${label} command is available; auth probe is not configured.`;
+  }
+
+  return `${label} command was not found on PATH.`;
 }
 
 function extractCommandToken(commandTemplate: string): string | undefined {
@@ -131,6 +169,16 @@ function defaultCommandExists(command: string): boolean {
   const args = process.platform === "win32" ? [command] : ["-v", command];
   const result = spawnSync(lookup, args, {
     shell: process.platform !== "win32",
+    windowsHide: true,
+    stdio: "ignore"
+  });
+
+  return result.status === 0;
+}
+
+function defaultAuthProbePasses(command: string): boolean {
+  const result = spawnSync(command, {
+    shell: true,
     windowsHide: true,
     stdio: "ignore"
   });

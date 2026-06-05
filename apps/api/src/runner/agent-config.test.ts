@@ -9,6 +9,7 @@ describe("agent config", () => {
   it("keeps the demo fake agent and registers configured CLI agents", () => {
     const configs = createConfiguredAgentConfigs({
       MAWO_CODEX_COMMAND_TEMPLATE: "codex run --prompt-file {promptFile}",
+      MAWO_CODEX_AUTH_PROBE_COMMAND: "codex auth status",
       MAWO_CLAUDE_COMMAND_TEMPLATE: "claude -p @${promptFile}"
     });
 
@@ -19,7 +20,8 @@ describe("agent config", () => {
     ]);
     expect(configs.find((config) => config.id === "codex")).toMatchObject({
       label: "Codex CLI",
-      commandTemplate: "codex run --prompt-file {promptFile}"
+      commandTemplate: "codex run --prompt-file {promptFile}",
+      authProbeCommand: "codex auth status"
     });
   });
 
@@ -71,6 +73,32 @@ describe("agent config", () => {
         healthy: false,
         status: "missing_command",
         command: "missing-codex-binary"
+      })
+    ]);
+    expect(JSON.stringify(health)).not.toContain("{promptFile}");
+  });
+
+  it("marks configured CLI agents unhealthy when their auth probe fails", async () => {
+    const health = await createAgentHealthChecks(
+      createConfiguredAgentConfigs({
+        MAWO_CODEX_COMMAND_TEMPLATE: "codex run --prompt-file {promptFile}",
+        MAWO_CODEX_AUTH_PROBE_COMMAND: "codex auth status"
+      }),
+      async () => true,
+      async (command) => command === "codex auth status" ? false : true
+    );
+
+    expect(health).toEqual([
+      expect.objectContaining({
+        id: "fake-agent",
+        healthy: true
+      }),
+      expect.objectContaining({
+        id: "codex",
+        healthy: false,
+        status: "auth_failed",
+        command: "codex",
+        authProbeConfigured: true
       })
     ]);
     expect(JSON.stringify(health)).not.toContain("{promptFile}");

@@ -50,6 +50,10 @@ Required for normal local operation:
 - `MAWO_CODEX_COMMAND_TEMPLATE`, `MAWO_CLAUDE_COMMAND_TEMPLATE`,
   `MAWO_CURSOR_COMMAND_TEMPLATE`: optional real CLI agent command templates.
   Leave empty to expose only the demo/fake agent.
+- `MAWO_CODEX_AUTH_PROBE_COMMAND`, `MAWO_CLAUDE_AUTH_PROBE_COMMAND`,
+  `MAWO_CURSOR_AUTH_PROBE_COMMAND`: optional lightweight commands used by
+  `GET /agents/health` to confirm CLI auth/session readiness without starting a
+  real workflow task.
 
 Reserved or optional:
 
@@ -67,6 +71,7 @@ Example:
 
 ```powershell
 $env:MAWO_CODEX_COMMAND_TEMPLATE = "codex run --prompt-file {promptFile}"
+$env:MAWO_CODEX_AUTH_PROBE_COMMAND = "codex auth status"
 ```
 
 ## 3. Local Startup
@@ -106,7 +111,8 @@ Expected health response:
 
 Expected agent health includes the built-in fake agent and any configured CLI
 agents. The endpoint returns only the parsed command name, never the full command
-template:
+template. Real agents can be `healthy`, `auth_unchecked`, `auth_failed`, or
+`missing_command`:
 
 ```json
 [
@@ -374,7 +380,7 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `docker compose config` succeeds on the target host.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
-      configured production agent reports `missing_command`.
+      configured production agent reports `missing_command` or `auth_failed`.
 - [ ] Web starts and can reach the configured API URL from the browser.
 - [ ] A demo workflow can be created and enqueued.
 - [ ] A completed worktree workflow can be cleaned with

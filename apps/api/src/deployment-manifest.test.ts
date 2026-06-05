@@ -39,5 +39,6 @@ describe("deployment manifests", () => {
     expect(env).toContain("MAWO_ALLOWED_REPOSITORY_ROOTS=");
     expect(env).toContain("NEXT_PUBLIC_API_URL=http://127.0.0.1:4000");
     expect(env).toContain("MAWO_CODEX_COMMAND_TEMPLATE=");
+    expect(env).toContain("MAWO_CODEX_AUTH_PROBE_COMMAND=");
   });
 });

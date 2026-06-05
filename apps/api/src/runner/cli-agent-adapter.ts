@@ -7,6 +7,7 @@ export type CliAgentConfig = {
   id: string;
   label: string;
   commandTemplate: string;
+  authProbeCommand?: string;
   env?: NodeJS.ProcessEnv;
 };
 
