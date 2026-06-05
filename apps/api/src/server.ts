@@ -192,6 +192,17 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         { root }
       );
       const repository = repositoryStore.create(parsed.data);
+      auditStore.append({
+        type: "repository.registered",
+        actor: "operator",
+        metadata: {
+          repositoryId: repository.id,
+          repositoryName: repository.name,
+          repositoryPath: repository.path,
+          defaultBranch: repository.defaultBranch ?? "",
+          qualityGates: String(repository.qualityGates.length)
+        }
+      });
 
       return reply.code(201).send(repository);
     } catch (error) {

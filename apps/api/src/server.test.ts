@@ -578,6 +578,50 @@ describe("runner API", () => {
     ]);
   });
 
+  it("records an audit event when a repository is registered", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-audit-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Audited repo",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: [
+          {
+            id: "test",
+            title: "Test gate",
+            command: "npm test"
+          }
+        ]
+      }
+    });
+    const created = createResponse.json();
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(auditResponse.statusCode).toBe(200);
+    expect(auditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "repository.registered",
+        actor: "operator",
+        metadata: expect.objectContaining({
+          repositoryId: created.id,
+          repositoryName: "Audited repo",
+          repositoryPath: repoPath,
+          qualityGates: "1"
+        })
+      })
+    );
+  });
+
   it("rejects repository registration outside configured allowed roots", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-allowlist-test-"));
     const allowedRoot = await mkdtemp(join(tmpdir(), "mawo-api-allowed-root-"));

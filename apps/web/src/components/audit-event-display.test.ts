@@ -22,6 +22,16 @@ const events: AuditEvent[] = [
     createdAt: "2026-06-05T10:29:10.513Z",
     jobId: "job-abcdef123456",
     metadata: {}
+  },
+  {
+    id: "event-3",
+    type: "repository.registered",
+    createdAt: "2026-06-05T10:30:10.513Z",
+    actor: "operator",
+    metadata: {
+      repositoryName: "MAWO Core",
+      qualityGates: "1"
+    }
   }
 ];
 
@@ -45,14 +55,23 @@ describe("audit event display", () => {
         workflowLabel: undefined,
         jobLabel: "job-abcde",
         metadataLabel: "No metadata"
+      },
+      {
+        id: "event-3",
+        label: "Repository Registered",
+        actor: "operator",
+        createdAt: "2026-06-05T10:30:10.513Z",
+        workflowLabel: undefined,
+        jobLabel: undefined,
+        metadataLabel: "repositoryName=MAWO Core, qualityGates=1"
       }
     ]);
   });
 
   it("summarizes audit activity for the console header", () => {
     expect(summarizeAuditEvents(events)).toEqual({
-      total: 2,
-      operatorActions: 1
+      total: 3,
+      operatorActions: 2
     });
   });
 });
