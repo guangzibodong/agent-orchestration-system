@@ -356,4 +356,21 @@ describe("workflowRunSchema", () => {
     expect(event.workflowId).toBe("run_1");
     expect(event.metadata?.cleanedCount).toBe("1");
   });
+
+  it("accepts repository update audit events", () => {
+    const event = auditEventSchema.parse({
+      id: "audit_2",
+      type: "repository.updated",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      actor: "operator",
+      metadata: {
+        repositoryId: "repo_1",
+        previousRepositoryName: "Old name",
+        repositoryName: "New name"
+      }
+    });
+
+    expect(event.type).toBe("repository.updated");
+    expect(event.metadata?.repositoryName).toBe("New name");
+  });
 });

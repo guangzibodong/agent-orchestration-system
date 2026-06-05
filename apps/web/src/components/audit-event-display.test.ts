@@ -35,8 +35,18 @@ const events: AuditEvent[] = [
   },
   {
     id: "event-4",
-    type: "job.recovered",
+    type: "repository.updated",
     createdAt: "2026-06-05T10:31:10.513Z",
+    actor: "operator",
+    metadata: {
+      repositoryName: "MAWO Core",
+      previousRepositoryName: "MAWO Old"
+    }
+  },
+  {
+    id: "event-5",
+    type: "job.recovered",
+    createdAt: "2026-06-05T10:32:10.513Z",
     actor: "system",
     workflowId: "workflow-recovered",
     jobId: "job-recovered",
@@ -46,9 +56,9 @@ const events: AuditEvent[] = [
     }
   },
   {
-    id: "event-5",
+    id: "event-6",
     type: "workflow.artifact_read",
-    createdAt: "2026-06-05T10:32:10.513Z",
+    createdAt: "2026-06-05T10:33:10.513Z",
     actor: "operator",
     workflowId: "workflow-artifact",
     metadata: {
@@ -92,18 +102,28 @@ describe("audit event display", () => {
       },
       {
         id: "event-4",
+        label: "Repository Updated",
+        actor: "operator",
+        createdAt: "2026-06-05T10:31:10.513Z",
+        workflowLabel: undefined,
+        jobLabel: undefined,
+        metadataLabel:
+          "repositoryName=MAWO Core, previousRepositoryName=MAWO Old"
+      },
+      {
+        id: "event-5",
         label: "Job Recovered",
         actor: "system",
-        createdAt: "2026-06-05T10:31:10.513Z",
+        createdAt: "2026-06-05T10:32:10.513Z",
         workflowLabel: "workflow-",
         jobLabel: "job-recov",
         metadataLabel: "previousStatus=running, recoveredStatus=failed"
       },
       {
-        id: "event-5",
+        id: "event-6",
         label: "Artifact Read",
         actor: "operator",
-        createdAt: "2026-06-05T10:32:10.513Z",
+        createdAt: "2026-06-05T10:33:10.513Z",
         workflowLabel: "workflow-",
         jobLabel: undefined,
         metadataLabel:
@@ -114,8 +134,8 @@ describe("audit event display", () => {
 
   it("summarizes audit activity for the console header", () => {
     expect(summarizeAuditEvents(events)).toEqual({
-      total: 5,
-      operatorActions: 3
+      total: 6,
+      operatorActions: 4
     });
   });
 

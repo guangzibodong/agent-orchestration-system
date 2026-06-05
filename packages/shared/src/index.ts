@@ -246,6 +246,7 @@ export const workflowJobSchema = z.object({
 
 export const auditEventTypeSchema = z.enum([
   "repository.registered",
+  "repository.updated",
   "workflow.created",
   "workflow.enqueued",
   "workflow.retry_requested",

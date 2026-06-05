@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { buildApp } from "../apps/api/src/server.js";
 
 type JsonObject = Record<string, unknown>;
@@ -170,13 +170,38 @@ async function main() {
       "Registered repository did not include an id.",
     );
     const repositoryId = registeredRepository.body.id;
+    const updatedRepository = await request(baseUrl, "POST", "/repositories", {
+      name: "Smoke repository updated",
+      path: `${repositoryPath}${sep}.`,
+      defaultBranch: "main",
+      qualityGates: [
+        {
+          id: "readme-gate",
+          title: "README contains smoke marker",
+          command: gateCommand,
+          timeoutMs: 30000,
+        },
+      ],
+    });
+    assert(
+      updatedRepository.status === 200,
+      `Duplicate repository registration returned ${updatedRepository.status}`,
+    );
+    assert(
+      updatedRepository.body.id === repositoryId,
+      "Duplicate repository registration changed the repository id.",
+    );
     const repositories = await request(baseUrl, "GET", "/repositories");
     assert(repositories.status === 200, `Repositories returned ${repositories.status}`);
+    const repositoryRows = repositories.body as unknown as Array<JsonObject>;
     assert(
-      (repositories.body as unknown as Array<JsonObject>).some(
-        (repository) => repository.id === repositoryId,
-      ),
-      "Repository list did not include the registered repository.",
+      repositoryRows.filter((repository) => repository.id === repositoryId).length ===
+        1,
+      "Repository list did not contain exactly one registered repository row.",
+    );
+    assert(
+      repositoryRows.length === 1,
+      "Duplicate repository registration created an extra repository row.",
     );
     log(`registered repository ${repositoryId}`);
 
@@ -507,6 +532,7 @@ async function main() {
     const eventTypes = events.map((event) => event.type);
     for (const type of [
       "workflow.created",
+      "repository.updated",
       "workflow.retry_requested",
       "workflow.reviewed",
       "workflow.artifact_read",

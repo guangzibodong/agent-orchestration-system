@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./server.js";
 import { LocalRunner } from "./runner/local-runner.js";
@@ -812,6 +812,87 @@ describe("runner API", () => {
           repositoryId: created.id,
           repositoryName: "Audited repo",
           repositoryPath: repoPath,
+          qualityGates: "1"
+        })
+      })
+    );
+  });
+
+  it("updates existing repository registrations for the same normalized path", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-upsert-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Original repo",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: []
+      }
+    });
+    const created = createResponse.json();
+    const updateResponse = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Updated repo",
+        path: `${repoPath}${sep}.`,
+        defaultBranch: "develop",
+        qualityGates: [
+          {
+            id: "test",
+            title: "Test gate",
+            command: "npm test"
+          }
+        ]
+      }
+    });
+    const updated = updateResponse.json();
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/repositories"
+    });
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updated).toMatchObject({
+      id: created.id,
+      name: "Updated repo",
+      path: repoPath,
+      defaultBranch: "develop",
+      createdAt: created.createdAt,
+      qualityGates: [
+        expect.objectContaining({
+          id: "test",
+          command: "npm test"
+        })
+      ]
+    });
+    expect(listResponse.json()).toEqual([
+      expect.objectContaining({
+        id: created.id,
+        name: "Updated repo",
+        path: repoPath
+      })
+    ]);
+    expect(auditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "repository.updated",
+        actor: "operator",
+        metadata: expect.objectContaining({
+          repositoryId: created.id,
+          previousRepositoryName: "Original repo",
+          repositoryName: "Updated repo",
+          repositoryPath: repoPath,
+          defaultBranch: "develop",
           qualityGates: "1"
         })
       })

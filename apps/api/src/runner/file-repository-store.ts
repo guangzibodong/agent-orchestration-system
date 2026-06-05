@@ -1,16 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   repositoryRecordSchema,
   type RepositoryRecord,
   type RepositoryRegistrationRequest
 } from "@mawo/shared";
 
+export type RepositoryUpsertResult = {
+  repository: RepositoryRecord;
+  created: boolean;
+  previous?: RepositoryRecord;
+};
+
 export type RepositoryStore = {
   list(): RepositoryRecord[];
   get(id: string): RepositoryRecord | undefined;
-  create(input: RepositoryRegistrationRequest): RepositoryRecord;
+  upsert(input: RepositoryRegistrationRequest): RepositoryUpsertResult;
 };
 
 export type FileRepositoryStoreOptions = {
@@ -41,24 +47,59 @@ export class FileRepositoryStore implements RepositoryStore {
     return this.list().find((repository) => repository.id === id);
   }
 
-  create(input: RepositoryRegistrationRequest): RepositoryRecord {
+  upsert(input: RepositoryRegistrationRequest): RepositoryUpsertResult {
     const now = new Date().toISOString();
+    const normalizedPath = resolve(input.path);
+    const repositories = this.list();
+    const existingIndex = repositories.findIndex(
+      (repository) => resolve(repository.path) === normalizedPath
+    );
+
+    if (existingIndex >= 0) {
+      const previous = repositories[existingIndex];
+      const repository = repositoryRecordSchema.parse({
+        ...previous,
+        name: input.name,
+        path: normalizedPath,
+        defaultBranch: input.defaultBranch,
+        qualityGates: input.qualityGates,
+        updatedAt: now
+      });
+      const updatedRepositories = repositories.map((current, index) =>
+        index === existingIndex ? repository : current
+      );
+
+      this.write(updatedRepositories);
+
+      return {
+        repository,
+        created: false,
+        previous
+      };
+    }
+
     const repository = repositoryRecordSchema.parse({
       id: randomUUID(),
       name: input.name,
-      path: input.path,
+      path: normalizedPath,
       defaultBranch: input.defaultBranch,
       qualityGates: input.qualityGates,
       createdAt: now,
       updatedAt: now
     });
-    const repositories = [...this.list(), repository];
 
+    this.write([...repositories, repository]);
+
+    return {
+      repository,
+      created: true
+    };
+  }
+
+  private write(repositories: RepositoryRecord[]): void {
     mkdirSync(dirname(this.stateFile), { recursive: true });
     const tempFile = `${this.stateFile}.tmp`;
     writeFileSync(tempFile, JSON.stringify(repositories, null, 2), "utf8");
     renameSync(tempFile, this.stateFile);
-
-    return repository;
   }
 }

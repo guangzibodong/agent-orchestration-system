@@ -206,12 +206,16 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         },
         { root }
       );
-      const repository = repositoryStore.create(parsed.data);
+      const result = repositoryStore.upsert(parsed.data);
+      const repository = result.repository;
       auditStore.append({
-        type: "repository.registered",
+        type: result.created ? "repository.registered" : "repository.updated",
         actor: "operator",
         metadata: {
           repositoryId: repository.id,
+          ...(result.previous
+            ? { previousRepositoryName: result.previous.name }
+            : {}),
           repositoryName: repository.name,
           repositoryPath: repository.path,
           defaultBranch: repository.defaultBranch ?? "",
@@ -219,7 +223,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         }
       });
 
-      return reply.code(201).send(repository);
+      return reply.code(result.created ? 201 : 200).send(repository);
     } catch (error) {
       if (error instanceof RepositoryNotReadyError) {
         return reply.code(422).send({
