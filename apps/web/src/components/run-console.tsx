@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  auditEventSchema,
   agentSummarySchema,
   agentHealthSchema,
   mergeCandidateSchema,
@@ -22,6 +23,7 @@ import {
   runReportSchema,
   workflowJobSchema,
   workflowRunSchema,
+  type AuditEvent,
   type AgentHealth,
   type AgentSummary,
   type MergeCandidate,
@@ -47,6 +49,10 @@ import {
   buildAgentHealthDisplay,
   summarizeAgentHealth
 } from "@/components/agent-health-display";
+import {
+  buildAuditEventDisplay,
+  summarizeAuditEvents
+} from "@/components/audit-event-display";
 import {
   canCancelJobStatus,
   canCleanupWorkflowStatus,
@@ -122,6 +128,7 @@ export function RunConsole() {
   const [repositories, setRepositories] = useState<RepositoryRecord[]>([]);
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -142,6 +149,14 @@ export function RunConsole() {
   const repositoryDisplay = useMemo(
     () => buildRepositoryDisplay(repositories),
     [repositories]
+  );
+  const auditEventSummary = useMemo(
+    () => summarizeAuditEvents(auditEvents),
+    [auditEvents]
+  );
+  const auditEventDisplay = useMemo(
+    () => buildAuditEventDisplay(auditEvents).slice(0, 8),
+    [auditEvents]
   );
 
   const metrics = useMemo(
@@ -172,9 +187,14 @@ export function RunConsole() {
         label: "Quality Gates",
         value: String(workflow?.qualityGates.length ?? 0),
         icon: ShieldCheck
+      },
+      {
+        label: "Audit Events",
+        value: String(auditEventSummary.total),
+        icon: Activity
       }
     ],
-    [agentHealthSummary, repositorySummary, workflow]
+    [agentHealthSummary, auditEventSummary, repositorySummary, workflow]
   );
   const canCreateRepositoryRun = useMemo(
     () => canCreateRepositoryWorkflow(repositoryForm),
@@ -329,6 +349,11 @@ export function RunConsole() {
   const loadAgentHealth = useCallback(async () => {
     const health = await api<unknown[]>("/agents/health");
     setAgentHealth(health.map((agent) => agentHealthSchema.parse(agent)));
+  }, []);
+
+  const loadAuditEvents = useCallback(async () => {
+    const events = await api<unknown[]>("/audit-events");
+    setAuditEvents(events.map((event) => auditEventSchema.parse(event)));
   }, []);
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
@@ -525,12 +550,23 @@ export function RunConsole() {
         apiError instanceof Error ? apiError.message : "Load repositories failed"
       );
     });
+    loadAuditEvents().catch((apiError) => {
+      setError(
+        apiError instanceof Error ? apiError.message : "Load audit events failed"
+      );
+    });
     loadAgentHealth().catch((apiError) => {
       setError(
         apiError instanceof Error ? apiError.message : "Load agent health failed"
       );
     });
-  }, [loadAgentHealth, loadConfiguredAgents, loadLatestWorkflow, loadRepositories]);
+  }, [
+    loadAgentHealth,
+    loadAuditEvents,
+    loadConfiguredAgents,
+    loadLatestWorkflow,
+    loadRepositories
+  ]);
 
   return (
     <main className="shell">
@@ -804,6 +840,45 @@ export function RunConsole() {
                 ))}
                 {agentHealthDisplay.length === 0 ? (
                   <div className="reportBox muted">No agent health checks</div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="inspectorSection">
+              <div className="sectionHeader">
+                <h3>Audit</h3>
+                <span>{auditEventSummary.operatorActions} operator actions</span>
+              </div>
+              <div className="runList">
+                {auditEventDisplay.map((event) => (
+                  <article className="auditEventItem" key={event.id}>
+                    <div>
+                      <strong>{event.label}</strong>
+                      <span>{event.actor}</span>
+                    </div>
+                    <p>{event.createdAt}</p>
+                    <dl className="artifactMeta">
+                      {event.workflowLabel ? (
+                        <div>
+                          <dt>Workflow</dt>
+                          <dd>{event.workflowLabel}</dd>
+                        </div>
+                      ) : null}
+                      {event.jobLabel ? (
+                        <div>
+                          <dt>Job</dt>
+                          <dd>{event.jobLabel}</dd>
+                        </div>
+                      ) : null}
+                      <div>
+                        <dt>Metadata</dt>
+                        <dd>{event.metadataLabel}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+                {auditEventDisplay.length === 0 ? (
+                  <div className="reportBox muted">No audit events</div>
                 ) : null}
               </div>
             </section>

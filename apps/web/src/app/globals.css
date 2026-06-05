@@ -459,6 +459,7 @@ h2 {
 
 .runItem,
 .agentHealthItem,
+.auditEventItem,
 .reportBox {
   display: grid;
   gap: 6px;
@@ -471,6 +472,7 @@ h2 {
 
 .runItem strong,
 .agentHealthItem strong,
+.auditEventItem strong,
 .reportBox strong {
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -478,6 +480,7 @@ h2 {
 
 .runItem span,
 .agentHealthItem p,
+.auditEventItem p,
 .reportBox p,
 .reportBox.muted {
   margin: 0;
@@ -492,6 +495,21 @@ h2 {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.auditEventItem > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.auditEventItem span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .healthBadge {
