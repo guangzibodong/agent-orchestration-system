@@ -107,6 +107,8 @@ $env:PATH = "$root\.tools\node;$root\.tools\git\cmd;$env:PATH"
 
 ```powershell
 Copy-Item .env.example .env
+notepad .env
+# 填写 MAWO_API_TOKEN、MAWO_ALLOWED_REPOSITORY_ROOTS、POSTGRES_PASSWORD
 docker compose up --build -d
 docker compose ps
 ```

@@ -8,9 +8,9 @@ services:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
-      MAWO_API_TOKEN: ${MAWO_API_TOKEN:-change-me-before-production}
-      MAWO_ALLOWED_REPOSITORY_ROOTS: ${MAWO_ALLOWED_REPOSITORY_ROOTS:-}
-      DATABASE_URL: postgresql://mawo:mawo@postgres:5432/mawo?schema=public
+      MAWO_API_TOKEN: ${MAWO_API_TOKEN:?Set MAWO_API_TOKEN to a long random token before production}
+      MAWO_ALLOWED_REPOSITORY_ROOTS: ${MAWO_ALLOWED_REPOSITORY_ROOTS:?Set MAWO_ALLOWED_REPOSITORY_ROOTS to an absolute repository root before production}
+      DATABASE_URL: "postgresql://mawo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before production}@postgres:5432/mawo?schema=public"
       REDIS_URL: redis://redis:6379
       MAWO_CODEX_COMMAND_TEMPLATE: ${MAWO_CODEX_COMMAND_TEMPLATE:-}
       MAWO_CODEX_AUTH_PROBE_COMMAND: ${MAWO_CODEX_AUTH_PROBE_COMMAND:-}
@@ -53,7 +53,7 @@ services:
     environment:
       POSTGRES_DB: mawo
       POSTGRES_USER: mawo
-      POSTGRES_PASSWORD: mawo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before production}
     ports:
       - "5432:5432"
     volumes:

@@ -48,6 +48,8 @@ Required for normal local operation:
 - `MAWO_ALLOWED_REPOSITORY_ROOTS`: optional semicolon- or newline-separated
   absolute root paths. When set, repository registration and repository
   workflows outside these roots are rejected.
+  Required by `docker-compose.yml` because Compose runs the API in production
+  mode.
 - `MAWO_CODEX_COMMAND_TEMPLATE`, `MAWO_CLAUDE_COMMAND_TEMPLATE`,
   `MAWO_CURSOR_COMMAND_TEMPLATE`: optional real CLI agent command templates.
   Leave empty to expose only the demo/fake agent.
@@ -55,6 +57,11 @@ Required for normal local operation:
   `MAWO_CURSOR_AUTH_PROBE_COMMAND`: optional lightweight commands used by
   `GET /agents/health` to confirm CLI auth/session readiness without starting a
   real workflow task.
+
+Docker Compose infrastructure:
+
+- `POSTGRES_PASSWORD`: required by `docker-compose.yml`; set a strong value
+  before starting the stack.
 
 Reserved or optional:
 
@@ -159,6 +166,8 @@ runtime state volume for `.mawo`:
 
 ```powershell
 Copy-Item .env.example .env
+notepad .env
+# Fill MAWO_API_TOKEN, MAWO_ALLOWED_REPOSITORY_ROOTS, and POSTGRES_PASSWORD.
 docker compose up -d
 docker compose ps
 ```
@@ -440,6 +449,8 @@ back the web process first while keeping the API and `.mawo` untouched.
       value.
 - [ ] `MAWO_ALLOWED_REPOSITORY_ROOTS` is set to the smallest practical set of
       repository parent directories.
+- [ ] `POSTGRES_PASSWORD` is set to a strong value before running Docker
+      Compose.
 - [ ] `npm run env` passes on the host.
 - [ ] `npm install` completed successfully.
 - [ ] `npm run typecheck` passes.
