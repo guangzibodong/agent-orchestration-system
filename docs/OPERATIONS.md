@@ -215,6 +215,7 @@ API_PORT="4000"
 MAWO_API_TOKEN="<long-random-token>"
 NEXT_PUBLIC_API_URL="https://<your-api-host-or-proxy>"
 MAWO_ALLOWED_REPOSITORY_ROOTS="C:\work\repos;D:\client-repos"
+MAWO_MAX_CONCURRENT_JOBS="1"
 ```
 
 Start API and web in separate supervised processes. Minimal PowerShell example:
@@ -222,6 +223,7 @@ Start API and web in separate supervised processes. Minimal PowerShell example:
 ```powershell
 New-Item -ItemType Directory -Force .logs
 $env:NODE_ENV = "production"
+$env:MAWO_MAX_CONCURRENT_JOBS = "1"
 $env:MAWO_API_REPLICA_COUNT = "1"
 
 Start-Process -WindowStyle Hidden -FilePath ".\.tools\node\npm.cmd" `
@@ -435,10 +437,11 @@ back the web process first while keeping the API and `.mawo` untouched.
   replicas are not supported. Set `MAWO_API_REPLICA_COUNT=1`; `/readiness`
   blocks production if the configured count is higher while the runtime remains
   file-backed and in-process.
-- The background worker is still in the API process. Job history is persisted,
-  queued jobs found after API restart are resumed, and running jobs are marked
-  failed. Matching running workflows are recovered to `aborted` with interrupted
-  task/gate metadata, then require operator retry.
+- The background worker is still in the API process. `MAWO_MAX_CONCURRENT_JOBS`
+  controls how many workflows may run at once in that process. Job history is
+  persisted, queued jobs found after API restart are resumed, and running jobs
+  are marked failed. Matching running workflows are recovered to `aborted` with
+  interrupted task/gate metadata, then require operator retry.
 - Postgres and Redis are present in Compose but are not the active workflow
   persistence path.
 - API and web are containerized, but production public exposure still requires

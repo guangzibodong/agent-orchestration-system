@@ -77,6 +77,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const deploymentMode =
     env.NODE_ENV === "production" ? "production" : "development";
   const apiReplicaCount = parseApiReplicaCount(env.MAWO_API_REPLICA_COUNT);
+  const maxConcurrentJobs = parseMaxConcurrentJobs(
+    env.MAWO_MAX_CONCURRENT_JOBS
+  );
   const allowedRepositoryRoots = parseAllowedRepositoryRoots(
     env.MAWO_ALLOWED_REPOSITORY_ROOTS
   );
@@ -120,6 +123,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
   const queue = new WorkflowJobQueue({
     runner: activeRunner,
+    maxConcurrentJobs,
     jobStore:
       options.jobStore ??
       new FileJobStore({
@@ -1190,4 +1194,18 @@ function parseApiReplicaCount(value?: string): number {
   }
 
   return Number(value);
+}
+
+function parseMaxConcurrentJobs(value?: string): number {
+  if (!value?.trim()) {
+    return 1;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.floor(parsed));
 }

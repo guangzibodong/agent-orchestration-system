@@ -151,6 +151,59 @@ describe("WorkflowJobQueue", () => {
     );
   });
 
+  it("limits concurrent workflow execution and keeps excess jobs queued", async () => {
+    const runner = new LocalRunner();
+    const firstRun = runner.createWorkflow({
+      goal: "First limited workflow",
+      tasks: [],
+      qualityGates: []
+    });
+    const secondRun = runner.createWorkflow({
+      goal: "Second limited workflow",
+      tasks: [],
+      qualityGates: []
+    });
+    const started: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    vi.spyOn(runner, "runWorkflow").mockImplementation(async (workflowId) => {
+      started.push(workflowId);
+
+      if (workflowId === firstRun.id) {
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+
+      return runner.getWorkflow(workflowId)!;
+    });
+    const queue = new WorkflowJobQueue({
+      runner,
+      maxConcurrentJobs: 1
+    });
+
+    const firstJob = queue.enqueue(firstRun.id);
+    const secondJob = queue.enqueue(secondRun.id);
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (queue.getJob(firstJob.id)?.status === "running") {
+        break;
+      }
+      await delay(10);
+    }
+
+    expect(queue.getJob(firstJob.id)?.status).toBe("running");
+    expect(queue.getJob(secondJob.id)?.status).toBe("queued");
+    expect(started).toEqual([firstRun.id]);
+
+    releaseFirst?.();
+    const firstCompleted = await queue.waitForJob(firstJob.id, 5000);
+    const secondCompleted = await queue.waitForJob(secondJob.id, 5000);
+
+    expect(firstCompleted.status).toBe("completed");
+    expect(secondCompleted.status).toBe("completed");
+    expect(started).toEqual([firstRun.id, secondRun.id]);
+  });
+
   it("notifies operators when persisted active jobs are recovered as failed", async () => {
     const root = await mkdtemp(join(tmpdir(), "mawo-job-recovery-notice-test-"));
     tempRoots.push(root);

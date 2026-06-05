@@ -39,7 +39,7 @@
 - Fastify API：提供 workflow、job、report、merge candidate、audit events 等接口。
 - 文件持久化：workflow 状态和审计事件保存在 `.mawo/state/`。
 - Artifact Store：stdout、stderr、patch、report、merge candidate 保存在 `.mawo/artifacts/`。
-- 后台队列：`POST /workflows/:id/enqueue` 非阻塞运行 workflow。
+- 后台队列：`POST /workflows/:id/enqueue` 非阻塞运行 workflow，`MAWO_MAX_CONCURRENT_JOBS` 可限制同时执行的 workflow 数。
 - 并发保护：同一个 workflow 同时只能有一个 queued/running job。
 - 取消任务：queued job 不会启动，running job 会收到 abort signal 并终止底层进程。
 - 真实仓库隔离：每个任务使用 git worktree 和独立分支。
@@ -303,7 +303,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
 - 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；如果生产环境声明多 API 副本，`GET /readiness` 会通过 `deployment_topology` 阻塞上线。
 - workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
-- job queue 运行器仍在单 API 进程内；API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
+- job queue 运行器仍在单 API 进程内；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力，API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
 - Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
 - 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
 

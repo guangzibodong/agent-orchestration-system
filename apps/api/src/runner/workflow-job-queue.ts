@@ -23,6 +23,7 @@ export type WorkflowJob = {
 export type WorkflowJobQueueOptions = {
   runner: LocalRunner;
   jobStore?: JobStore;
+  maxConcurrentJobs?: number;
   onJobRecovered?: (event: {
     original: WorkflowJob;
     recovered: WorkflowJob;
@@ -42,6 +43,7 @@ export class WorkflowAlreadyRunningError extends Error {
 export class WorkflowJobQueue {
   private readonly runner: LocalRunner;
   private readonly jobStore?: JobStore;
+  private readonly maxConcurrentJobs: number;
   private readonly jobs = new Map<string, WorkflowJob>();
   private readonly waiters = new Map<string, Array<(job: WorkflowJob) => void>>();
   private readonly controllers = new Map<string, AbortController>();
@@ -49,6 +51,9 @@ export class WorkflowJobQueue {
   constructor(options: WorkflowJobQueueOptions) {
     this.runner = options.runner;
     this.jobStore = options.jobStore;
+    this.maxConcurrentJobs = normalizeMaxConcurrentJobs(
+      options.maxConcurrentJobs
+    );
     for (const job of this.jobStore?.list() ?? []) {
       if (this.isTerminal(job)) {
         this.jobs.set(job.id, job);
@@ -57,7 +62,7 @@ export class WorkflowJobQueue {
 
       if (job.status === "queued") {
         this.jobs.set(job.id, job);
-        this.scheduleProcess(job.id);
+        this.scheduleProcess();
         continue;
       }
 
@@ -94,7 +99,7 @@ export class WorkflowJobQueue {
 
     this.jobs.set(job.id, job);
     this.jobStore?.save(job);
-    this.scheduleProcess(job.id);
+    this.scheduleProcess();
 
     return job;
   }
@@ -171,6 +176,10 @@ export class WorkflowJobQueue {
       return;
     }
 
+    if (this.activeWorkerCount() >= this.maxConcurrentJobs) {
+      return;
+    }
+
     this.update(job, {
       status: "running",
       startedAt: new Date().toISOString()
@@ -202,13 +211,38 @@ export class WorkflowJobQueue {
       });
     } finally {
       this.controllers.delete(id);
+      this.scheduleProcess();
     }
   }
 
-  private scheduleProcess(id: string): void {
+  private scheduleProcess(): void {
     setTimeout(() => {
-      void this.process(id);
+      this.drainQueuedJobs();
     }, 0);
+  }
+
+  private drainQueuedJobs(): void {
+    for (const job of this.jobs.values()) {
+      if (this.activeWorkerCount() >= this.maxConcurrentJobs) {
+        return;
+      }
+
+      if (job.status === "queued") {
+        void this.process(job.id);
+      }
+    }
+  }
+
+  private activeWorkerCount(): number {
+    const activeJobIds = new Set(this.controllers.keys());
+
+    for (const job of this.jobs.values()) {
+      if (job.status === "running") {
+        activeJobIds.add(job.id);
+      }
+    }
+
+    return activeJobIds.size;
   }
 
   private update(job: WorkflowJob, patch: Partial<WorkflowJob>): void {
@@ -226,4 +260,16 @@ export class WorkflowJobQueue {
   private isTerminal(job: WorkflowJob): boolean {
     return ["completed", "failed", "canceled"].includes(job.status);
   }
+}
+
+function normalizeMaxConcurrentJobs(value: number | undefined): number {
+  if (value === undefined) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  if (!Number.isFinite(value)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(1, Math.floor(value));
 }

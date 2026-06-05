@@ -8,6 +8,7 @@ services:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
+      MAWO_MAX_CONCURRENT_JOBS: ${MAWO_MAX_CONCURRENT_JOBS:-1}
       MAWO_API_REPLICA_COUNT: ${MAWO_API_REPLICA_COUNT:-1}
       MAWO_API_TOKEN: ${MAWO_API_TOKEN:?Set MAWO_API_TOKEN to a long random token before production}
       MAWO_ALLOWED_REPOSITORY_ROOTS: ${MAWO_ALLOWED_REPOSITORY_ROOTS:?Set MAWO_ALLOWED_REPOSITORY_ROOTS to an absolute repository root before production}

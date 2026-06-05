@@ -1982,6 +1982,93 @@ describe("runner API", () => {
     expect(workflow.status).toBe("needs_review");
   });
 
+  it("honors MAWO_MAX_CONCURRENT_JOBS when processing enqueued workflows", async () => {
+    const runner = new LocalRunner();
+    const started: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    let firstStarted = false;
+    vi.spyOn(runner, "runWorkflow").mockImplementation(async (workflowId) => {
+      started.push(workflowId);
+
+      if (!firstStarted) {
+        firstStarted = true;
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+
+      return runner.getWorkflow(workflowId)!;
+    });
+    const app = buildApp(runner, {
+      env: {
+        MAWO_MAX_CONCURRENT_JOBS: "1"
+      }
+    });
+    const firstCreateResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const secondCreateResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const firstWorkflow = firstCreateResponse.json();
+    const secondWorkflow = secondCreateResponse.json();
+
+    const firstEnqueueResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${firstWorkflow.id}/enqueue`
+    });
+    const secondEnqueueResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${secondWorkflow.id}/enqueue`
+    });
+    const firstJob = firstEnqueueResponse.json();
+    const secondJob = secondEnqueueResponse.json();
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const firstJobResponse = await app.inject({
+        method: "GET",
+        url: `/jobs/${firstJob.id}`
+      });
+
+      if (firstJobResponse.json().status === "running") {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const queuedSecondJobResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${secondJob.id}`
+    });
+
+    expect(queuedSecondJobResponse.json()).toMatchObject({
+      id: secondJob.id,
+      workflowId: secondWorkflow.id,
+      status: "queued"
+    });
+    expect(started).toEqual([firstWorkflow.id]);
+
+    releaseFirst?.();
+    let completedSecondJob = queuedSecondJobResponse.json();
+    for (
+      let attempt = 0;
+      attempt < 20 && completedSecondJob.status !== "completed";
+      attempt++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const secondJobResponse = await app.inject({
+        method: "GET",
+        url: `/jobs/${secondJob.id}`
+      });
+      completedSecondJob = secondJobResponse.json();
+    }
+
+    expect(completedSecondJob.status).toBe("completed");
+    expect(started).toEqual([firstWorkflow.id, secondWorkflow.id]);
+  });
+
   it("rejects duplicate enqueue requests while a workflow job is active", async () => {
     vi.useFakeTimers();
     const app = buildApp();
