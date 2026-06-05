@@ -122,23 +122,47 @@ async function main() {
     ].join(" ");
     const gateCommand = `${node} -e "const fs=require('fs'); if(!fs.readFileSync('README.md','utf8').includes('smoke retry success')) process.exit(9);"`;
 
+    const registeredRepository = await request(baseUrl, "POST", "/repositories", {
+      name: "Smoke repository",
+      path: repositoryPath,
+      defaultBranch: "main",
+      qualityGates: [
+        {
+          id: "readme-gate",
+          title: "README contains smoke marker",
+          command: gateCommand,
+          timeoutMs: 30000,
+        },
+      ],
+    });
+    assert(
+      registeredRepository.status === 201,
+      `Repository registration returned ${registeredRepository.status}`,
+    );
+    assert(
+      typeof registeredRepository.body.id === "string",
+      "Registered repository did not include an id.",
+    );
+    const repositoryId = registeredRepository.body.id;
+    const repositories = await request(baseUrl, "GET", "/repositories");
+    assert(repositories.status === 200, `Repositories returned ${repositories.status}`);
+    assert(
+      (repositories.body as unknown as Array<JsonObject>).some(
+        (repository) => repository.id === repositoryId,
+      ),
+      "Repository list did not include the registered repository.",
+    );
+    log(`registered repository ${repositoryId}`);
+
     const create = await request(baseUrl, "POST", "/workflows/repository", {
       goal: "Smoke test repository workflow retry path",
-      repositoryPath,
+      repositoryId: String(repositoryId),
       tasks: [
         {
           id: "flaky-task",
           title: "Flaky repository task",
           agent: "shell",
           command: taskCommand,
-          timeoutMs: 30000,
-        },
-      ],
-      qualityGates: [
-        {
-          id: "readme-gate",
-          title: "README contains smoke marker",
-          command: gateCommand,
           timeoutMs: 30000,
         },
       ],
@@ -156,7 +180,7 @@ async function main() {
       `Created workflow status was ${String(create.body.status)}`,
     );
     const workflowId = create.body.id;
-    log(`created repository workflow ${workflowId}`);
+    log(`created repository workflow ${workflowId} from registered repository`);
 
     const failedRun = await request(
       baseUrl,
@@ -428,6 +452,7 @@ async function main() {
       JSON.stringify(
         {
           workflowId,
+          repositoryId,
           repositoryPath,
           report: report.body.summary,
           mergeCandidate: mergeCandidate.body.summary,

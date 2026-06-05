@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import {
   createRepositoryWorkflowRequestSchema,
+  repositoryRegistrationRequestSchema,
   workflowReviewRequestSchema
 } from "@mawo/shared";
 import Fastify from "fastify";
@@ -8,6 +9,10 @@ import { join } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
 import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
+import {
+  FileRepositoryStore,
+  type RepositoryStore
+} from "./runner/file-repository-store.js";
 import { FileRunStore } from "./runner/file-run-store.js";
 import {
   createAgentSummaries,
@@ -37,6 +42,7 @@ export type BuildAppOptions = {
   env?: Record<string, string | undefined>;
   auditStore?: AuditStore;
   jobStore?: JobStore;
+  repositoryStore?: RepositoryStore;
 };
 
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
@@ -69,6 +75,11 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     new FileAuditStore({
       stateFile: join(root, ".mawo", "state", "audit-events.json")
     });
+  const repositoryStore =
+    options.repositoryStore ??
+    new FileRepositoryStore({
+      stateFile: join(root, ".mawo", "state", "repositories.json")
+    });
 
   app.register(cors, {
     origin: true
@@ -95,6 +106,51 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     return auditStore.list({
       workflowId: request.query.workflowId
     });
+  });
+
+  app.get("/repositories", async () => {
+    return repositoryStore.list();
+  });
+
+  app.post("/repositories", async (request, reply) => {
+    const parsed = repositoryRegistrationRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "invalid_repository_registration_request",
+        issues: parsed.error.issues
+      });
+    }
+
+    try {
+      await createRepositoryWorkflowDefinition(
+        {
+          goal: "Validate repository registration",
+          repositoryPath: parsed.data.path,
+          tasks: [
+            {
+              id: "validate",
+              agent: "shell",
+              command: "git status --short"
+            }
+          ],
+          qualityGates: []
+        },
+        { root }
+      );
+      const repository = repositoryStore.create(parsed.data);
+
+      return reply.code(201).send(repository);
+    } catch (error) {
+      if (error instanceof RepositoryNotReadyError) {
+        return reply.code(422).send({
+          error: "repository_not_ready",
+          message: error.message
+        });
+      }
+
+      throw error;
+    }
   });
 
   app.post("/workflows/demo", async (_request, reply) => {
@@ -155,9 +211,34 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
-      const definition = await createRepositoryWorkflowDefinition(parsed.data, {
+      const repository = parsed.data.repositoryId
+        ? repositoryStore.get(parsed.data.repositoryId)
+        : undefined;
+
+      if (parsed.data.repositoryId && !repository) {
+        return reply.code(404).send({ error: "repository_not_found" });
+      }
+
+      const repositoryPath = repository?.path ?? parsed.data.repositoryPath;
+      if (!repositoryPath) {
+        return reply.code(400).send({
+          error: "repository_path_required"
+        });
+      }
+
+      const definition = await createRepositoryWorkflowDefinition(
+        {
+          ...parsed.data,
+          repositoryPath,
+          qualityGates:
+            parsed.data.qualityGates.length > 0
+              ? parsed.data.qualityGates
+              : repository?.qualityGates ?? []
+        },
+        {
         root
-      });
+        }
+      );
       const run = activeRunner.createWorkflow(definition);
 
       auditStore.append({

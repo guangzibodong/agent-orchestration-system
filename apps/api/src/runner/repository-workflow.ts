@@ -1,5 +1,9 @@
 import { join } from "node:path";
-import type { CreateRepositoryWorkflowRequest } from "@mawo/shared";
+import type {
+  CreateRepositoryWorkflowRequest,
+  QualityGateInput,
+  WorkflowTaskInput
+} from "@mawo/shared";
 import type { WorkflowDefinition } from "./local-runner.js";
 import { ShellAdapter } from "./shell-adapter.js";
 
@@ -15,8 +19,17 @@ export class RepositoryNotReadyError extends Error {
   }
 }
 
+export type ResolvedRepositoryWorkflowRequest = Omit<
+  CreateRepositoryWorkflowRequest,
+  "repositoryPath" | "tasks" | "qualityGates"
+> & {
+  repositoryPath: string;
+  tasks: WorkflowTaskInput[];
+  qualityGates: QualityGateInput[];
+};
+
 export async function createRepositoryWorkflowDefinition(
-  input: CreateRepositoryWorkflowRequest,
+  input: ResolvedRepositoryWorkflowRequest,
   options: RepositoryWorkflowOptions = {}
 ): Promise<WorkflowDefinition> {
   const shell = options.shell ?? new ShellAdapter();

@@ -3,6 +3,8 @@ import {
   agentSummarySchema,
   auditEventSchema,
   createRepositoryWorkflowRequestSchema,
+  repositoryRegistrationRequestSchema,
+  repositoryRecordSchema,
   mergeCandidateSchema,
   runReportSchema,
   workflowReviewRequestSchema,
@@ -254,6 +256,51 @@ describe("workflowRunSchema", () => {
     expect(request.tasks[0]?.timeoutMs).toBe(900000);
     expect(request.qualityGates[0]?.id).toBe("tests");
     expect(request.qualityGates[0]?.timeoutMs).toBe(300000);
+  });
+
+  it("accepts repository workflow creation requests by registered repository id", () => {
+    const request = createRepositoryWorkflowRequestSchema.parse({
+      goal: "Run against a registered repository",
+      repositoryId: "repo_1",
+      tasks: [
+        {
+          id: "test",
+          agent: "shell",
+          command: "npm test"
+        }
+      ]
+    });
+
+    expect(request.repositoryId).toBe("repo_1");
+    expect(request.repositoryPath).toBeUndefined();
+  });
+
+  it("accepts repository registration records and requests", () => {
+    const request = repositoryRegistrationRequestSchema.parse({
+      name: "Main application",
+      path: "C:/repo",
+      defaultBranch: "main",
+      qualityGates: [
+        {
+          id: "lint",
+          title: "Lint",
+          command: "npm run lint",
+          timeoutMs: 300000
+        }
+      ]
+    });
+    const record = repositoryRecordSchema.parse({
+      id: "repo_1",
+      name: request.name,
+      path: request.path,
+      defaultBranch: request.defaultBranch,
+      qualityGates: request.qualityGates,
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:00:00.000Z"
+    });
+
+    expect(record.name).toBe("Main application");
+    expect(record.qualityGates[0]?.command).toBe("npm run lint");
   });
 
   it("accepts public agent summaries", () => {

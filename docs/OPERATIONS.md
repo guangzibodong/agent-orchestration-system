@@ -13,6 +13,7 @@ path does not require them for workflow execution.
 - Health endpoint: `GET /health`
 - Workflow state: `.mawo/state/workflows.json`
 - Job history: `.mawo/state/jobs.json`
+- Repository registry: `.mawo/state/repositories.json`
 - Audit events: `.mawo/state/audit-events.json`
 - Workflow artifacts: `.mawo/artifacts/<workflowId>/`
 - Local logs, if redirected by operator scripts: `.logs/`
@@ -173,6 +174,7 @@ API:
 Invoke-RestMethod http://127.0.0.1:4000/health
 Invoke-RestMethod http://127.0.0.1:4000/jobs
 Invoke-RestMethod http://127.0.0.1:4000/workflows
+Invoke-RestMethod http://127.0.0.1:4000/repositories
 Invoke-RestMethod http://127.0.0.1:4000/audit-events
 ```
 
@@ -213,6 +215,8 @@ Persistent workflow data:
 - `.mawo/state/jobs.json`: background job history. Queued/running jobs found
   during API startup are marked failed because the in-process worker cannot be
   resumed after restart.
+- `.mawo/state/repositories.json`: registered repositories and their default
+  quality gates.
 - `.mawo/state/audit-events.json`: append-only operator action trail for
   workflow creation, enqueue, retry, review, and job cancellation.
 - `.mawo/artifacts/`: task stdout/stderr, patches, reports, and merge

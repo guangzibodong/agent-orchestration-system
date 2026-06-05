@@ -111,13 +111,32 @@ export const qualityGateInputSchema = z.object({
   cwd: z.string().min(1).optional()
 });
 
-export const createRepositoryWorkflowRequestSchema = z.object({
-  goal: z.string().min(1),
-  repositoryPath: z.string().min(1),
-  worktreeRoot: z.string().min(1).optional(),
-  tasks: z.array(workflowTaskInputSchema).min(1),
+export const repositoryRegistrationRequestSchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  defaultBranch: z.string().min(1).optional(),
   qualityGates: z.array(qualityGateInputSchema).default([])
 });
+
+export const repositoryRecordSchema = repositoryRegistrationRequestSchema.extend({
+  id: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const createRepositoryWorkflowRequestSchema = z
+  .object({
+    goal: z.string().min(1),
+    repositoryId: z.string().min(1).optional(),
+    repositoryPath: z.string().min(1).optional(),
+    worktreeRoot: z.string().min(1).optional(),
+    tasks: z.array(workflowTaskInputSchema).min(1),
+    qualityGates: z.array(qualityGateInputSchema).default([])
+  })
+  .refine((request) => request.repositoryId || request.repositoryPath, {
+    message: "Repository workflow requires repositoryId or repositoryPath",
+    path: ["repositoryPath"]
+  });
 
 export const agentSummarySchema = z.object({
   id: z.string().min(1),
@@ -236,6 +255,10 @@ export type WorkflowJob = z.infer<typeof workflowJobSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type WorkflowTaskInput = z.infer<typeof workflowTaskInputSchema>;
 export type QualityGateInput = z.infer<typeof qualityGateInputSchema>;
+export type RepositoryRegistrationRequest = z.infer<
+  typeof repositoryRegistrationRequestSchema
+>;
+export type RepositoryRecord = z.infer<typeof repositoryRecordSchema>;
 export type CreateRepositoryWorkflowRequest = z.infer<
   typeof createRepositoryWorkflowRequestSchema
 >;

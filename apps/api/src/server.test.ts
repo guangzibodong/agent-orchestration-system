@@ -350,6 +350,112 @@ describe("runner API", () => {
     );
   });
 
+  it("registers repositories and restores them across API rebuilds", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-registry-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const firstApp = buildApp(undefined, { demoRoot });
+
+    const createResponse = await firstApp.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Registered repo",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: [
+          {
+            id: "readme",
+            title: "README exists",
+            command: `${node} -e "const fs = require('fs'); if (!fs.existsSync('README.md')) process.exit(1)"`
+          }
+        ]
+      }
+    });
+    const created = createResponse.json();
+    const secondApp = buildApp(undefined, { demoRoot });
+    const listResponse = await secondApp.inject({
+      method: "GET",
+      url: "/repositories"
+    });
+    const restored = listResponse.json();
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(created).toMatchObject({
+      name: "Registered repo",
+      path: repoPath,
+      defaultBranch: "main"
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(restored).toEqual([
+      expect.objectContaining({
+        id: created.id,
+        path: repoPath,
+        qualityGates: [
+          expect.objectContaining({
+            id: "readme"
+          })
+        ]
+      })
+    ]);
+  });
+
+  it("creates repository workflows from a registered repository id", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-registered-workflow-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+    const repositoryResponse = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Registered workflow repo",
+        path: repoPath,
+        qualityGates: [
+          {
+            id: "readme-gate",
+            title: "README has registered marker",
+            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('registered workflow')) process.exit(1)"`
+          }
+        ]
+      }
+    });
+    const repository = repositoryResponse.json();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "Use a registered repository",
+        repositoryId: repository.id,
+        tasks: [
+          {
+            id: "edit-readme",
+            title: "Edit README",
+            agent: "shell",
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'registered workflow\\\\n')"`
+          }
+        ]
+      }
+    });
+    const created = createResponse.json();
+    const runResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const completed = runResponse.json();
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(created.repositoryPath).toBe(repoPath);
+    expect(created.qualityGates[0]).toMatchObject({
+      id: "readme-gate",
+      title: "README has registered marker"
+    });
+    expect(runResponse.statusCode).toBe(200);
+    expect(completed.status).toBe("needs_review");
+    expect(completed.qualityGates[0].status).toBe("passed");
+  });
+
   it("enqueues workflow runs and exposes job status", async () => {
     const app = buildApp();
     const createResponse = await app.inject({
