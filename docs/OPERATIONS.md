@@ -65,6 +65,10 @@ Docker Compose infrastructure:
 
 Reserved or optional:
 
+- `MAWO_STATE_BACKEND`: active workflow state backend. Keep `file` until the
+  Postgres store is implemented.
+- `MAWO_QUEUE_BACKEND`: active workflow queue backend. Keep `in_process` until
+  the Redis/worker queue is implemented.
 - `DATABASE_URL`: currently used only by Prisma helpers and future database
   work; workflow runtime still uses `.mawo`.
 - `REDIS_URL`: reserved for future queue/runtime work.
@@ -138,10 +142,12 @@ template. Real agents can be `healthy`, `auth_unchecked`, `auth_failed`, or
 
 Expected readiness response includes deployability checks for `.mawo/state`,
 `.mawo/artifacts`, Git CLI availability, agent health, token protection,
-deployment topology, and active queue pressure. In production it also enforces
-`production_config` for `MAWO_API_TOKEN` and `MAWO_ALLOWED_REPOSITORY_ROOTS`,
-plus `deployment_topology` for the current file-backed runtime. Treat
-`ok=false` as a deployment blocker until each degraded check is resolved:
+runtime backend selection, deployment topology, and active queue pressure. In
+production it also enforces `production_config` for `MAWO_API_TOKEN` and
+`MAWO_ALLOWED_REPOSITORY_ROOTS`, `runtime_backend` for the currently active
+file/in-process runtime, plus `deployment_topology` for the current
+single-replica runtime. Treat `ok=false` as a deployment blocker until each
+degraded check is resolved:
 
 ```json
 {
@@ -156,6 +162,7 @@ plus `deployment_topology` for the current file-backed runtime. Treat
     { "id": "git_cli", "ok": true, "status": "ready" },
     { "id": "agents", "ok": true, "status": "ready" },
     { "id": "production_config", "ok": true, "status": "ready" },
+    { "id": "runtime_backend", "ok": true, "status": "ready" },
     { "id": "deployment_topology", "ok": true, "status": "ready" }
   ]
 }
@@ -215,6 +222,8 @@ API_PORT="4000"
 MAWO_API_TOKEN="<long-random-token>"
 NEXT_PUBLIC_API_URL="https://<your-api-host-or-proxy>"
 MAWO_ALLOWED_REPOSITORY_ROOTS="C:\work\repos;D:\client-repos"
+MAWO_STATE_BACKEND="file"
+MAWO_QUEUE_BACKEND="in_process"
 MAWO_MAX_CONCURRENT_JOBS="1"
 ```
 
@@ -223,6 +232,8 @@ Start API and web in separate supervised processes. Minimal PowerShell example:
 ```powershell
 New-Item -ItemType Directory -Force .logs
 $env:NODE_ENV = "production"
+$env:MAWO_STATE_BACKEND = "file"
+$env:MAWO_QUEUE_BACKEND = "in_process"
 $env:MAWO_MAX_CONCURRENT_JOBS = "1"
 $env:MAWO_API_REPLICA_COUNT = "1"
 
@@ -443,7 +454,9 @@ back the web process first while keeping the API and `.mawo` untouched.
   are marked failed. Matching running workflows are recovered to `aborted` with
   interrupted task/gate metadata, then require operator retry.
 - Postgres and Redis are present in Compose but are not the active workflow
-  persistence path.
+  persistence path. `/readiness` reports the active `runtime_backend` and blocks
+  if `MAWO_STATE_BACKEND` or `MAWO_QUEUE_BACKEND` requests an unimplemented
+  backend.
 - API and web are containerized, but production public exposure still requires
   a reverse proxy, TLS, and an auth boundary.
 - Repository workflows require the target repository to be a git repository with
@@ -469,7 +482,7 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /readiness` returns `ok=true`, reports token protection, and marks
       `state_store`, `artifact_store`, `git_cli`, `agents`, and
-      `production_config`, `deployment_topology` as ready.
+      `production_config`, `runtime_backend`, `deployment_topology` as ready.
 - [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
       configured production agent reports `missing_command` or `auth_failed`.
 - [ ] Web starts and can reach the configured API URL from the browser.

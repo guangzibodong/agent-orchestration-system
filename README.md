@@ -304,7 +304,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；如果生产环境声明多 API 副本，`GET /readiness` 会通过 `deployment_topology` 阻塞上线。
 - workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
 - job queue 运行器仍在单 API 进程内；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力，API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
-- Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
+- Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue；如果把 `MAWO_STATE_BACKEND` 或 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
 - 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
 
 ## 路线图

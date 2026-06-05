@@ -270,6 +270,52 @@ describe("runner API", () => {
     );
   });
 
+  it("blocks production readiness when unsupported runtime backends are requested", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-backend-test-"));
+    tempRoots.push(demoRoot);
+    const token = "production-token-1234567890";
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        NODE_ENV: "production",
+        MAWO_API_TOKEN: token,
+        MAWO_ALLOWED_REPOSITORY_ROOTS: demoRoot,
+        MAWO_STATE_BACKEND: "postgres",
+        MAWO_QUEUE_BACKEND: "redis",
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
+        REDIS_URL: "redis://localhost:6379"
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/readiness",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    const readiness = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(readiness).toMatchObject({
+      ok: false,
+      deploymentMode: "production"
+    });
+    expect(readiness.checks).toContainEqual(
+      expect.objectContaining({
+        id: "runtime_backend",
+        ok: false,
+        status: "blocked",
+        requestedStateBackend: "postgres",
+        activeStateBackend: "file",
+        requestedQueueBackend: "redis",
+        activeQueueBackend: "in_process",
+        databaseUrlConfigured: true,
+        redisUrlConfigured: true
+      })
+    );
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

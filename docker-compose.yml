@@ -8,6 +8,8 @@ services:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
+      MAWO_STATE_BACKEND: ${MAWO_STATE_BACKEND:-file}
+      MAWO_QUEUE_BACKEND: ${MAWO_QUEUE_BACKEND:-in_process}
       MAWO_MAX_CONCURRENT_JOBS: ${MAWO_MAX_CONCURRENT_JOBS:-1}
       MAWO_API_REPLICA_COUNT: ${MAWO_API_REPLICA_COUNT:-1}
       MAWO_API_TOKEN: ${MAWO_API_TOKEN:?Set MAWO_API_TOKEN to a long random token before production}

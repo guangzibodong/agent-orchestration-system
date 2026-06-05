@@ -80,6 +80,14 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const maxConcurrentJobs = parseMaxConcurrentJobs(
     env.MAWO_MAX_CONCURRENT_JOBS
   );
+  const requestedStateBackend = parseRuntimeBackend(
+    env.MAWO_STATE_BACKEND,
+    "file"
+  );
+  const requestedQueueBackend = parseRuntimeBackend(
+    env.MAWO_QUEUE_BACKEND,
+    "in_process"
+  );
   const allowedRepositoryRoots = parseAllowedRepositoryRoots(
     env.MAWO_ALLOWED_REPOSITORY_ROOTS
   );
@@ -226,11 +234,19 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       deploymentMode,
       apiReplicaCount
     });
+    const runtimeBackendCheck = createRuntimeBackendCheck({
+      requestedStateBackend,
+      requestedQueueBackend,
+      maxConcurrentJobs,
+      databaseUrlConfigured: Boolean(env.DATABASE_URL?.trim()),
+      redisUrlConfigured: Boolean(env.REDIS_URL?.trim())
+    });
     const checks = [
       ...storeChecks,
       gitCheck,
       agentsCheck,
       productionConfigCheck,
+      runtimeBackendCheck,
       deploymentTopologyCheck
     ];
 
@@ -1176,6 +1192,44 @@ function createDeploymentTopologyCheck(input: {
   };
 }
 
+function createRuntimeBackendCheck(input: {
+  requestedStateBackend: string;
+  requestedQueueBackend: string;
+  maxConcurrentJobs: number;
+  databaseUrlConfigured: boolean;
+  redisUrlConfigured: boolean;
+}) {
+  const activeStateBackend = "file";
+  const activeQueueBackend = "in_process";
+  const unsupported = [
+    input.requestedStateBackend !== activeStateBackend
+      ? `MAWO_STATE_BACKEND=${input.requestedStateBackend}`
+      : undefined,
+    input.requestedQueueBackend !== activeQueueBackend
+      ? `MAWO_QUEUE_BACKEND=${input.requestedQueueBackend}`
+      : undefined
+  ].filter((item): item is string => Boolean(item));
+  const ok = unsupported.length === 0;
+
+  return {
+    id: "runtime_backend",
+    label: "Runtime backend",
+    ok,
+    status: ok ? "ready" : "blocked",
+    requestedStateBackend: input.requestedStateBackend,
+    activeStateBackend,
+    requestedQueueBackend: input.requestedQueueBackend,
+    activeQueueBackend,
+    maxConcurrentJobs: input.maxConcurrentJobs,
+    databaseUrlConfigured: input.databaseUrlConfigured,
+    redisUrlConfigured: input.redisUrlConfigured,
+    unsupported,
+    message: ok
+      ? `Using file-backed state and in-process queue with max ${input.maxConcurrentJobs} concurrent workflow job${input.maxConcurrentJobs === 1 ? "" : "s"}.`
+      : `Requested runtime backend is not active yet: ${unsupported.join(", ")}. Keep MAWO_STATE_BACKEND=file and MAWO_QUEUE_BACKEND=in_process until Postgres/Redis backends are implemented.`
+  };
+}
+
 function isProductionApiToken(apiToken?: string): boolean {
   if (!apiToken) {
     return false;
@@ -1208,4 +1262,13 @@ function parseMaxConcurrentJobs(value?: string): number {
   }
 
   return Math.max(1, Math.floor(parsed));
+}
+
+function parseRuntimeBackend(
+  value: string | undefined,
+  fallback: "file" | "in_process"
+): string {
+  const normalized = value?.trim().toLowerCase().replace("-", "_");
+
+  return normalized || fallback;
 }

@@ -24,6 +24,10 @@ describe("deployment manifests", () => {
     expect(compose).toContain("target: api");
     expect(compose).toContain("target: web");
     expect(compose).toContain("API_HOST: 0.0.0.0");
+    expect(compose).toContain("MAWO_STATE_BACKEND: ${MAWO_STATE_BACKEND:-file}");
+    expect(compose).toContain(
+      "MAWO_QUEUE_BACKEND: ${MAWO_QUEUE_BACKEND:-in_process}"
+    );
     expect(compose).toContain("MAWO_MAX_CONCURRENT_JOBS: ${MAWO_MAX_CONCURRENT_JOBS:-1}");
     expect(compose).toContain("MAWO_API_REPLICA_COUNT: ${MAWO_API_REPLICA_COUNT:-1}");
     expect(compose).toContain("MAWO_API_TOKEN: ${MAWO_API_TOKEN:?");
@@ -41,6 +45,8 @@ describe("deployment manifests", () => {
 
     expect(env).toContain("API_HOST=0.0.0.0");
     expect(env).toContain("API_PORT=4000");
+    expect(env).toContain("MAWO_STATE_BACKEND=file");
+    expect(env).toContain("MAWO_QUEUE_BACKEND=in_process");
     expect(env).toContain("MAWO_MAX_CONCURRENT_JOBS=1");
     expect(env).toContain("MAWO_API_REPLICA_COUNT=1");
     expect(env).toContain("MAWO_API_TOKEN=");
