@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import {
+  auditEventTypeSchema,
   createRepositoryWorkflowRequestSchema,
   repositoryRegistrationRequestSchema,
   workflowReviewRequestSchema
@@ -161,9 +162,31 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   app.get<{
-    Querystring: { workflowId?: string; limit?: string };
-  }>("/audit-events", async (request) => {
+    Querystring: {
+      actor?: string;
+      jobId?: string;
+      limit?: string;
+      repositoryId?: string;
+      type?: string;
+      workflowId?: string;
+    };
+  }>("/audit-events", async (request, reply) => {
+    const eventType = request.query.type
+      ? auditEventTypeSchema.safeParse(request.query.type)
+      : undefined;
+
+    if (eventType && !eventType.success) {
+      return reply.code(400).send({
+        error: "invalid_audit_event_type",
+        allowedTypes: auditEventTypeSchema.options
+      });
+    }
+
     const events = auditStore.list({
+      actor: request.query.actor,
+      jobId: request.query.jobId,
+      repositoryId: request.query.repositoryId,
+      type: eventType?.data,
       workflowId: request.query.workflowId
     });
     return limitToRecent(events, request.query.limit);

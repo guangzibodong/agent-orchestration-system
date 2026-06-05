@@ -630,6 +630,41 @@ async function main() {
       "audit events recorded operator actions plus task and gate lifecycle",
     );
 
+    const filteredRepositoryAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=repository.updated&actor=operator&repositoryId=${repositoryId}&limit=1`,
+    );
+    assert(
+      filteredRepositoryAudit.status === 200,
+      `Filtered repository audit returned ${filteredRepositoryAudit.status}`,
+    );
+    assert(
+      (filteredRepositoryAudit.body as unknown as Array<JsonObject>).length === 1,
+      "Filtered repository audit did not return exactly one event.",
+    );
+    assert(
+      (filteredRepositoryAudit.body as unknown as Array<JsonObject>)[0]?.type ===
+        "repository.updated",
+      "Filtered repository audit did not return the repository update event.",
+    );
+    const filteredJobAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=job.canceled&actor=operator&jobId=${cancelJobId}`,
+    );
+    assert(
+      filteredJobAudit.status === 200,
+      `Filtered job audit returned ${filteredJobAudit.status}`,
+    );
+    assert(
+      (filteredJobAudit.body as unknown as Array<JsonObject>).some(
+        (event) => event.type === "job.canceled" && event.jobId === cancelJobId,
+      ),
+      "Filtered job audit did not return the canceled job event.",
+    );
+    log("audit filters isolate repository and job operator actions");
+
     const deletedRepository = await request(
       baseUrl,
       "DELETE",
@@ -648,7 +683,11 @@ async function main() {
       (repositoriesAfterDelete.body as unknown as Array<JsonObject>).length === 0,
       "Repository deletion did not remove the registered repository.",
     );
-    const auditAfterRepositoryDelete = await request(baseUrl, "GET", "/audit-events");
+    const auditAfterRepositoryDelete = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=repository.deleted&repositoryId=${repositoryId}`,
+    );
     assert(
       (auditAfterRepositoryDelete.body as unknown as Array<JsonObject>).some(
         (event) =>

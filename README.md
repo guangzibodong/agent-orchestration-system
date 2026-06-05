@@ -194,6 +194,7 @@ POST /repositories
 DELETE /repositories/:id
 GET  /audit-events
 GET  /audit-events?workflowId=<id>
+GET  /audit-events?type=<type>&actor=<actor>&jobId=<jobId>&repositoryId=<repositoryId>&limit=<n>
 POST /workflows/demo
 POST /workflows/worktree-demo
 POST /workflows/agent-demo

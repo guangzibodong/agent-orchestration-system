@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { auditEventSchema, type AuditEvent } from "@mawo/shared";
+import {
+  auditEventSchema,
+  type AuditEvent,
+  type AuditEventType
+} from "@mawo/shared";
 
 export type AuditEventInput = Omit<AuditEvent, "id" | "createdAt"> & {
   id?: string;
@@ -9,6 +13,10 @@ export type AuditEventInput = Omit<AuditEvent, "id" | "createdAt"> & {
 };
 
 export type AuditEventFilter = {
+  actor?: string;
+  jobId?: string;
+  repositoryId?: string;
+  type?: AuditEventType;
   workflowId?: string;
 };
 
@@ -31,11 +39,32 @@ export class FileAuditStore implements AuditStore {
   list(filter: AuditEventFilter = {}): AuditEvent[] {
     const events = this.readAll();
 
-    if (!filter.workflowId) {
-      return events;
-    }
+    return events.filter((event) => {
+      if (filter.workflowId && event.workflowId !== filter.workflowId) {
+        return false;
+      }
 
-    return events.filter((event) => event.workflowId === filter.workflowId);
+      if (filter.jobId && event.jobId !== filter.jobId) {
+        return false;
+      }
+
+      if (filter.actor && event.actor !== filter.actor) {
+        return false;
+      }
+
+      if (filter.type && event.type !== filter.type) {
+        return false;
+      }
+
+      if (
+        filter.repositoryId &&
+        event.metadata?.repositoryId !== filter.repositoryId
+      ) {
+        return false;
+      }
+
+      return true;
+    });
   }
 
   append(input: AuditEventInput): AuditEvent {

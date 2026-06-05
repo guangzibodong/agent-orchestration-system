@@ -601,6 +601,86 @@ describe("runner API", () => {
     );
   });
 
+  it("filters audit events by type actor job and repository metadata", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-audit-filter-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const repositoryResponse = await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Filter repo",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: []
+      }
+    });
+    const repository = repositoryResponse.json();
+    await app.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Filter repo updated",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: []
+      }
+    });
+    const workflowResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const workflow = workflowResponse.json();
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${workflow.id}/enqueue`
+    });
+    const job = enqueueResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/jobs/${job.id}/cancel`
+    });
+
+    const repositoryAuditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?type=repository.updated&actor=operator&repositoryId=${repository.id}&limit=1`
+    });
+    const jobAuditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?type=job.canceled&jobId=${job.id}&actor=operator`
+    });
+    const invalidTypeResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events?type=not.real"
+    });
+
+    expect(repositoryAuditResponse.statusCode).toBe(200);
+    expect(repositoryAuditResponse.json()).toEqual([
+      expect.objectContaining({
+        type: "repository.updated",
+        actor: "operator",
+        metadata: expect.objectContaining({
+          repositoryId: repository.id,
+          repositoryName: "Filter repo updated"
+        })
+      })
+    ]);
+    expect(jobAuditResponse.statusCode).toBe(200);
+    expect(jobAuditResponse.json()).toEqual([
+      expect.objectContaining({
+        type: "job.canceled",
+        jobId: job.id,
+        actor: "operator"
+      })
+    ]);
+    expect(invalidTypeResponse.statusCode).toBe(400);
+    expect(invalidTypeResponse.json()).toMatchObject({
+      error: "invalid_audit_event_type"
+    });
+  });
+
   it("restores completed job history when the API is rebuilt", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-persist-test-"));
     tempRoots.push(demoRoot);
