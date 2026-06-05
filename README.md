@@ -208,7 +208,7 @@ POST /jobs/:id/cancel
       tasks/<taskId>/patch.diff
 ```
 
-这些文件用于恢复 workflow 状态、查看 job 历史、复用已登记仓库、查看审计记录、排查运行失败和生成可应用的 patch。API 重启时，如果发现 `jobs.json` 里遗留的 queued/running job，会把它们标记为 failed，避免旧 job 永远占用运行槽。
+这些文件用于恢复 workflow 状态、查看 job 历史、复用已登记仓库、查看审计记录、排查运行失败和生成可应用的 patch。审计事件同时覆盖 operator action 和 runner lifecycle，包括 task/gate 开始、完成、失败、取消等状态。API 重启时，如果发现 `jobs.json` 里遗留的 queued/running job，会把它们标记为 failed，避免旧 job 永远占用运行槽。
 
 ## 接入真实 CLI Agent
 
@@ -258,10 +258,9 @@ Invoke-RestMethod http://127.0.0.1:4000/agents/health
 近期优先级：
 
 1. Agent 授权探针：在不启动真实任务的前提下检查 Codex/Claude/Cursor 是否已登录。
-2. 更完整的审计和运行历史：每次 task/gate 开始、结束、失败都可追踪。
-3. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
-4. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
-5. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
+2. 部署模板：Dockerfile、Render/Vercel/Cloudflare/本机服务脚本。
+3. 安全边界：本地访问控制、反向代理 auth、路径 allowlist。
+4. 数据层升级：把文件状态迁移到 Postgres，把队列运行迁移到 Redis/worker。
 
 ## 文档入口
 

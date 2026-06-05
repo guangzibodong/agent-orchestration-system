@@ -86,6 +86,67 @@ describe("LocalRunner", () => {
     expect(report.recommendation).toBe("ready_for_review");
   });
 
+  it("emits task and gate lifecycle events while running workflows", async () => {
+    const events: Array<{
+      type: string;
+      workflowId: string;
+      taskId?: string;
+      gateId?: string;
+      status?: string;
+    }> = [];
+    const runner = new LocalRunner(undefined, {
+      eventSink: (event) => {
+        events.push(event);
+      }
+    });
+
+    const run = runner.createWorkflow({
+      goal: "Audit lifecycle events",
+      tasks: [
+        {
+          id: "plan",
+          title: "Plan",
+          agent: "shell",
+          command: `${node} -e "console.log('planned')"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "unit",
+          title: "Unit",
+          command: `${node} -e "console.log('unit ok')"`
+        }
+      ]
+    });
+
+    await runner.runWorkflow(run.id);
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "workflow.task_started",
+        workflowId: run.id,
+        taskId: "plan"
+      }),
+      expect.objectContaining({
+        type: "workflow.task_completed",
+        workflowId: run.id,
+        taskId: "plan",
+        status: "passed"
+      }),
+      expect.objectContaining({
+        type: "workflow.gate_started",
+        workflowId: run.id,
+        gateId: "unit"
+      }),
+      expect.objectContaining({
+        type: "workflow.gate_completed",
+        workflowId: run.id,
+        gateId: "unit",
+        status: "passed"
+      })
+    ]);
+  });
+
   it("stops on a failed quality gate and reports the failure", async () => {
     const runner = new LocalRunner();
 

@@ -335,6 +335,64 @@ describe("runner API", () => {
     );
   });
 
+  it("persists task and gate lifecycle audit events while workflows run", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-runtime-audit-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const created = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?workflowId=${created.id}`
+    });
+    const events = auditResponse.json();
+
+    expect(auditResponse.statusCode).toBe(200);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "workflow.task_started",
+          workflowId: created.id,
+          metadata: expect.objectContaining({
+            taskId: "plan"
+          })
+        }),
+        expect.objectContaining({
+          type: "workflow.task_completed",
+          workflowId: created.id,
+          metadata: expect.objectContaining({
+            taskId: "plan",
+            status: "passed"
+          })
+        }),
+        expect.objectContaining({
+          type: "workflow.gate_started",
+          workflowId: created.id,
+          metadata: expect.objectContaining({
+            gateId: "node"
+          })
+        }),
+        expect.objectContaining({
+          type: "workflow.gate_completed",
+          workflowId: created.id,
+          metadata: expect.objectContaining({
+            gateId: "node",
+            status: "passed"
+          })
+        })
+      ])
+    );
+  });
+
   it("restores completed job history when the API is rebuilt", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-persist-test-"));
     tempRoots.push(demoRoot);

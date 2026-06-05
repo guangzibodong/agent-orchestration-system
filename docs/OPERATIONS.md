@@ -244,9 +244,9 @@ Persistent workflow data:
   resumed after restart.
 - `.mawo/state/repositories.json`: registered repositories and their default
   quality gates.
-- `.mawo/state/audit-events.json`: append-only operator action trail for
-  workflow creation, enqueue, retry, review, workspace cleanup, and job
-  cancellation.
+- `.mawo/state/audit-events.json`: append-only operator and runner trail for
+  workflow creation, enqueue, retry, review, workspace cleanup, task/gate
+  lifecycle, and job cancellation.
 - `.mawo/artifacts/`: task stdout/stderr, patches, reports, and merge
   candidates.
 - Worktree paths may appear inside workflow artifacts and reports.

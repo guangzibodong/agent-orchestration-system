@@ -461,6 +461,10 @@ async function main() {
       "workflow.retry_requested",
       "workflow.reviewed",
       "workflow.workspaces_cleaned",
+      "workflow.task_started",
+      "workflow.task_completed",
+      "workflow.gate_started",
+      "workflow.gate_completed",
       "workflow.enqueued",
       "job.canceled",
     ]) {
@@ -483,11 +487,33 @@ async function main() {
     );
     assert(
       events.some(
+        (event) =>
+          event.type === "workflow.task_completed" &&
+          event.workflowId === workflowId &&
+          (event.metadata as JsonObject | undefined)?.taskId === "flaky-task" &&
+          (event.metadata as JsonObject | undefined)?.status === "passed",
+      ),
+      "Audit log did not include passed task lifecycle event for the main workflow.",
+    );
+    assert(
+      events.some(
+        (event) =>
+          event.type === "workflow.gate_completed" &&
+          event.workflowId === workflowId &&
+          (event.metadata as JsonObject | undefined)?.gateId === "readme-gate" &&
+          (event.metadata as JsonObject | undefined)?.status === "passed",
+      ),
+      "Audit log did not include passed gate lifecycle event for the main workflow.",
+    );
+    assert(
+      events.some(
         (event) => event.type === "job.canceled" && event.jobId === cancelJobId,
       ),
       "Audit log did not include cancel event for the canceled job.",
     );
-    log("audit events recorded create, retry, review, cleanup, enqueue, and cancel");
+    log(
+      "audit events recorded operator actions plus task and gate lifecycle",
+    );
 
     const jobs = await request(baseUrl, "GET", "/jobs");
     assert(jobs.status === 200, `Jobs endpoint returned ${jobs.status}`);

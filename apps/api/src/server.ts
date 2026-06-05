@@ -50,6 +50,11 @@ export type BuildAppOptions = {
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const root = options.demoRoot ?? process.cwd();
   const cliAgents = createConfiguredAgentConfigs(options.env);
+  const auditStore =
+    options.auditStore ??
+    new FileAuditStore({
+      stateFile: join(root, ".mawo", "state", "audit-events.json")
+    });
   const activeRunner =
     runner ??
     new LocalRunner(undefined, {
@@ -59,7 +64,25 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       }),
       artifactStore: new FileArtifactStore({
         root: join(root, ".mawo", "artifacts")
-      })
+      }),
+      eventSink: (event) => {
+        auditStore.append({
+          type: event.type,
+          actor: "runner",
+          workflowId: event.workflowId,
+          metadata: {
+            ...(event.taskId ? { taskId: event.taskId } : {}),
+            ...(event.gateId ? { gateId: event.gateId } : {}),
+            ...(event.status ? { status: event.status } : {}),
+            ...(event.exitCode !== undefined
+              ? { exitCode: String(event.exitCode) }
+              : {}),
+            ...(event.durationMs !== undefined
+              ? { durationMs: String(event.durationMs) }
+              : {})
+          }
+        });
+      }
     });
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test"
@@ -72,11 +95,6 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         stateFile: join(root, ".mawo", "state", "jobs.json")
       })
   });
-  const auditStore =
-    options.auditStore ??
-    new FileAuditStore({
-      stateFile: join(root, ".mawo", "state", "audit-events.json")
-    });
   const repositoryStore =
     options.repositoryStore ??
     new FileRepositoryStore({

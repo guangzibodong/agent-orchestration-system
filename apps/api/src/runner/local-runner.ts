@@ -158,10 +158,25 @@ export type WorkspaceCleanupResult = {
   cleaned: WorkspaceCleanupItem[];
 };
 
+export type WorkflowRuntimeEvent = {
+  type:
+    | "workflow.task_started"
+    | "workflow.task_completed"
+    | "workflow.gate_started"
+    | "workflow.gate_completed";
+  workflowId: string;
+  taskId?: string;
+  gateId?: string;
+  status?: RunnerTaskStatus;
+  exitCode?: number;
+  durationMs?: number;
+};
+
 export type LocalRunnerOptions = {
   cliAgents?: CliAgentConfig[];
   runStore?: RunStore;
   artifactStore?: ArtifactStore;
+  eventSink?: (event: WorkflowRuntimeEvent) => void;
 };
 
 export type RunWorkflowOptions = {
@@ -197,11 +212,13 @@ export class LocalRunner {
   private readonly cliAgents = new Map<string, CliAgentAdapter>();
   private readonly runStore?: RunStore;
   private readonly artifactStore?: ArtifactStore;
+  private readonly eventSink?: (event: WorkflowRuntimeEvent) => void;
 
   constructor(shell = new ShellAdapter(), options: LocalRunnerOptions = {}) {
     this.shell = shell;
     this.runStore = options.runStore;
     this.artifactStore = options.artifactStore;
+    this.eventSink = options.eventSink;
     for (const config of options.cliAgents ?? []) {
       this.cliAgents.set(config.id, new CliAgentAdapter(config, this.shell));
     }
@@ -378,6 +395,11 @@ export class LocalRunner {
       task.status = "running";
       run.updatedAt = new Date().toISOString();
       this.persist(run);
+      this.emitEvent({
+        type: "workflow.task_started",
+        workflowId: run.id,
+        taskId: task.id
+      });
       const workspace =
         run.executionMode === "worktree"
           ? await this.createTaskWorkspace(run, task)
@@ -386,6 +408,14 @@ export class LocalRunner {
       task.workspace = workspace;
       task.result = await this.runTask(run, task, taskCwd, options.signal);
       task.status = task.result.status;
+      this.emitEvent({
+        type: "workflow.task_completed",
+        workflowId: run.id,
+        taskId: task.id,
+        status: task.status,
+        exitCode: task.result.exitCode,
+        durationMs: task.result.durationMs
+      });
 
       if (workspace && task.status !== "canceled") {
         task.diff = await new GitWorktreeManager({
@@ -422,6 +452,11 @@ export class LocalRunner {
       gate.status = "running";
       run.updatedAt = new Date().toISOString();
       this.persist(run);
+      this.emitEvent({
+        type: "workflow.gate_started",
+        workflowId: run.id,
+        gateId: gate.id
+      });
       gate.result = await this.shell.run({
         command: gate.command,
         cwd: gate.cwd ?? this.lastTaskWorkspacePath(run),
@@ -429,6 +464,14 @@ export class LocalRunner {
         signal: options.signal
       });
       gate.status = gate.result.status;
+      this.emitEvent({
+        type: "workflow.gate_completed",
+        workflowId: run.id,
+        gateId: gate.id,
+        status: gate.status,
+        exitCode: gate.result.exitCode,
+        durationMs: gate.result.durationMs
+      });
       run.updatedAt = new Date().toISOString();
       this.persist(run);
 
@@ -567,6 +610,10 @@ export class LocalRunner {
 
   private persist(run: LocalWorkflowRun): void {
     this.runStore?.save(run);
+  }
+
+  private emitEvent(event: WorkflowRuntimeEvent): void {
+    this.eventSink?.(event);
   }
 
   private async createTaskWorkspace(
