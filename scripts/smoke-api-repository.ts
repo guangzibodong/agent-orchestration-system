@@ -465,6 +465,12 @@ async function main() {
       failedTasks[0]?.status === "failed",
       "First task did not fail before retry.",
     );
+    const failedWorkspace = failedTasks[0]?.workspace as JsonObject | undefined;
+    assert(
+      typeof failedWorkspace?.path === "string" &&
+        typeof failedWorkspace.branch === "string",
+      "First failed task did not expose the stale worktree before retry.",
+    );
     log("first run failed as expected");
 
     const retry = await request(
@@ -882,6 +888,22 @@ async function main() {
         );
       }),
       "Audit log did not include workspace cleanup metadata for the cleaned worktree.",
+    );
+    assert(
+      events.some((event) => {
+        const metadata = event.metadata as JsonObject | undefined;
+        return (
+          event.type === "workflow.retry_requested" &&
+          event.workflowId === workflowId &&
+          metadata?.previousStatus === "failed" &&
+          metadata.status === "ready" &&
+          metadata.cleanedCount === "1" &&
+          metadata.cleanedTaskIds === "flaky-task" &&
+          metadata.cleanedBranches === failedWorkspace.branch &&
+          metadata.cleanedPaths === failedWorkspace.path
+        );
+      }),
+      "Audit log did not include retry cleanup metadata for the stale worktree.",
     );
     assert(
       events.some((event) => {

@@ -331,6 +331,9 @@ Persistent workflow data:
 - `.mawo/state/audit-events.json`: append-only operator and runner trail for
   workflow creation, enqueue, retry, review, workspace cleanup, task/gate
   lifecycle, and job cancellation.
+  Retry events include `previousStatus`, `cleanedCount`, `cleanedTaskIds`,
+  `cleanedBranches`, and `cleanedPaths` so operators can confirm stale
+  worktrees and temporary branches were removed before a new attempt.
 - `.mawo/artifacts/`: task stdout/stderr, patches, reports, and merge
   candidates.
 - Worktree paths may appear inside workflow artifacts and reports.

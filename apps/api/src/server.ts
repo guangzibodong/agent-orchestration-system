@@ -639,14 +639,24 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
-      const run = await activeRunner.retryWorkflow(request.params.id);
+      const retry = await activeRunner.retryWorkflowWithResult(request.params.id);
+      const run = retry.run;
 
       auditStore.append({
         type: "workflow.retry_requested",
         actor: "operator",
         workflowId: run.id,
         metadata: {
-          status: run.status
+          previousStatus: retry.previousStatus,
+          status: run.status,
+          cleanedCount: String(retry.cleanedWorkspaces.length),
+          cleanedTaskIds: retry.cleanedWorkspaces
+            .map((item) => item.taskId)
+            .join(","),
+          cleanedBranches: retry.cleanedWorkspaces
+            .map((item) => item.branch)
+            .join(","),
+          cleanedPaths: retry.cleanedWorkspaces.map((item) => item.path).join(",")
         }
       });
 

@@ -309,12 +309,21 @@ describe("LocalRunner", () => {
     expect(branch).toBeTruthy();
     expect(existsSync(workspacePath ?? "")).toBe(true);
 
-    const retried = await runner.retryWorkflow(run.id);
+    const retry = await runner.retryWorkflowWithResult(run.id);
+    const retried = retry.run;
     const branchCheck = await shell.run({
       command: `git branch --list ${JSON.stringify(branch)}`,
       cwd: repoPath
     });
 
+    expect(retry.previousStatus).toBe("failed");
+    expect(retry.cleanedWorkspaces).toEqual([
+      {
+        taskId: "failed-edit",
+        path: workspacePath,
+        branch
+      }
+    ]);
     expect(retried.status).toBe("ready");
     expect(existsSync(workspacePath ?? "")).toBe(false);
     expect(branchCheck.stdout.trim()).toBe("");

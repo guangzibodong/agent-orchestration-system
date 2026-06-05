@@ -609,10 +609,14 @@ describe("runner API", () => {
       }
     });
     const retryWorkflow = failCreateResponse.json();
-    await firstApp.inject({
+    const failedRetryRunResponse = await firstApp.inject({
       method: "POST",
       url: `/workflows/${retryWorkflow.id}/run`
     });
+    const failedRetryRun = failedRetryRunResponse.json() as {
+      tasks: Array<{ workspace?: { path: string; branch: string } }>;
+    };
+    const retryWorkspace = failedRetryRun.tasks[0]?.workspace;
     await firstApp.inject({
       method: "POST",
       url: `/workflows/${retryWorkflow.id}/retry`
@@ -642,6 +646,23 @@ describe("runner API", () => {
     ).toMatchObject({
       workflowId: demoWorkflow.id,
       jobId: queuedJob.id
+    });
+    expect(retryWorkspace).toBeDefined();
+    expect(
+      events.find(
+        (event: { type: string; workflowId?: string }) =>
+          event.type === "workflow.retry_requested" &&
+          event.workflowId === retryWorkflow.id
+      )
+    ).toMatchObject({
+      metadata: {
+        previousStatus: "failed",
+        status: "ready",
+        cleanedCount: "1",
+        cleanedTaskIds: "fail",
+        cleanedBranches: retryWorkspace?.branch,
+        cleanedPaths: retryWorkspace?.path
+      }
     });
 
     const secondApp = buildApp(undefined, { demoRoot });

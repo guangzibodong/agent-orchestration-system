@@ -178,6 +178,14 @@ export type WorkspaceCleanupPreview = {
   workspaces: WorkspaceCleanupPreviewItem[];
 };
 
+export type WorkflowRetryResult = {
+  run: LocalWorkflowRun;
+  previousStatus: RunnerWorkflowStatus;
+  status: RunnerWorkflowStatus;
+  retriedAt: string;
+  cleanedWorkspaces: WorkspaceCleanupItem[];
+};
+
 export type InterruptedWorkflowRecoveryResult = {
   recovered: boolean;
   workflowId: string;
@@ -482,20 +490,33 @@ export class LocalRunner {
   }
 
   async retryWorkflow(id: string): Promise<LocalWorkflowRun> {
+    return (await this.retryWorkflowWithResult(id)).run;
+  }
+
+  async retryWorkflowWithResult(id: string): Promise<WorkflowRetryResult> {
     const run = this.mustGetWorkflow(id);
 
     if (!["failed", "gate_failed", "aborted"].includes(run.status)) {
       throw new WorkflowNotRetryableError(run.status);
     }
 
+    const previousStatus = run.status;
+    const cleanedWorkspaces: WorkspaceCleanupItem[] = [];
+
     delete run.review;
     for (const task of run.tasks) {
       if (task.workspace) {
+        const workspace = task.workspace;
         await new GitWorktreeManager({
-          repoPath: task.workspace.repoPath,
+          repoPath: workspace.repoPath,
           worktreeRoot: run.worktreeRoot,
           shell: this.shell
-        }).removeWorkspace(task.workspace);
+        }).removeWorkspace(workspace);
+        cleanedWorkspaces.push({
+          taskId: task.id,
+          path: workspace.path,
+          branch: workspace.branch
+        });
       }
 
       task.status = "waiting";
@@ -509,7 +530,13 @@ export class LocalRunner {
     }
     this.updateStatus(run, "ready");
 
-    return run;
+    return {
+      run,
+      previousStatus,
+      status: run.status,
+      retriedAt: run.updatedAt,
+      cleanedWorkspaces
+    };
   }
 
   async runWorkflow(
