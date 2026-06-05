@@ -264,7 +264,7 @@ describe("LocalRunner", () => {
     const failed = await runner.runWorkflow(run.id);
     expect(failed.status).toBe("failed");
 
-    const retried = runner.retryWorkflow(run.id);
+    const retried = await runner.retryWorkflow(run.id);
     expect(retried.status).toBe("ready");
     expect(retried.review).toBeUndefined();
     expect(retried.tasks[0]?.status).toBe("waiting");
@@ -279,6 +279,47 @@ describe("LocalRunner", () => {
     expect(completed.status).toBe("needs_review");
     expect(completed.tasks[0]?.result?.stdout).toContain("attempt 2");
     expect(completed.qualityGates[0]?.status).toBe("passed");
+  });
+
+  it("cleans stale worktree workspaces before retrying failed workflows", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Retry should not orphan failed worktrees",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "failed-edit",
+          title: "Failed edit",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'failed edit\\\\n'); process.exit(7)"`
+        }
+      ],
+      qualityGates: []
+    });
+
+    const failed = await runner.runWorkflow(run.id);
+    const workspacePath = failed.tasks[0]?.workspace?.path;
+    const branch = failed.tasks[0]?.workspace?.branch;
+
+    expect(failed.status).toBe("failed");
+    expect(workspacePath).toBeTruthy();
+    expect(branch).toBeTruthy();
+    expect(existsSync(workspacePath ?? "")).toBe(true);
+
+    const retried = await runner.retryWorkflow(run.id);
+    const branchCheck = await shell.run({
+      command: `git branch --list ${JSON.stringify(branch)}`,
+      cwd: repoPath
+    });
+
+    expect(retried.status).toBe("ready");
+    expect(existsSync(workspacePath ?? "")).toBe(false);
+    expect(branchCheck.stdout.trim()).toBe("");
+    expect(retried.tasks[0]?.workspace).toBeUndefined();
+    expect(retried.tasks[0]?.diff).toBeUndefined();
   });
 
   it("runs tasks inside git worktrees and includes diff artifacts in the report", async () => {

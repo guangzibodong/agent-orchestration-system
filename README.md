@@ -44,7 +44,7 @@
 - 取消任务：queued job 不会启动，running job 会收到 abort signal 并终止底层进程。
 - 真实仓库隔离：每个任务使用 git worktree 和独立分支。
 - 质量门控：gate 失败会阻止 workflow 进入 review-ready。
-- 重试：失败或取消的 workflow 可以 reset 后重新运行。
+- 重试：失败或取消的 workflow 会先清理旧 worktree/临时分支，再 reset 后重新运行。
 - 审计事件：记录 create、enqueue、retry、review、cancel 等操作。
 - CLI Agent Adapter：支持通过环境变量接入 Codex、Claude、Cursor 等真实 CLI agent。
 

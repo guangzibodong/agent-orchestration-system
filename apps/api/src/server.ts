@@ -638,7 +638,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
-      const run = activeRunner.retryWorkflow(request.params.id);
+      const run = await activeRunner.retryWorkflow(request.params.id);
 
       auditStore.append({
         type: "workflow.retry_requested",

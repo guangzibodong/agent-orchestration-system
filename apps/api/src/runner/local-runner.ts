@@ -466,7 +466,7 @@ export class LocalRunner {
     return run;
   }
 
-  retryWorkflow(id: string): LocalWorkflowRun {
+  async retryWorkflow(id: string): Promise<LocalWorkflowRun> {
     const run = this.mustGetWorkflow(id);
 
     if (!["failed", "gate_failed", "aborted"].includes(run.status)) {
@@ -475,6 +475,14 @@ export class LocalRunner {
 
     delete run.review;
     for (const task of run.tasks) {
+      if (task.workspace) {
+        await new GitWorktreeManager({
+          repoPath: task.workspace.repoPath,
+          worktreeRoot: run.worktreeRoot,
+          shell: this.shell
+        }).removeWorkspace(task.workspace);
+      }
+
       task.status = "waiting";
       delete task.result;
       delete task.workspace;

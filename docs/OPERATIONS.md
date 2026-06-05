@@ -286,6 +286,11 @@ Use `GET /workflows/:id/workspaces` first to see whether cleanup is allowed,
 how many tracked worktrees still exist on disk, and which task branch/path will
 be removed by the cleanup call.
 
+Retry is the exception for failed, gate-failed, or aborted workflows: before the
+workflow is reset to `ready`, the runner removes any tracked task worktrees and
+their temporary branches. This prevents stale failed-attempt worktrees from
+being orphaned when the next attempt creates fresh isolated workspaces.
+
 Read a persisted workflow artifact without shelling into the host:
 
 ```powershell
