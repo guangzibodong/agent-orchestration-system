@@ -4,6 +4,7 @@ import {
   Activity,
   Bot,
   CheckCircle2,
+  FileText,
   FolderGit2,
   GitBranch,
   Play,
@@ -61,6 +62,11 @@ import {
   buildJobHistoryDisplay,
   summarizeJobHistory
 } from "@/components/job-history-display";
+import {
+  buildArtifactPreviewDisplay,
+  buildArtifactPreviewPath,
+  type ArtifactPreviewResponse
+} from "@/components/artifact-preview";
 import { loadOperationsSnapshot } from "@/components/operations-snapshot";
 import {
   buildWorkflowListDisplay,
@@ -143,6 +149,8 @@ export function RunConsole() {
   const [workflow, setWorkflow] = useState<WorkflowRun>();
   const [workflowList, setWorkflowList] = useState<WorkflowRun[]>([]);
   const [report, setReport] = useState<RunReport>();
+  const [artifactPreview, setArtifactPreview] =
+    useState<ArtifactPreviewResponse>();
   const [job, setJob] = useState<ConsoleWorkflowJob>();
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
@@ -318,6 +326,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
+    setArtifactPreview(undefined);
     setJob(undefined);
     setMergeCandidate(undefined);
 
@@ -339,6 +348,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
+    setArtifactPreview(undefined);
     setJob(undefined);
     setMergeCandidate(undefined);
 
@@ -362,6 +372,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
+    setArtifactPreview(undefined);
     setJob(undefined);
     setMergeCandidate(undefined);
 
@@ -385,6 +396,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
+    setArtifactPreview(undefined);
     setJob(undefined);
     setMergeCandidate(undefined);
 
@@ -421,6 +433,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
+    setArtifactPreview(undefined);
     setJob(undefined);
     setMergeCandidate(undefined);
 
@@ -497,6 +510,33 @@ export function RunConsole() {
     );
     setMergeCandidate(mergeCandidateSchema.parse(candidate));
   }, []);
+
+  const previewReportArtifact = useCallback(async () => {
+    if (!workflow || !report?.reportArtifactPath) {
+      return;
+    }
+
+    setIsBusy(true);
+    setError(undefined);
+
+    try {
+      const preview = await api<ArtifactPreviewResponse>(
+        buildArtifactPreviewPath({
+          workflowId: workflow.id,
+          artifactPath: report.reportArtifactPath
+        })
+      );
+      setArtifactPreview(preview);
+    } catch (apiError) {
+      setError(
+        apiError instanceof Error
+          ? `Load artifact failed: ${apiError.message}`
+          : "Load artifact failed"
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, [report, workflow]);
 
   const refreshJobAndWorkflow = useCallback(
     async (jobId: string, workflowId: string) => {
@@ -620,6 +660,7 @@ export function RunConsole() {
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
+    setArtifactPreview(undefined);
     setJob(undefined);
     setMergeCandidate(undefined);
 
@@ -1266,7 +1307,36 @@ export function RunConsole() {
                   <strong>{report.recommendation}</strong>
                   <p>{report.summary}</p>
                   {report.reportArtifactPath ? (
-                    <p>{report.reportArtifactPath}</p>
+                    <>
+                      <p>{report.reportArtifactPath}</p>
+                      <button
+                        className="secondaryButton"
+                        disabled={isBusy}
+                        onClick={() => void previewReportArtifact()}
+                        type="button"
+                      >
+                        <FileText aria-hidden="true" size={16} />
+                        Preview Report Artifact
+                      </button>
+                    </>
+                  ) : null}
+                  {artifactPreview ? (
+                    <div className="mergeCandidateBox">
+                      {(() => {
+                        const preview =
+                          buildArtifactPreviewDisplay(artifactPreview);
+                        return (
+                          <>
+                            <strong>{preview.title}</strong>
+                            <p>
+                              {preview.meta}
+                              {preview.truncated ? " / truncated" : ""}
+                            </p>
+                            <pre className="patchBox">{preview.content}</pre>
+                          </>
+                        );
+                      })()}
+                    </div>
                   ) : null}
                   {workflow?.status === "needs_review" ? (
                     <div className="reviewActions">
