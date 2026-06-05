@@ -13,6 +13,22 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: mawo
+          POSTGRES_USER: mawo
+          POSTGRES_PASSWORD: mawo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mawo -d mawo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mawo:mawo@localhost:5432/mawo?schema=public
 
     steps:
       - name: Checkout
@@ -27,8 +43,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Prisma schema
+        run: npm run db:validate
+
       - name: Generate Prisma client
         run: npm run db:generate
+
+      - name: Apply database migrations
+        run: npm run db:migrate:deploy
 
       - name: Test
         run: npm run test

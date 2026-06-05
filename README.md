@@ -125,7 +125,14 @@ Postgres 的 baseline schema 已放在 `apps/api/prisma/migrations`，覆盖 wor
 .\.tools\node\npm.cmd run db:migrate
 ```
 
-对应的 package scripts 是 `npm run db:generate` 和 `npm run db:migrate`。
+共享或生产环境不要使用开发迁移命令，改用：
+
+```powershell
+.\.tools\node\npm.cmd run db:validate
+.\.tools\node\npm.cmd run db:migrate:deploy
+```
+
+对应的 package scripts 是 `npm run db:validate`、`npm run db:generate`、`npm run db:migrate` 和 `npm run db:migrate:deploy`。GitHub Actions 会启动 Postgres service 并执行 `npm run db:migrate:deploy`，防止迁移 SQL 和 Prisma schema 漂移。
 
 注意：当前 API 主运行路径仍是 `.mawo` 文件持久化和进程内队列，Postgres/Redis 还没有切为 active backend；切换 `MAWO_STATE_BACKEND` 或 `MAWO_QUEUE_BACKEND` 前要看 `/readiness` 的 `runtime_backend` 结果。
 

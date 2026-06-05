@@ -21,8 +21,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "db:validate": "prisma validate --schema apps/api/prisma/schema.prisma",
     "db:generate": "prisma generate --schema apps/api/prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema apps/api/prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema apps/api/prisma/schema.prisma",
     "playwright:install": "playwright install chromium"
   },
   "devDependencies": {

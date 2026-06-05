@@ -61,11 +61,16 @@ describe("deployment manifests", () => {
   it("documents the database migration baseline", () => {
     const readme = read("README.md");
     const operations = read("docs/OPERATIONS.md");
+    const packageJson = read("package.json");
 
     expect(readme).toContain("apps/api/prisma/migrations");
     expect(readme).toContain("npm run db:migrate");
+    expect(readme).toContain("npm run db:migrate:deploy");
     expect(operations).toContain("apps/api/prisma/migrations");
     expect(operations).toContain("npm run db:migrate");
+    expect(operations).toContain("npm run db:migrate:deploy");
+    expect(packageJson).toContain("\"db:validate\"");
+    expect(packageJson).toContain("\"db:migrate:deploy\"");
   });
 
   it("ignores runtime logs and generated verification artifacts", () => {
@@ -83,8 +88,11 @@ describe("deployment manifests", () => {
     expect(workflow).toContain("push:");
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("node-version: 26");
+    expect(workflow).toContain("postgres:");
     expect(workflow).toContain("npm ci");
+    expect(workflow).toContain("npm run db:validate");
     expect(workflow).toContain("npm run db:generate");
+    expect(workflow).toContain("npm run db:migrate:deploy");
     expect(workflow).toContain("npm run test");
     expect(workflow).toContain("npm run typecheck");
     expect(workflow).toContain("npm run lint");

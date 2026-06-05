@@ -195,6 +195,15 @@ Database migration baseline:
 .\.tools\node\npm.cmd run db:migrate
 ```
 
+For shared, staging, or production databases, validate the schema and apply
+checked-in migrations with the deploy command instead of the development
+migration command:
+
+```powershell
+.\.tools\node\npm.cmd run db:validate
+.\.tools\node\npm.cmd run db:migrate:deploy
+```
+
 The baseline migration lives in `apps/api/prisma/migrations` and creates tables
 for workflow runs, task runs, quality gate runs, workflow jobs, registered
 repositories, audit events, artifacts, and merge candidates. This prepares the
@@ -203,7 +212,8 @@ still `.mawo` file state until `/readiness` reports the `runtime_backend` as
 Postgres/Redis-backed.
 
 The underlying package scripts are `npm run db:generate` and
-`npm run db:migrate`.
+`npm run db:migrate` for local development, plus `npm run db:validate` and
+`npm run db:migrate:deploy` for CI and production migration deployment.
 
 Stop the stack:
 
@@ -491,6 +501,9 @@ back the web process first while keeping the API and `.mawo` untouched.
       Compose.
 - [ ] `npm run env` passes on the host.
 - [ ] `npm install` completed successfully.
+- [ ] `npm run db:validate` passes.
+- [ ] `npm run db:migrate:deploy` has been applied if Postgres is part of the
+      target environment.
 - [ ] `npm run typecheck` passes.
 - [ ] `npm run test` passes.
 - [ ] `npm run lint` passes or approved lint exceptions are documented.
