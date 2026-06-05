@@ -188,6 +188,23 @@ The default container ports are:
 - Postgres: `localhost:5432`
 - Redis: `localhost:6379`
 
+Database migration baseline:
+
+```powershell
+.\.tools\node\npm.cmd run db:generate
+.\.tools\node\npm.cmd run db:migrate
+```
+
+The baseline migration lives in `apps/api/prisma/migrations` and creates tables
+for workflow runs, task runs, quality gate runs, workflow jobs, registered
+repositories, audit events, artifacts, and merge candidates. This prepares the
+database for the Postgres state-store migration, but the active runtime path is
+still `.mawo` file state until `/readiness` reports the `runtime_backend` as
+Postgres/Redis-backed.
+
+The underlying package scripts are `npm run db:generate` and
+`npm run db:migrate`.
+
 Stop the stack:
 
 ```powershell

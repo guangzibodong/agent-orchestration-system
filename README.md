@@ -118,6 +118,17 @@ docker compose ps
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:4000`
 
+Postgres 的 baseline schema 已放在 `apps/api/prisma/migrations`，覆盖 workflow、task、quality gate、job、repository、audit event、artifact 和 merge candidate 这些运行时实体。首次准备数据库时执行：
+
+```powershell
+.\.tools\node\npm.cmd run db:generate
+.\.tools\node\npm.cmd run db:migrate
+```
+
+对应的 package scripts 是 `npm run db:generate` 和 `npm run db:migrate`。
+
+注意：当前 API 主运行路径仍是 `.mawo` 文件持久化和进程内队列，Postgres/Redis 还没有切为 active backend；切换 `MAWO_STATE_BACKEND` 或 `MAWO_QUEUE_BACKEND` 前要看 `/readiness` 的 `runtime_backend` 结果。
+
 停止服务：
 
 ```powershell

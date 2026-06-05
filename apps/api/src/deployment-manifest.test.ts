@@ -58,6 +58,16 @@ describe("deployment manifests", () => {
     expect(env).toContain("MAWO_CODEX_AUTH_PROBE_COMMAND=");
   });
 
+  it("documents the database migration baseline", () => {
+    const readme = read("README.md");
+    const operations = read("docs/OPERATIONS.md");
+
+    expect(readme).toContain("apps/api/prisma/migrations");
+    expect(readme).toContain("npm run db:migrate");
+    expect(operations).toContain("apps/api/prisma/migrations");
+    expect(operations).toContain("npm run db:migrate");
+  });
+
   it("ignores runtime logs and generated verification artifacts", () => {
     const gitignore = read(".gitignore");
 

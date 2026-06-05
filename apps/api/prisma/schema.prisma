@@ -7,21 +7,149 @@ datasource db {
 }
 
 model WorkflowRun {
-  id        String   @id @default(cuid())
-  goal      String
-  status    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tasks     TaskRun[]
+  id              String                 @id @default(cuid())
+  goal            String
+  status          String
+  executionMode   String                 @default("direct")
+  repositoryId    String?
+  repositoryPath  String?
+  worktreeRoot    String?
+  reviewDecision  String?
+  reviewNote      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  repository      RepositoryRecord?      @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  tasks           WorkflowTaskRun[]
+  qualityGates    QualityGateRun[]
+  jobs            WorkflowJob[]
+  auditEvents     AuditEvent[]
+  artifacts       ArtifactRecord[]
+  mergeCandidate  MergeCandidateRecord?
+
+  @@index([repositoryId, updatedAt])
+  @@index([repositoryPath])
+  @@index([status, updatedAt])
 }
 
-model TaskRun {
-  id            String      @id @default(cuid())
+model WorkflowTaskRun {
+  id            String           @id @default(cuid())
   workflowRunId String
+  taskId        String
   title         String
   status        String
   agent         String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  command       String?
+  instructions  String?
+  cwd           String?
+  timeoutMs     Int?
+  position      Int
+  dependsOn     Json?
+  result        Json?
+  workspace     Json?
+  diff          Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  workflowRun   WorkflowRun      @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  artifacts     ArtifactRecord[]
+
+  @@unique([workflowRunId, taskId])
+  @@index([workflowRunId, status])
+}
+
+model QualityGateRun {
+  id            String           @id @default(cuid())
+  workflowRunId String
+  gateId        String
+  title         String
+  status        String
+  command       String
+  cwd           String?
+  timeoutMs     Int?
+  position      Int
+  result        Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  workflowRun   WorkflowRun      @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  artifacts     ArtifactRecord[]
+
+  @@unique([workflowRunId, gateId])
+  @@index([workflowRunId, status])
+}
+
+model WorkflowJob {
+  id            String       @id @default(cuid())
+  workflowRunId String
+  status        String
+  error         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  workflowRun   WorkflowRun  @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  auditEvents   AuditEvent[]
+
+  @@index([status, updatedAt])
+  @@index([workflowRunId, status])
+}
+
+model RepositoryRecord {
+  id            String        @id @default(cuid())
+  name          String
+  path          String        @unique
+  defaultBranch String?
+  qualityGates  Json
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  workflowRuns  WorkflowRun[]
+
+  @@index([updatedAt])
+}
+
+model AuditEvent {
+  id            String       @id @default(cuid())
+  type          String
+  actor         String?
+  workflowRunId String?
+  jobId         String?
+  metadata      Json?
+  createdAt     DateTime     @default(now())
+  workflowRun   WorkflowRun? @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  job           WorkflowJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, createdAt])
+  @@index([type, createdAt])
+  @@index([workflowRunId, createdAt])
+}
+
+model ArtifactRecord {
+  id               String           @id @default(cuid())
+  workflowRunId    String
+  taskRunId        String?
+  qualityGateRunId String?
+  kind             String
+  path             String
+  contentType      String?
+  sizeBytes        Int?
+  createdAt        DateTime         @default(now())
+  workflowRun      WorkflowRun      @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  taskRun          WorkflowTaskRun? @relation(fields: [taskRunId], references: [id], onDelete: SetNull)
+  qualityGateRun   QualityGateRun?  @relation(fields: [qualityGateRunId], references: [id], onDelete: SetNull)
+
+  @@index([path])
+  @@index([workflowRunId, kind])
+}
+
+model MergeCandidateRecord {
+  id                   String      @id @default(cuid())
+  workflowRunId        String      @unique
+  status               String
+  summary              String
+  sourceBranches       Json
+  patch                String
+  patchArtifactPath    String?
+  manifestArtifactPath String?
+  applyCommand         String?
+  createdAt            DateTime    @default(now())
+  workflowRun          WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
 }
