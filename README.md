@@ -191,6 +191,7 @@ GET  /agents/health
 GET  /workflows
 GET  /repositories
 POST /repositories
+DELETE /repositories/:id
 GET  /audit-events
 GET  /audit-events?workflowId=<id>
 POST /workflows/demo

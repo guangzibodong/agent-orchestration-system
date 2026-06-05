@@ -45,8 +45,17 @@ const events: AuditEvent[] = [
   },
   {
     id: "event-5",
-    type: "job.recovered",
+    type: "repository.deleted",
     createdAt: "2026-06-05T10:32:10.513Z",
+    actor: "operator",
+    metadata: {
+      repositoryName: "Old repo"
+    }
+  },
+  {
+    id: "event-6",
+    type: "job.recovered",
+    createdAt: "2026-06-05T10:33:10.513Z",
     actor: "system",
     workflowId: "workflow-recovered",
     jobId: "job-recovered",
@@ -56,9 +65,9 @@ const events: AuditEvent[] = [
     }
   },
   {
-    id: "event-6",
+    id: "event-7",
     type: "workflow.artifact_read",
-    createdAt: "2026-06-05T10:33:10.513Z",
+    createdAt: "2026-06-05T10:34:10.513Z",
     actor: "operator",
     workflowId: "workflow-artifact",
     metadata: {
@@ -112,18 +121,27 @@ describe("audit event display", () => {
       },
       {
         id: "event-5",
+        label: "Repository Deleted",
+        actor: "operator",
+        createdAt: "2026-06-05T10:32:10.513Z",
+        workflowLabel: undefined,
+        jobLabel: undefined,
+        metadataLabel: "repositoryName=Old repo"
+      },
+      {
+        id: "event-6",
         label: "Job Recovered",
         actor: "system",
-        createdAt: "2026-06-05T10:32:10.513Z",
+        createdAt: "2026-06-05T10:33:10.513Z",
         workflowLabel: "workflow-",
         jobLabel: "job-recov",
         metadataLabel: "previousStatus=running, recoveredStatus=failed"
       },
       {
-        id: "event-6",
+        id: "event-7",
         label: "Artifact Read",
         actor: "operator",
-        createdAt: "2026-06-05T10:33:10.513Z",
+        createdAt: "2026-06-05T10:34:10.513Z",
         workflowLabel: "workflow-",
         jobLabel: undefined,
         metadataLabel:
@@ -134,8 +152,8 @@ describe("audit event display", () => {
 
   it("summarizes audit activity for the console header", () => {
     expect(summarizeAuditEvents(events)).toEqual({
-      total: 6,
-      operatorActions: 4
+      total: 7,
+      operatorActions: 5
     });
   });
 

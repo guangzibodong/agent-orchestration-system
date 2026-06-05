@@ -64,4 +64,31 @@ describe("FileRepositoryStore", () => {
     });
     expect(store.list()).toEqual([updated.repository]);
   });
+
+  it("removes repositories by id and persists the registry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-repository-remove-test-"));
+    tempRoots.push(root);
+    const store = new FileRepositoryStore({
+      stateFile: join(root, "state", "repositories.json")
+    });
+    const first = store.upsert({
+      name: "First repo",
+      path: join(root, "first"),
+      qualityGates: []
+    });
+    const second = store.upsert({
+      name: "Second repo",
+      path: join(root, "second"),
+      qualityGates: []
+    });
+
+    const removed = store.remove(first.repository.id);
+    const restored = new FileRepositoryStore({
+      stateFile: join(root, "state", "repositories.json")
+    });
+
+    expect(removed).toEqual(first.repository);
+    expect(restored.list()).toEqual([second.repository]);
+    expect(restored.remove("missing-repo")).toBeUndefined();
+  });
 });

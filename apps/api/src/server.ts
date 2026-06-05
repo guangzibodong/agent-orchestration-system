@@ -236,6 +236,30 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
   });
 
+  app.delete<{
+    Params: { id: string };
+  }>("/repositories/:id", async (request, reply) => {
+    const repository = repositoryStore.remove(request.params.id);
+
+    if (!repository) {
+      return reply.code(404).send({ error: "repository_not_found" });
+    }
+
+    auditStore.append({
+      type: "repository.deleted",
+      actor: "operator",
+      metadata: {
+        repositoryId: repository.id,
+        repositoryName: repository.name,
+        repositoryPath: repository.path,
+        defaultBranch: repository.defaultBranch ?? "",
+        qualityGates: String(repository.qualityGates.length)
+      }
+    });
+
+    return repository;
+  });
+
   app.post("/workflows/demo", async (_request, reply) => {
     const run = activeRunner.createWorkflow(createDemoWorkflowDefinition());
 

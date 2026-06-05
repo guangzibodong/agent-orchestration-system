@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Square,
   ShieldCheck,
+  Trash2,
   XCircle
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -503,6 +504,32 @@ export function RunConsole() {
     setAuditEvents(snapshot.auditEvents);
     setJobHistory(snapshot.jobs);
   }, []);
+
+  const deleteRepository = useCallback(
+    async (repository: RepositoryRecord) => {
+      setIsBusy(true);
+      setError(undefined);
+
+      try {
+        await api<unknown>(`/repositories/${repository.id}`, {
+          method: "DELETE"
+        });
+        setRepositories((current) =>
+          current.filter((item) => item.id !== repository.id)
+        );
+        await refreshOperationsSnapshot();
+      } catch (apiError) {
+        setError(
+          apiError instanceof Error
+            ? `Delete repository failed: ${apiError.message}`
+            : "Delete repository failed"
+        );
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [refreshOperationsSnapshot]
+  );
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
     const candidate = await api<unknown>(
@@ -1028,14 +1055,33 @@ export function RunConsole() {
                     <dd>{repository.updatedAt}</dd>
                   </div>
                 </dl>
-                <button
-                  className="secondaryButton"
-                  onClick={() => selectRegisteredRepository(repository.path)}
-                  type="button"
-                >
-                  <FolderGit2 aria-hidden="true" size={16} />
-                  Use
-                </button>
+                <div className="repositoryActions">
+                  <button
+                    className="secondaryButton"
+                    onClick={() => selectRegisteredRepository(repository.path)}
+                    type="button"
+                  >
+                    <FolderGit2 aria-hidden="true" size={16} />
+                    Use
+                  </button>
+                  <button
+                    aria-label={`Delete ${repository.name}`}
+                    className="secondaryButton dangerButton"
+                    disabled={isBusy}
+                    onClick={() => {
+                      const record = repositories.find(
+                        (item) => item.id === repository.id
+                      );
+                      if (record) {
+                        void deleteRepository(record);
+                      }
+                    }}
+                    title="Delete repository"
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={16} />
+                  </button>
+                </div>
               </article>
             ))}
             {repositoryDisplay.length === 0 ? (

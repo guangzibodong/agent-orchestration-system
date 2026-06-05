@@ -13,6 +13,7 @@ export type AuditEventDisplay = {
 const eventLabels: Record<AuditEventType, string> = {
   "repository.registered": "Repository Registered",
   "repository.updated": "Repository Updated",
+  "repository.deleted": "Repository Deleted",
   "workflow.created": "Workflow Created",
   "workflow.enqueued": "Workflow Enqueued",
   "workflow.retry_requested": "Retry Requested",

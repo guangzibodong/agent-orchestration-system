@@ -373,4 +373,21 @@ describe("workflowRunSchema", () => {
     expect(event.type).toBe("repository.updated");
     expect(event.metadata?.repositoryName).toBe("New name");
   });
+
+  it("accepts repository deletion audit events", () => {
+    const event = auditEventSchema.parse({
+      id: "audit_3",
+      type: "repository.deleted",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      actor: "operator",
+      metadata: {
+        repositoryId: "repo_1",
+        repositoryName: "Deleted repo",
+        repositoryPath: "C:/repo"
+      }
+    });
+
+    expect(event.type).toBe("repository.deleted");
+    expect(event.metadata?.repositoryPath).toBe("C:/repo");
+  });
 });

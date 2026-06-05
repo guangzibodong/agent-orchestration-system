@@ -17,6 +17,7 @@ export type RepositoryStore = {
   list(): RepositoryRecord[];
   get(id: string): RepositoryRecord | undefined;
   upsert(input: RepositoryRegistrationRequest): RepositoryUpsertResult;
+  remove(id: string): RepositoryRecord | undefined;
 };
 
 export type FileRepositoryStoreOptions = {
@@ -94,6 +95,19 @@ export class FileRepositoryStore implements RepositoryStore {
       repository,
       created: true
     };
+  }
+
+  remove(id: string): RepositoryRecord | undefined {
+    const repositories = this.list();
+    const repository = repositories.find((current) => current.id === id);
+
+    if (!repository) {
+      return undefined;
+    }
+
+    this.write(repositories.filter((current) => current.id !== id));
+
+    return repository;
   }
 
   private write(repositories: RepositoryRecord[]): void {

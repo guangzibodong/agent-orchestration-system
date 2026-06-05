@@ -630,6 +630,35 @@ async function main() {
       "audit events recorded operator actions plus task and gate lifecycle",
     );
 
+    const deletedRepository = await request(
+      baseUrl,
+      "DELETE",
+      `/repositories/${repositoryId}`,
+    );
+    assert(
+      deletedRepository.status === 200,
+      `Repository deletion returned ${deletedRepository.status}`,
+    );
+    const repositoriesAfterDelete = await request(baseUrl, "GET", "/repositories");
+    assert(
+      repositoriesAfterDelete.status === 200,
+      `Repositories after delete returned ${repositoriesAfterDelete.status}`,
+    );
+    assert(
+      (repositoriesAfterDelete.body as unknown as Array<JsonObject>).length === 0,
+      "Repository deletion did not remove the registered repository.",
+    );
+    const auditAfterRepositoryDelete = await request(baseUrl, "GET", "/audit-events");
+    assert(
+      (auditAfterRepositoryDelete.body as unknown as Array<JsonObject>).some(
+        (event) =>
+          event.type === "repository.deleted" &&
+          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+      ),
+      "Audit log did not include repository deletion metadata.",
+    );
+    log("repository deletion removes the registry row and records audit metadata");
+
     const jobs = await request(baseUrl, "GET", "/jobs");
     assert(jobs.status === 200, `Jobs endpoint returned ${jobs.status}`);
     const jobHistory = jobs.body as unknown as Array<JsonObject>;

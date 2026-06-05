@@ -190,6 +190,10 @@ h2 {
   color: var(--text);
 }
 
+.dangerButton {
+  color: var(--danger);
+}
+
 .primaryButton:disabled,
 .secondaryButton:disabled {
   cursor: not-allowed;
@@ -312,7 +316,15 @@ h2 {
   overflow-wrap: anywhere;
 }
 
-.repositoryItem > .secondaryButton {
+.repositoryActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.repositoryActions > .secondaryButton {
   justify-self: end;
   min-height: 32px;
   padding: 0 12px;

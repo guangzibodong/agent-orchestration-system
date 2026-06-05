@@ -899,6 +899,66 @@ describe("runner API", () => {
     );
   });
 
+  it("deletes repository registrations and records an audit event", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-delete-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const firstApp = buildApp(undefined, { demoRoot });
+
+    const createResponse = await firstApp.inject({
+      method: "POST",
+      url: "/repositories",
+      payload: {
+        name: "Delete me",
+        path: repoPath,
+        defaultBranch: "main",
+        qualityGates: []
+      }
+    });
+    const created = createResponse.json();
+    const deleteResponse = await firstApp.inject({
+      method: "DELETE",
+      url: `/repositories/${created.id}`
+    });
+    const secondDeleteResponse = await firstApp.inject({
+      method: "DELETE",
+      url: `/repositories/${created.id}`
+    });
+    const secondApp = buildApp(undefined, { demoRoot });
+    const listResponse = await secondApp.inject({
+      method: "GET",
+      url: "/repositories"
+    });
+    const auditResponse = await secondApp.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toMatchObject({
+      id: created.id,
+      name: "Delete me",
+      path: repoPath
+    });
+    expect(secondDeleteResponse.statusCode).toBe(404);
+    expect(secondDeleteResponse.json()).toMatchObject({
+      error: "repository_not_found"
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([]);
+    expect(auditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "repository.deleted",
+        actor: "operator",
+        metadata: expect.objectContaining({
+          repositoryId: created.id,
+          repositoryName: "Delete me",
+          repositoryPath: repoPath
+        })
+      })
+    );
+  });
+
   it("rejects repository registration outside configured allowed roots", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-allowlist-test-"));
     const allowedRoot = await mkdtemp(join(tmpdir(), "mawo-api-allowed-root-"));

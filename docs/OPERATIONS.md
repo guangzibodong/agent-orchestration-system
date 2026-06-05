@@ -215,6 +215,7 @@ Invoke-RestMethod http://127.0.0.1:4000/health
 Invoke-RestMethod http://127.0.0.1:4000/jobs
 Invoke-RestMethod http://127.0.0.1:4000/workflows
 Invoke-RestMethod http://127.0.0.1:4000/repositories
+Invoke-RestMethod -Method Delete http://127.0.0.1:4000/repositories/<repositoryId>
 Invoke-RestMethod http://127.0.0.1:4000/audit-events
 ```
 
