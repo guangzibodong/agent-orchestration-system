@@ -41,3 +41,8 @@ jobs:
 
       - name: API smoke
         run: npm run smoke:api
+
+      - name: API smoke with auth token
+        run: npm run smoke:api
+        env:
+          MAWO_API_TOKEN: smoke-secret

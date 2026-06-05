@@ -55,5 +55,6 @@ describe("deployment manifests", () => {
     expect(workflow).toContain("npm run lint");
     expect(workflow).toContain("npm run build");
     expect(workflow).toContain("npm run smoke:api");
+    expect(workflow).toContain("MAWO_API_TOKEN: smoke-secret");
   });
 });
