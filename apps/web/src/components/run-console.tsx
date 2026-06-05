@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  auditEventSchema,
   agentSummarySchema,
   agentHealthSchema,
   mergeCandidateSchema,
@@ -57,6 +56,7 @@ import {
   buildJobHistoryDisplay,
   summarizeJobHistory
 } from "@/components/job-history-display";
+import { loadOperationsSnapshot } from "@/components/operations-snapshot";
 import {
   canCancelJobStatus,
   canCleanupWorkflowStatus,
@@ -375,14 +375,10 @@ export function RunConsole() {
     setAgentHealth(health.map((agent) => agentHealthSchema.parse(agent)));
   }, []);
 
-  const loadAuditEvents = useCallback(async () => {
-    const events = await api<unknown[]>("/audit-events?limit=8");
-    setAuditEvents(events.map((event) => auditEventSchema.parse(event)));
-  }, []);
-
-  const loadJobHistory = useCallback(async () => {
-    const jobs = await api<unknown[]>("/jobs?limit=8");
-    setJobHistory(jobs.map((item) => workflowJobSchema.parse(item)));
+  const refreshOperationsSnapshot = useCallback(async () => {
+    const snapshot = await loadOperationsSnapshot(api);
+    setAuditEvents(snapshot.auditEvents);
+    setJobHistory(snapshot.jobs);
   }, []);
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
@@ -460,6 +456,7 @@ export function RunConsole() {
             setReport(runReportSchema.parse(nextReport));
             await loadMergeCandidate(workflow.id);
           }
+          await refreshOperationsSnapshot();
           break;
         }
       }
@@ -468,7 +465,7 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [loadMergeCandidate, workflow]);
+  }, [loadMergeCandidate, refreshOperationsSnapshot, workflow]);
 
   const cancelJob = useCallback(async () => {
     if (!job || !workflow || !canCancelJobStatus(job.status)) {
@@ -484,6 +481,7 @@ export function RunConsole() {
         body: "{}"
       });
       await refreshJobAndWorkflow(job.id, workflow.id);
+      await refreshOperationsSnapshot();
     } catch (apiError) {
       setError(
         apiError instanceof Error
@@ -494,7 +492,7 @@ export function RunConsole() {
     } finally {
       setIsCanceling(false);
     }
-  }, [job, refreshJobAndWorkflow, workflow]);
+  }, [job, refreshJobAndWorkflow, refreshOperationsSnapshot, workflow]);
 
   const retryWorkflow = useCallback(async () => {
     if (!workflow || !canRetryWorkflowStatus(workflow.status)) {
@@ -513,12 +511,13 @@ export function RunConsole() {
         body: "{}"
       });
       setWorkflow(workflowRunSchema.parse(retried));
+      await refreshOperationsSnapshot();
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Retry failed");
     } finally {
       setIsBusy(false);
     }
-  }, [workflow]);
+  }, [refreshOperationsSnapshot, workflow]);
 
   const reviewWorkflow = useCallback(
     async (decision: "approve" | "reject") => {
@@ -538,13 +537,14 @@ export function RunConsole() {
         if (decision === "approve") {
           await loadMergeCandidate(workflow.id);
         }
+        await refreshOperationsSnapshot();
       } catch (apiError) {
         setError(apiError instanceof Error ? apiError.message : "Review failed");
       } finally {
         setIsBusy(false);
       }
     },
-    [loadMergeCandidate, workflow]
+    [loadMergeCandidate, refreshOperationsSnapshot, workflow]
   );
 
   const cleanupWorkspaces = useCallback(async () => {
@@ -558,12 +558,13 @@ export function RunConsole() {
     try {
       const refreshed = await cleanupWorkflowWorkspaces(api, workflow);
       setWorkflow(refreshed);
+      await refreshOperationsSnapshot();
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Cleanup failed");
     } finally {
       setIsBusy(false);
     }
-  }, [workflow]);
+  }, [refreshOperationsSnapshot, workflow]);
 
   useEffect(() => {
     // Load the API-backed in-memory run after the browser can reach the API.
@@ -579,14 +580,11 @@ export function RunConsole() {
         apiError instanceof Error ? apiError.message : "Load repositories failed"
       );
     });
-    loadAuditEvents().catch((apiError) => {
+    refreshOperationsSnapshot().catch((apiError) => {
       setError(
-        apiError instanceof Error ? apiError.message : "Load audit events failed"
-      );
-    });
-    loadJobHistory().catch((apiError) => {
-      setError(
-        apiError instanceof Error ? apiError.message : "Load job history failed"
+        apiError instanceof Error
+          ? apiError.message
+          : "Load operations snapshot failed"
       );
     });
     loadAgentHealth().catch((apiError) => {
@@ -596,11 +594,10 @@ export function RunConsole() {
     });
   }, [
     loadAgentHealth,
-    loadAuditEvents,
     loadConfiguredAgents,
-    loadJobHistory,
     loadLatestWorkflow,
-    loadRepositories
+    loadRepositories,
+    refreshOperationsSnapshot
   ]);
 
   return (
