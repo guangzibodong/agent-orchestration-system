@@ -233,6 +233,16 @@ export class WorkflowWorkspacesNotCleanableError extends Error {
   }
 }
 
+export class WorkflowMergeCandidateNotReadyError extends Error {
+  readonly status: RunnerWorkflowStatus;
+
+  constructor(status: RunnerWorkflowStatus) {
+    super(`Workflow is ${status}; merge candidate requires review-ready work.`);
+    this.name = "WorkflowMergeCandidateNotReadyError";
+    this.status = status;
+  }
+}
+
 export class LocalRunner {
   private readonly runs = new Map<string, LocalWorkflowRun>();
   private readonly shell: ShellAdapter;
@@ -291,6 +301,11 @@ export class LocalRunner {
 
   getMergeCandidate(id: string): MergeCandidate {
     const run = this.mustGetWorkflow(id);
+
+    if (!isMergeCandidateAllowed(run.status)) {
+      throw new WorkflowMergeCandidateNotReadyError(run.status);
+    }
+
     const patchTasks = run.tasks.filter(
       (task) =>
         task.status === "passed" &&
@@ -779,6 +794,10 @@ function isWorkspaceCleanupAllowed(status: RunnerWorkflowStatus): boolean {
 
 function workspaceCleanupBlockedReason(status: RunnerWorkflowStatus): string {
   return `Workflow is ${status}; workspaces can only be cleaned after completion or abort.`;
+}
+
+function isMergeCandidateAllowed(status: RunnerWorkflowStatus): boolean {
+  return ["needs_review", "completed"].includes(status);
 }
 
 function createCanceledResult(command: string): ShellRunResult {

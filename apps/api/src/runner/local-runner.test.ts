@@ -420,6 +420,40 @@ describe("LocalRunner", () => {
     expect(candidate.patch).toContain("+candidate patch");
   });
 
+  it("blocks merge candidates when quality gates fail after a task patch", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Do not suggest patches when gates fail",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "edit-readme",
+          title: "Edit README",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'blocked candidate patch\\\\n')"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "unit",
+          title: "Unit tests",
+          command: `${node} -e "process.exit(8)"`
+        }
+      ]
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+
+    expect(completed.status).toBe("gate_failed");
+    expect(completed.tasks[0]?.diff?.patch).toContain("+blocked candidate patch");
+    expect(() => runner.getMergeCandidate(run.id)).toThrow(
+      "Workflow is gate_failed; merge candidate requires review-ready work."
+    );
+  });
+
   it("cleans worktree workspaces only after workflow review is completed", async () => {
     const repoPath = await createCommittedRepo();
     const runner = new LocalRunner();

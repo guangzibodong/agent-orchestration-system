@@ -35,6 +35,7 @@ import {
 import {
   createDemoWorkflowDefinition,
   LocalRunner,
+  WorkflowMergeCandidateNotReadyError,
   WorkflowNotRetryableError,
   WorkflowNotReviewReadyError,
   WorkflowWorkspacesNotCleanableError
@@ -907,7 +908,15 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   }>("/workflows/:id/merge-candidate", async (request, reply) => {
     try {
       return activeRunner.getMergeCandidate(request.params.id);
-    } catch {
+    } catch (error) {
+      if (error instanceof WorkflowMergeCandidateNotReadyError) {
+        return reply.code(409).send({
+          error: "merge_candidate_not_ready",
+          message: error.message,
+          status: error.status
+        });
+      }
+
       return reply.code(404).send({ error: "workflow_not_found" });
     }
   });

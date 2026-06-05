@@ -302,6 +302,12 @@ $artifact.content
 The artifact endpoint only serves files under `.mawo/artifacts/<workflow-id>/`
 and caps returned text at 64 KiB by default.
 
+Merge candidates are intentionally blocked until workflow work is review-ready.
+If a task produced a patch but the workflow is still `ready`, `running`,
+`failed`, `gate_failed`, or `aborted`, `GET /workflows/:id/merge-candidate`
+returns `409 merge_candidate_not_ready`. This keeps failed quality gates from
+being presented as safe-to-apply patches.
+
 ## 7. Logs and Data Locations
 
 Runtime logs:

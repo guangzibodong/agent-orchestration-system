@@ -2018,6 +2018,63 @@ describe("runner API", () => {
     expect(candidate.applyCommand).toContain("git -C");
   });
 
+  it("blocks merge candidates for workflows that failed quality gates", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-merge-block-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "Block merge candidate until gates pass",
+        repositoryPath: repoPath,
+        tasks: [
+          {
+            id: "edit-readme",
+            title: "Edit README",
+            agent: "shell",
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'blocked API candidate\\\\n')"`
+          }
+        ],
+        qualityGates: [
+          {
+            id: "unit",
+            title: "Unit tests",
+            command: `${node} -e "process.exit(8)"`
+          }
+        ]
+      }
+    });
+    const created = createResponse.json();
+    const runResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const candidateResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/merge-candidate`
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(runResponse.json()).toMatchObject({
+      status: "gate_failed",
+      tasks: [
+        expect.objectContaining({
+          diff: expect.objectContaining({
+            patch: expect.stringContaining("+blocked API candidate")
+          })
+        })
+      ]
+    });
+    expect(candidateResponse.statusCode).toBe(409);
+    expect(candidateResponse.json()).toMatchObject({
+      error: "merge_candidate_not_ready",
+      status: "gate_failed"
+    });
+  });
+
   it("cleans completed workflow workspaces through the API", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-cleanup-test-"));
     tempRoots.push(demoRoot);

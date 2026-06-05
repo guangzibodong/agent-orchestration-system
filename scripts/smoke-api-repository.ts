@@ -366,6 +366,58 @@ async function main() {
     );
     log(`registered repository ${repositoryId}`);
 
+    const blockedMergeWorkflow = await request(
+      baseUrl,
+      "POST",
+      "/workflows/repository",
+      {
+        goal: "Smoke test merge candidate gate enforcement",
+        repositoryId: String(repositoryId),
+        tasks: [
+          {
+            id: "blocked-patch",
+            title: "Create a patch that should be blocked",
+            agent: "shell",
+            command: `${node} -e "const fs=require('fs'); fs.appendFileSync('README.md','blocked merge candidate\\n');"`,
+            timeoutMs: 30000,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "failing-gate",
+            title: "Failing quality gate",
+            command: `${node} -e "process.exit(8)"`,
+            timeoutMs: 30000,
+          },
+        ],
+      },
+    );
+    assert(
+      blockedMergeWorkflow.status === 201,
+      `Blocked merge workflow creation returned ${blockedMergeWorkflow.status}`,
+    );
+    const blockedMergeWorkflowId = blockedMergeWorkflow.body.id;
+    const blockedMergeRun = await request(
+      baseUrl,
+      "POST",
+      `/workflows/${String(blockedMergeWorkflowId)}/run`,
+    );
+    assert(
+      blockedMergeRun.body.status === "gate_failed",
+      "Blocked merge workflow did not fail its quality gate.",
+    );
+    const blockedMergeCandidate = await request(
+      baseUrl,
+      "GET",
+      `/workflows/${String(blockedMergeWorkflowId)}/merge-candidate`,
+    );
+    assert(
+      blockedMergeCandidate.status === 409 &&
+        blockedMergeCandidate.body.error === "merge_candidate_not_ready",
+      "Gate-failed workflow returned a merge candidate instead of a 409.",
+    );
+    log("merge candidate is blocked until quality gates pass");
+
     const create = await request(baseUrl, "POST", "/workflows/repository", {
       goal: "Smoke test repository workflow retry path",
       repositoryId: String(repositoryId),
