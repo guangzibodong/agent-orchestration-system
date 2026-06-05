@@ -205,6 +205,7 @@ POST /workflows/:id/enqueue
 POST /workflows/:id/run
 POST /workflows/:id/retry
 POST /workflows/:id/review
+GET  /workflows/:id/workspaces
 POST /workflows/:id/workspaces/cleanup
 GET  /workflows/:id/report
 GET  /workflows/:id/merge-candidate

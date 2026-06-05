@@ -184,6 +184,26 @@ export const workspaceCleanupResultSchema = z.object({
   cleaned: z.array(workspaceCleanupItemSchema)
 });
 
+export const workspaceCleanupPreviewItemSchema = z.object({
+  taskId: z.string(),
+  taskTitle: z.string(),
+  path: z.string(),
+  branch: z.string(),
+  repoPath: z.string(),
+  exists: z.boolean(),
+  cleanupAllowed: z.boolean()
+});
+
+export const workspaceCleanupPreviewSchema = z.object({
+  workflowId: z.string(),
+  workflowStatus: workflowStatusSchema,
+  cleanupAllowed: z.boolean(),
+  blockedReason: z.string().optional(),
+  workspaceCount: z.number().int().nonnegative(),
+  existingCount: z.number().int().nonnegative(),
+  workspaces: z.array(workspaceCleanupPreviewItemSchema)
+});
+
 export const runReportSchema = z.object({
   workflowId: z.string(),
   reportArtifactPath: z.string().optional(),
@@ -304,4 +324,7 @@ export type WorkflowReviewRequest = z.infer<
 export type MergeCandidate = z.infer<typeof mergeCandidateSchema>;
 export type WorkspaceCleanupResult = z.infer<
   typeof workspaceCleanupResultSchema
+>;
+export type WorkspaceCleanupPreview = z.infer<
+  typeof workspaceCleanupPreviewSchema
 >;

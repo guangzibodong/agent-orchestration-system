@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   CliAgentAdapter,
@@ -160,6 +161,23 @@ export type WorkspaceCleanupResult = {
   cleaned: WorkspaceCleanupItem[];
 };
 
+export type WorkspaceCleanupPreviewItem = WorkspaceCleanupItem & {
+  taskTitle: string;
+  repoPath: string;
+  exists: boolean;
+  cleanupAllowed: boolean;
+};
+
+export type WorkspaceCleanupPreview = {
+  workflowId: string;
+  workflowStatus: RunnerWorkflowStatus;
+  cleanupAllowed: boolean;
+  blockedReason?: string;
+  workspaceCount: number;
+  existingCount: number;
+  workspaces: WorkspaceCleanupPreviewItem[];
+};
+
 export type WorkflowRuntimeEvent = {
   type:
     | "workflow.task_started"
@@ -201,9 +219,7 @@ export class WorkflowNotRetryableError extends Error {
 
 export class WorkflowWorkspacesNotCleanableError extends Error {
   constructor(status: RunnerWorkflowStatus) {
-    super(
-      `Workflow is ${status}; workspaces can only be cleaned after completion or abort.`
-    );
+    super(workspaceCleanupBlockedReason(status));
     this.name = "WorkflowWorkspacesNotCleanableError";
   }
 }
@@ -297,7 +313,7 @@ export class LocalRunner {
   async cleanupWorkflowWorkspaces(id: string): Promise<WorkspaceCleanupResult> {
     const run = this.mustGetWorkflow(id);
 
-    if (!["completed", "aborted", "archived"].includes(run.status)) {
+    if (!isWorkspaceCleanupAllowed(run.status)) {
       throw new WorkflowWorkspacesNotCleanableError(run.status);
     }
 
@@ -329,6 +345,39 @@ export class LocalRunner {
       status: cleaned.length > 0 ? "cleaned" : "empty",
       cleanedAt: new Date().toISOString(),
       cleaned
+    };
+  }
+
+  getWorkspaceCleanupPreview(id: string): WorkspaceCleanupPreview {
+    const run = this.mustGetWorkflow(id);
+    const cleanupAllowed = isWorkspaceCleanupAllowed(run.status);
+    const workspaces = run.tasks
+      .filter((task) => Boolean(task.workspace))
+      .map((task) => {
+        const workspace = task.workspace!;
+        const exists = existsSync(workspace.path);
+
+        return {
+          taskId: task.id,
+          taskTitle: task.title,
+          path: workspace.path,
+          branch: workspace.branch,
+          repoPath: workspace.repoPath,
+          exists,
+          cleanupAllowed: cleanupAllowed && exists
+        };
+      });
+
+    return {
+      workflowId: run.id,
+      workflowStatus: run.status,
+      cleanupAllowed,
+      ...(cleanupAllowed
+        ? {}
+        : { blockedReason: workspaceCleanupBlockedReason(run.status) }),
+      workspaceCount: workspaces.length,
+      existingCount: workspaces.filter((workspace) => workspace.exists).length,
+      workspaces
     };
   }
 
@@ -649,6 +698,14 @@ export class LocalRunner {
 
 function resolveTaskCwd(workspacePath: string, cwd?: string): string {
   return cwd ? join(workspacePath, cwd) : workspacePath;
+}
+
+function isWorkspaceCleanupAllowed(status: RunnerWorkflowStatus): boolean {
+  return ["completed", "aborted", "archived"].includes(status);
+}
+
+function workspaceCleanupBlockedReason(status: RunnerWorkflowStatus): string {
+  return `Workflow is ${status}; workspaces can only be cleaned after completion or abort.`;
 }
 
 function createCanceledResult(command: string): ShellRunResult {

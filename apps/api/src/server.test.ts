@@ -1859,6 +1859,92 @@ describe("runner API", () => {
     );
   });
 
+  it("previews workflow workspace cleanup readiness through the API", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-cleanup-preview-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/worktree-demo"
+    });
+    const created = createResponse.json();
+    const runResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    const reviewReady = runResponse.json();
+    const blockedPreviewResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/workspaces`
+    });
+    const blockedPreview = blockedPreviewResponse.json();
+
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/review`,
+      payload: {
+        decision: "approve",
+        note: "Preview cleanup"
+      }
+    });
+    const allowedPreviewResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/workspaces`
+    });
+    const cleanupResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/workspaces/cleanup`
+    });
+    const emptyPreviewResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}/workspaces`
+    });
+
+    expect(blockedPreviewResponse.statusCode).toBe(200);
+    expect(blockedPreview).toMatchObject({
+      workflowId: created.id,
+      workflowStatus: "needs_review",
+      cleanupAllowed: false,
+      workspaceCount: 1,
+      existingCount: 1,
+      blockedReason:
+        "Workflow is needs_review; workspaces can only be cleaned after completion or abort.",
+      workspaces: [
+        expect.objectContaining({
+          taskId: "worktree-edit",
+          taskTitle: "Edit demo repository",
+          path: reviewReady.tasks[0].workspace.path,
+          exists: true,
+          cleanupAllowed: false
+        })
+      ]
+    });
+    expect(allowedPreviewResponse.statusCode).toBe(200);
+    expect(allowedPreviewResponse.json()).toMatchObject({
+      workflowId: created.id,
+      workflowStatus: "completed",
+      cleanupAllowed: true,
+      workspaceCount: 1,
+      existingCount: 1,
+      workspaces: [
+        expect.objectContaining({
+          cleanupAllowed: true
+        })
+      ]
+    });
+    expect(cleanupResponse.statusCode).toBe(200);
+    expect(emptyPreviewResponse.statusCode).toBe(200);
+    expect(emptyPreviewResponse.json()).toMatchObject({
+      workflowId: created.id,
+      workflowStatus: "completed",
+      cleanupAllowed: true,
+      workspaceCount: 0,
+      existingCount: 0,
+      workspaces: []
+    });
+  });
+
   it("rejects review decisions before a workflow is review-ready", async () => {
     const app = buildApp();
     const createResponse = await app.inject({

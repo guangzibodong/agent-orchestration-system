@@ -496,6 +496,16 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
   });
 
+  app.get<{
+    Params: { id: string };
+  }>("/workflows/:id/workspaces", async (request, reply) => {
+    if (!activeRunner.getWorkflow(request.params.id)) {
+      return reply.code(404).send({ error: "workflow_not_found" });
+    }
+
+    return activeRunner.getWorkspaceCleanupPreview(request.params.id);
+  });
+
   app.post<{
     Params: { id: string };
   }>("/workflows/:id/workspaces/cleanup", async (request, reply) => {

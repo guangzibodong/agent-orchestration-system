@@ -438,4 +438,68 @@ describe("LocalRunner", () => {
       cleaned: []
     });
   });
+
+  it("previews workspace cleanup readiness before deleting worktrees", async () => {
+    const repoPath = await createCommittedRepo();
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Preview worktree cleanup",
+      executionMode: "worktree",
+      repositoryPath: repoPath,
+      tasks: [
+        {
+          id: "edit-readme",
+          title: "Edit README",
+          agent: "shell",
+          command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'preview cleanup\\\\n')"`
+        }
+      ],
+      qualityGates: []
+    });
+
+    const reviewReady = await runner.runWorkflow(run.id);
+    const workspacePath = reviewReady.tasks[0]?.workspace?.path;
+    const blockedPreview = runner.getWorkspaceCleanupPreview(run.id);
+
+    expect(blockedPreview).toMatchObject({
+      workflowId: run.id,
+      workflowStatus: "needs_review",
+      cleanupAllowed: false,
+      workspaceCount: 1,
+      existingCount: 1,
+      blockedReason:
+        "Workflow is needs_review; workspaces can only be cleaned after completion or abort."
+    });
+    expect(blockedPreview.workspaces).toEqual([
+      expect.objectContaining({
+        taskId: "edit-readme",
+        taskTitle: "Edit README",
+        path: workspacePath,
+        branch: expect.stringContaining("edit-readme"),
+        repoPath,
+        exists: true,
+        cleanupAllowed: false
+      })
+    ]);
+
+    runner.reviewWorkflow(run.id, { decision: "approve" });
+    const allowedPreview = runner.getWorkspaceCleanupPreview(run.id);
+
+    expect(allowedPreview.cleanupAllowed).toBe(true);
+    expect(allowedPreview.blockedReason).toBeUndefined();
+    expect(allowedPreview.workspaces[0]?.cleanupAllowed).toBe(true);
+
+    await runner.cleanupWorkflowWorkspaces(run.id);
+    const emptyPreview = runner.getWorkspaceCleanupPreview(run.id);
+
+    expect(emptyPreview).toMatchObject({
+      workflowId: run.id,
+      workflowStatus: "completed",
+      cleanupAllowed: true,
+      workspaceCount: 0,
+      existingCount: 0,
+      workspaces: []
+    });
+  });
 });

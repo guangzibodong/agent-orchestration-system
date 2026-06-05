@@ -252,11 +252,16 @@ Invoke-RestMethod "http://127.0.0.1:4000/jobs?workflowId=$($workflow.id)&limit=5
 Completed or aborted worktree workflow cleanup:
 
 ```powershell
+$preview = Invoke-RestMethod "http://127.0.0.1:4000/workflows/<workflow-id>/workspaces"
+$preview.workspaces | Format-Table taskId, exists, cleanupAllowed, branch, path
 Invoke-RestMethod -Method Post "http://127.0.0.1:4000/workflows/<workflow-id>/workspaces/cleanup"
 ```
 
 Cleanup is intentionally rejected for `needs_review` and `failed` workflows so
 operators can inspect patches and failure state before removing worktrees.
+Use `GET /workflows/:id/workspaces` first to see whether cleanup is allowed,
+how many tracked worktrees still exist on disk, and which task branch/path will
+be removed by the cleanup call.
 
 Read a persisted workflow artifact without shelling into the host:
 

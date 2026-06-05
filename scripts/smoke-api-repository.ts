@@ -391,6 +391,26 @@ async function main() {
     );
     log("report and merge candidate are ready");
 
+    const blockedWorkspacePreview = await request(
+      baseUrl,
+      "GET",
+      `/workflows/${workflowId}/workspaces`,
+    );
+    assert(
+      blockedWorkspacePreview.status === 200,
+      `Blocked workspace preview returned ${blockedWorkspacePreview.status}`,
+    );
+    assert(
+      blockedWorkspacePreview.body.cleanupAllowed === false &&
+        blockedWorkspacePreview.body.workspaceCount === 1 &&
+        blockedWorkspacePreview.body.existingCount === 1 &&
+        String(blockedWorkspacePreview.body.blockedReason).includes(
+          "needs_review",
+        ),
+      "Workspace preview did not block cleanup before review.",
+    );
+    log("workspace preview blocks cleanup while review evidence is still needed");
+
     const review = await request(baseUrl, "POST", `/workflows/${workflowId}/review`, {
       decision: "approve",
       note: "Smoke reviewed",
@@ -403,6 +423,21 @@ async function main() {
     log("review approval completed the workflow");
 
     const workspacePath = passedTasks[0]?.workspace as JsonObject | undefined;
+    const allowedWorkspacePreview = await request(
+      baseUrl,
+      "GET",
+      `/workflows/${workflowId}/workspaces`,
+    );
+    assert(
+      allowedWorkspacePreview.status === 200,
+      `Allowed workspace preview returned ${allowedWorkspacePreview.status}`,
+    );
+    assert(
+      allowedWorkspacePreview.body.cleanupAllowed === true &&
+        allowedWorkspacePreview.body.workspaceCount === 1 &&
+        allowedWorkspacePreview.body.existingCount === 1,
+      "Workspace preview did not allow cleanup after approval.",
+    );
     const cleanup = await request(
       baseUrl,
       "POST",
@@ -439,6 +474,23 @@ async function main() {
       Array.isArray(secondCleanup.body.cleaned) &&
         secondCleanup.body.cleaned.length === 0,
       "Second workspace cleanup should not report already removed worktrees.",
+    );
+    const emptyWorkspacePreview = await request(
+      baseUrl,
+      "GET",
+      `/workflows/${workflowId}/workspaces`,
+    );
+    assert(
+      emptyWorkspacePreview.status === 200,
+      `Empty workspace preview returned ${emptyWorkspacePreview.status}`,
+    );
+    assert(
+      emptyWorkspacePreview.body.cleanupAllowed === true &&
+        emptyWorkspacePreview.body.workspaceCount === 0 &&
+        emptyWorkspacePreview.body.existingCount === 0 &&
+        Array.isArray(emptyWorkspacePreview.body.workspaces) &&
+        emptyWorkspacePreview.body.workspaces.length === 0,
+      "Workspace preview did not show an empty cleanup target list after cleanup.",
     );
     log("completed workflow workspaces were cleaned after review and cleanup is idempotent");
 
@@ -872,6 +924,7 @@ async function main() {
           mergeCandidate: mergeCandidate.body.summary,
           workspaceCleanup: cleanup.body.status,
           secondWorkspaceCleanup: secondCleanup.body.status,
+          workspacePreview: emptyWorkspacePreview.body.workspaceCount,
           canceledJobId: cancelJobId,
         },
         null,

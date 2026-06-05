@@ -32,7 +32,9 @@ import {
   type RepositoryRecord,
   type RunReport,
   type WorkflowJob,
-  type WorkflowRun
+  type WorkflowRun,
+  type WorkspaceCleanupPreview,
+  type WorkspaceCleanupResult
 } from "@mawo/shared";
 import { buildMergeCandidateDisplay } from "@/components/merge-candidate-display";
 import {
@@ -88,7 +90,11 @@ import {
   parseWorkflowAlreadyRunningJob,
   type WorkflowJobDisplayStatus
 } from "@/components/workflow-actions";
-import { cleanupWorkflowWorkspaces } from "@/components/workflow-workspaces";
+import {
+  buildWorkspaceCleanupPreviewDisplay,
+  cleanupWorkflowWorkspacesWithResult,
+  loadWorkflowWorkspacePreview
+} from "@/components/workflow-workspaces";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
@@ -171,6 +177,10 @@ export function RunConsole() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
   const [jobTimeline, setJobTimeline] = useState<JobTimelineResponse>();
+  const [workspaceCleanupPreview, setWorkspaceCleanupPreview] =
+    useState<WorkspaceCleanupPreview>();
+  const [workspaceCleanupResult, setWorkspaceCleanupResult] =
+    useState<WorkspaceCleanupResult>();
   const [operationsRepositoryId, setOperationsRepositoryId] = useState("");
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
   const [isBusy, setIsBusy] = useState(false);
@@ -232,6 +242,17 @@ export function RunConsole() {
     () => buildWorkflowListDisplay(workflowList).slice(-8).reverse(),
     [workflowList]
   );
+  const workspaceCleanupDisplay = useMemo(
+    () =>
+      workspaceCleanupPreview
+        ? buildWorkspaceCleanupPreviewDisplay(workspaceCleanupPreview)
+        : undefined,
+    [workspaceCleanupPreview]
+  );
+  const workspaceCleanupTargetCount =
+    workspaceCleanupPreview?.existingCount ??
+    workflow?.tasks.filter((task) => task.workspace).length ??
+    0;
 
   const metrics = useMemo(
     () => [
@@ -300,7 +321,8 @@ export function RunConsole() {
     [configuredAgents]
   );
   const canRetryCurrentWorkflow = canRetryWorkflowStatus(workflow?.status);
-  const canCleanupCurrentWorkflow = canCleanupWorkflowStatus(workflow?.status);
+  const canCleanupCurrentWorkflow =
+    canCleanupWorkflowStatus(workflow?.status) && workspaceCleanupTargetCount > 0;
   const canCancelCurrentJob = canCancelJobStatus(job?.status);
 
   const updateApiToken = useCallback((value: string) => {
@@ -816,8 +838,13 @@ export function RunConsole() {
     setError(undefined);
 
     try {
-      const refreshed = await cleanupWorkflowWorkspaces(api, workflow);
+      const { cleanup, workflow: refreshed } =
+        await cleanupWorkflowWorkspacesWithResult(api, workflow);
+      setWorkspaceCleanupResult(cleanup);
       setWorkflow(refreshed);
+      setWorkspaceCleanupPreview(
+        await loadWorkflowWorkspacePreview(api, workflow.id)
+      );
       await loadWorkflowList();
       await refreshOperationsSnapshot();
     } catch (apiError) {
@@ -871,6 +898,37 @@ export function RunConsole() {
     loadWorkflowList,
     refreshOperationsSnapshot
   ]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWorkspaceCleanupResult(undefined);
+  }, [workflow?.id]);
+
+  useEffect(() => {
+    let canceled = false;
+
+    if (!workflow) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWorkspaceCleanupPreview(undefined);
+      return;
+    }
+
+    loadWorkflowWorkspacePreview(api, workflow.id)
+      .then((preview) => {
+        if (!canceled) {
+          setWorkspaceCleanupPreview(preview);
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setWorkspaceCleanupPreview(undefined);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [workflow]);
 
   return (
     <main className="shell">
@@ -1583,6 +1641,43 @@ export function RunConsole() {
                     <p>
                       {workflow.review.decision} / {workflow.review.reviewedAt}
                     </p>
+                  ) : null}
+                  {workspaceCleanupDisplay ? (
+                    <div className="mergeCandidateBox">
+                      <strong>{workspaceCleanupDisplay.statusLabel}</strong>
+                      <p>{workspaceCleanupDisplay.summary}</p>
+                      {workspaceCleanupDisplay.blockedReason ? (
+                        <p>{workspaceCleanupDisplay.blockedReason}</p>
+                      ) : null}
+                      {workspaceCleanupDisplay.rows.slice(0, 4).map((row) => (
+                        <p key={`${row.branch}-${row.path}`}>
+                          {row.task} / {row.status} / {row.branch}
+                          <br />
+                          {row.path}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {workspaceCleanupResult ? (
+                    <div className="mergeCandidateBox">
+                      <strong>
+                        {workspaceCleanupResult.status === "cleaned"
+                          ? `Cleaned ${workspaceCleanupResult.cleaned.length} workspace${
+                              workspaceCleanupResult.cleaned.length === 1
+                                ? ""
+                                : "s"
+                            }`
+                          : "No active workspaces to clean"}
+                      </strong>
+                      <p>{workspaceCleanupResult.cleanedAt}</p>
+                      {workspaceCleanupResult.cleaned.map((item) => (
+                        <p key={`${item.taskId}-${item.branch}`}>
+                          {item.taskId} / {item.branch}
+                          <br />
+                          {item.path}
+                        </p>
+                      ))}
+                    </div>
                   ) : null}
                   {canCleanupCurrentWorkflow ? (
                     <button

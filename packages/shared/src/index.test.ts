@@ -9,7 +9,8 @@ import {
   runReportSchema,
   workflowReviewRequestSchema,
   workflowJobSchema,
-  workflowRunSchema
+  workflowRunSchema,
+  workspaceCleanupPreviewSchema
 } from "./index";
 
 describe("workflowRunSchema", () => {
@@ -339,6 +340,30 @@ describe("workflowRunSchema", () => {
 
     expect(candidate.status).toBe("ready");
     expect(candidate.sourceBranches[0]).toBe("mawo/run/task");
+  });
+
+  it("accepts workspace cleanup preview responses", () => {
+    const preview = workspaceCleanupPreviewSchema.parse({
+      workflowId: "run_7",
+      workflowStatus: "completed",
+      cleanupAllowed: true,
+      workspaceCount: 1,
+      existingCount: 1,
+      workspaces: [
+        {
+          taskId: "task_1",
+          taskTitle: "Edit README",
+          path: "C:/repo/.mawo/worktrees/task",
+          branch: "mawo/run/task",
+          repoPath: "C:/repo",
+          exists: true,
+          cleanupAllowed: true
+        }
+      ]
+    });
+
+    expect(preview.cleanupAllowed).toBe(true);
+    expect(preview.workspaces[0]?.exists).toBe(true);
   });
 
   it("accepts workflow audit events", () => {
