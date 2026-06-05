@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { LocalRunner } from "./local-runner.js";
+import type { JobStore } from "./file-job-store.js";
 
 export type WorkflowJobStatus =
   | "queued"
@@ -21,6 +22,7 @@ export type WorkflowJob = {
 
 export type WorkflowJobQueueOptions = {
   runner: LocalRunner;
+  jobStore?: JobStore;
 };
 
 export class WorkflowAlreadyRunningError extends Error {
@@ -35,12 +37,28 @@ export class WorkflowAlreadyRunningError extends Error {
 
 export class WorkflowJobQueue {
   private readonly runner: LocalRunner;
+  private readonly jobStore?: JobStore;
   private readonly jobs = new Map<string, WorkflowJob>();
   private readonly waiters = new Map<string, Array<(job: WorkflowJob) => void>>();
   private readonly controllers = new Map<string, AbortController>();
 
   constructor(options: WorkflowJobQueueOptions) {
     this.runner = options.runner;
+    this.jobStore = options.jobStore;
+    for (const job of this.jobStore?.list() ?? []) {
+      const restored = this.isTerminal(job)
+        ? job
+        : {
+            ...job,
+            status: "failed" as const,
+            finishedAt: new Date().toISOString(),
+            error: "Job was interrupted by API restart."
+          };
+      this.jobs.set(restored.id, restored);
+      if (restored !== job) {
+        this.jobStore?.save(restored);
+      }
+    }
   }
 
   enqueue(workflowId: string): WorkflowJob {
@@ -60,6 +78,7 @@ export class WorkflowJobQueue {
     };
 
     this.jobs.set(job.id, job);
+    this.jobStore?.save(job);
     setTimeout(() => {
       void this.process(job.id);
     }, 0);
@@ -178,6 +197,7 @@ export class WorkflowJobQueue {
       updatedAt: new Date().toISOString()
     });
     this.jobs.set(job.id, job);
+    this.jobStore?.save(job);
 
     for (const waiter of this.waiters.get(job.id) ?? []) {
       waiter(job);

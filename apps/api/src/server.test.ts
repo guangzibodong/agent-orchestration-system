@@ -305,6 +305,51 @@ describe("runner API", () => {
     );
   });
 
+  it("restores completed job history when the API is rebuilt", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-persist-test-"));
+    tempRoots.push(demoRoot);
+    const firstApp = buildApp(undefined, { demoRoot });
+    const createResponse = await firstApp.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const created = createResponse.json();
+
+    const enqueueResponse = await firstApp.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/enqueue`
+    });
+    const queued = enqueueResponse.json();
+    let job = queued;
+    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const jobResponse = await firstApp.inject({
+        method: "GET",
+        url: `/jobs/${queued.id}`
+      });
+      job = jobResponse.json();
+    }
+
+    const secondApp = buildApp(undefined, { demoRoot });
+    const jobsResponse = await secondApp.inject({
+      method: "GET",
+      url: "/jobs"
+    });
+    const restoredJobs = jobsResponse.json();
+
+    expect(job.status).toBe("completed");
+    expect(jobsResponse.statusCode).toBe(200);
+    expect(restoredJobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: queued.id,
+          workflowId: created.id,
+          status: "completed"
+        })
+      ])
+    );
+  });
+
   it("enqueues workflow runs and exposes job status", async () => {
     const app = buildApp();
     const createResponse = await app.inject({

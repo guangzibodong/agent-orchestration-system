@@ -413,6 +413,17 @@ async function main() {
     );
     log("audit events recorded create, retry, review, enqueue, and cancel");
 
+    const jobs = await request(baseUrl, "GET", "/jobs");
+    assert(jobs.status === 200, `Jobs endpoint returned ${jobs.status}`);
+    const jobHistory = jobs.body as unknown as Array<JsonObject>;
+    assert(
+      jobHistory.some(
+        (job) => job.id === cancelJobId && job.status === "canceled",
+      ),
+      "Persistent job history did not include the canceled job.",
+    );
+    log("job history includes the canceled background job");
+
     console.log(
       JSON.stringify(
         {

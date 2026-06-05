@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { FileJobStore } from "./file-job-store.js";
 import { LocalRunner } from "./local-runner.js";
 import { WorkflowJobQueue } from "./workflow-job-queue.js";
 
@@ -49,6 +50,93 @@ describe("WorkflowJobQueue", () => {
 
     expect(completed.status).toBe("completed");
     expect(runner.getWorkflow(run.id)?.status).toBe("needs_review");
+  });
+
+  it("persists completed jobs across queue instances", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-job-store-test-"));
+    tempRoots.push(root);
+    const stateFile = join(root, "jobs.json");
+    const runner = new LocalRunner();
+    const store = new FileJobStore({ stateFile });
+    const queue = new WorkflowJobQueue({ runner, jobStore: store });
+    const run = runner.createWorkflow({
+      goal: "Persist queued job history",
+      tasks: [
+        {
+          id: "task",
+          title: "Queued task",
+          agent: "shell",
+          command: `${node} -e "console.log('persisted job')"`
+        }
+      ],
+      qualityGates: []
+    });
+
+    const job = queue.enqueue(run.id);
+    const completed = await queue.waitForJob(job.id, 5000);
+    const restoredQueue = new WorkflowJobQueue({
+      runner,
+      jobStore: new FileJobStore({ stateFile })
+    });
+
+    expect(completed.status).toBe("completed");
+    expect(restoredQueue.getJob(job.id)).toMatchObject({
+      id: job.id,
+      workflowId: run.id,
+      status: "completed"
+    });
+    expect(restoredQueue.listJobs().map((restored) => restored.id)).toContain(job.id);
+  });
+
+  it("marks persisted non-terminal jobs failed on queue startup", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-job-recover-test-"));
+    tempRoots.push(root);
+    const stateFile = join(root, "jobs.json");
+    await writeFile(
+      stateFile,
+      JSON.stringify(
+        [
+          {
+            id: "queued-job",
+            workflowId: "workflow-1",
+            status: "queued",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:00.000Z"
+          },
+          {
+            id: "running-job",
+            workflowId: "workflow-2",
+            status: "running",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:01.000Z",
+            startedAt: "2026-06-05T00:00:01.000Z"
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const queue = new WorkflowJobQueue({
+      runner: new LocalRunner(),
+      jobStore: new FileJobStore({ stateFile })
+    });
+
+    expect(queue.getJob("queued-job")).toMatchObject({
+      status: "failed",
+      error: "Job was interrupted by API restart."
+    });
+    expect(queue.getJob("running-job")).toMatchObject({
+      status: "failed",
+      error: "Job was interrupted by API restart."
+    });
+    expect(new FileJobStore({ stateFile }).list()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "queued-job", status: "failed" }),
+        expect.objectContaining({ id: "running-job", status: "failed" })
+      ])
+    );
   });
 
   it("rejects duplicate jobs while a workflow already has an active job", async () => {

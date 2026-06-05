@@ -12,6 +12,7 @@ path does not require them for workflow execution.
 - API: Fastify, default `http://127.0.0.1:4000`
 - Health endpoint: `GET /health`
 - Workflow state: `.mawo/state/workflows.json`
+- Job history: `.mawo/state/jobs.json`
 - Audit events: `.mawo/state/audit-events.json`
 - Workflow artifacts: `.mawo/artifacts/<workflowId>/`
 - Local logs, if redirected by operator scripts: `.logs/`
@@ -209,6 +210,9 @@ Runtime logs:
 Persistent workflow data:
 
 - `.mawo/state/workflows.json`: workflow and review state.
+- `.mawo/state/jobs.json`: background job history. Queued/running jobs found
+  during API startup are marked failed because the in-process worker cannot be
+  resumed after restart.
 - `.mawo/state/audit-events.json`: append-only operator action trail for
   workflow creation, enqueue, retry, review, and job cancellation.
 - `.mawo/artifacts/`: task stdout/stderr, patches, reports, and merge

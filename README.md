@@ -191,6 +191,7 @@ POST /jobs/:id/cancel
 .mawo/
   state/
     workflows.json
+    jobs.json
     audit-events.json
   artifacts/
     <workflowId>/
@@ -202,7 +203,7 @@ POST /jobs/:id/cancel
       tasks/<taskId>/patch.diff
 ```
 
-这些文件用于恢复 workflow 状态、查看审计记录、排查运行失败和生成可应用的 patch。
+这些文件用于恢复 workflow 状态、查看 job 历史、查看审计记录、排查运行失败和生成可应用的 patch。API 重启时，如果发现 `jobs.json` 里遗留的 queued/running job，会把它们标记为 failed，避免旧 job 永远占用运行槽。
 
 ## 接入真实 CLI Agent
 

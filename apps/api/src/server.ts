@@ -7,6 +7,7 @@ import Fastify from "fastify";
 import { join } from "node:path";
 import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import { FileAuditStore, type AuditStore } from "./runner/file-audit-store.js";
+import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
 import { FileRunStore } from "./runner/file-run-store.js";
 import {
   createAgentSummaries,
@@ -35,6 +36,7 @@ export type BuildAppOptions = {
   demoRoot?: string;
   env?: Record<string, string | undefined>;
   auditStore?: AuditStore;
+  jobStore?: JobStore;
 };
 
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
@@ -54,7 +56,14 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test"
   });
-  const queue = new WorkflowJobQueue({ runner: activeRunner });
+  const queue = new WorkflowJobQueue({
+    runner: activeRunner,
+    jobStore:
+      options.jobStore ??
+      new FileJobStore({
+        stateFile: join(root, ".mawo", "state", "jobs.json")
+      })
+  });
   const auditStore =
     options.auditStore ??
     new FileAuditStore({
