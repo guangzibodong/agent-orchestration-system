@@ -60,5 +60,26 @@ function formatMetadata(metadata?: Record<string, string>): string {
     return "No metadata";
   }
 
-  return entries.map(([key, value]) => `${key}=${value}`).join(", ");
+  return entries
+    .map(([key, value]) => `${key}=${compactMetadataValue(value)}`)
+    .join(", ");
+}
+
+function compactMetadataValue(value: string): string {
+  const maxLength = 58;
+
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const headLength = 24;
+  const pathSegment = value.split(/[\\/]/).at(-1);
+
+  if (pathSegment && pathSegment.length < maxLength - headLength - 3) {
+    return `${value.slice(0, headLength)}...${pathSegment}`;
+  }
+
+  const tailLength = maxLength - headLength - 3;
+
+  return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
 }

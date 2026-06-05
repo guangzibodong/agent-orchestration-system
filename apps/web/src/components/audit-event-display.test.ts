@@ -95,4 +95,26 @@ describe("audit event display", () => {
       operatorActions: 2
     });
   });
+
+  it("keeps long cleanup metadata compact while preserving useful path context", () => {
+    const [event] = buildAuditEventDisplay([
+      {
+        id: "event-long",
+        type: "workflow.workspaces_cleaned",
+        createdAt: "2026-06-05T10:32:10.513Z",
+        actor: "operator",
+        metadata: {
+          cleanedPaths:
+            "C:/Users/Harry/AppData/Local/Temp/mawo-smoke-repo/.mawo/worktrees/workflow-task-1234567890",
+          cleanedBranches:
+            "mawo/workflow-with-a-very-long-identifier/flaky-task-1234567890"
+        }
+      }
+    ]);
+
+    expect(event?.metadataLabel).toContain("cleanedPaths=C:/Users");
+    expect(event?.metadataLabel).toContain("...workflow-task-1234567890");
+    expect(event?.metadataLabel).toContain("cleanedBranches=mawo/work");
+    expect(event?.metadataLabel.length).toBeLessThanOrEqual(150);
+  });
 });
