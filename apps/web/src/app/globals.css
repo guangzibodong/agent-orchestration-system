@@ -759,6 +759,15 @@ h2 {
   padding-top: 8px;
 }
 
+.mergeCandidateBox.blocked {
+  border-left: 3px solid var(--warning);
+  padding-left: 8px;
+}
+
+.mergeCandidateBox.blocked strong {
+  color: var(--warning);
+}
+
 .workflowNode {
   width: 210px;
   max-width: 100%;

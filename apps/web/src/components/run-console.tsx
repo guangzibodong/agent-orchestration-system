@@ -36,7 +36,12 @@ import {
   type WorkspaceCleanupPreview,
   type WorkspaceCleanupResult
 } from "@mawo/shared";
-import { buildMergeCandidateDisplay } from "@/components/merge-candidate-display";
+import {
+  buildMergeCandidateDisplay,
+  buildMergeCandidateNotReadyDisplay,
+  isMergeCandidateNotReadyResponse,
+  type MergeCandidateDisplay
+} from "@/components/merge-candidate-display";
 import {
   buildRepositoryWorkflowPayload,
   canCreateRepositoryWorkflow,
@@ -167,6 +172,8 @@ export function RunConsole() {
     useState<ArtifactPreviewResponse>();
   const [job, setJob] = useState<ConsoleWorkflowJob>();
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
+  const [mergeCandidateNotice, setMergeCandidateNotice] =
+    useState<MergeCandidateDisplay>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
   const [repositoryRegistrationForm, setRepositoryRegistrationForm] = useState(
     defaultRepositoryRegistrationForm
@@ -383,6 +390,7 @@ export function RunConsole() {
     setJob(undefined);
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       const next = await api<unknown>("/workflows/demo", {
@@ -406,6 +414,7 @@ export function RunConsole() {
     setJob(undefined);
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       const next = await api<unknown>("/workflows/worktree-demo", {
@@ -431,6 +440,7 @@ export function RunConsole() {
     setJob(undefined);
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       const next = await api<unknown>("/workflows/agent-demo", {
@@ -456,6 +466,7 @@ export function RunConsole() {
     setJob(undefined);
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       const payload = buildRepositoryWorkflowPayload(repositoryForm);
@@ -494,6 +505,7 @@ export function RunConsole() {
     setJob(undefined);
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       const next = await api<unknown>(`/workflows/${workflowId}`);
@@ -598,10 +610,27 @@ export function RunConsole() {
   );
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
-    const candidate = await api<unknown>(
-      `/workflows/${workflowId}/merge-candidate`
-    );
-    setMergeCandidate(mergeCandidateSchema.parse(candidate));
+    try {
+      const candidate = await api<unknown>(
+        `/workflows/${workflowId}/merge-candidate`
+      );
+      setMergeCandidate(mergeCandidateSchema.parse(candidate));
+      setMergeCandidateNotice(undefined);
+    } catch (apiError) {
+      if (
+        apiError instanceof ApiResponseError &&
+        apiError.status === 409 &&
+        isMergeCandidateNotReadyResponse(apiError.body)
+      ) {
+        setMergeCandidate(undefined);
+        setMergeCandidateNotice(
+          buildMergeCandidateNotReadyDisplay(apiError.body)
+        );
+        return;
+      }
+
+      throw apiError;
+    }
   }, []);
 
   const loadTimelineForJob = useCallback(async (jobId: string) => {
@@ -669,6 +698,8 @@ export function RunConsole() {
     setError(undefined);
     setJob(undefined);
     setJobTimeline(undefined);
+    setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       let queuedJob: ConsoleWorkflowJob;
@@ -784,6 +815,7 @@ export function RunConsole() {
     setJob(undefined);
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
+    setMergeCandidateNotice(undefined);
 
     try {
       const retried = await api<unknown>(`/workflows/${workflow.id}/retry`, {
@@ -1694,6 +1726,21 @@ export function RunConsole() {
                     <div className="mergeCandidateBox">
                       {buildMergeCandidateDisplay(mergeCandidate).lines.map(
                         (line) => (
+                          <p key={line}>{line}</p>
+                        )
+                      )}
+                    </div>
+                  ) : null}
+                  {mergeCandidateNotice ? (
+                    <div
+                      className={`mergeCandidateBox ${
+                        mergeCandidateNotice.tone ?? "blocked"
+                      }`}
+                    >
+                      {mergeCandidateNotice.lines.map((line, index) =>
+                        index === 0 ? (
+                          <strong key={line}>{line}</strong>
+                        ) : (
                           <p key={line}>{line}</p>
                         )
                       )}
