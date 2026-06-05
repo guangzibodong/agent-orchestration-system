@@ -3,6 +3,7 @@ import {
   auditEventTypeSchema,
   createRepositoryWorkflowRequestSchema,
   repositoryRegistrationRequestSchema,
+  workflowStatusSchema,
   workflowReviewRequestSchema
 } from "@mawo/shared";
 import Fastify from "fastify";
@@ -157,8 +158,44 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     return createAgentHealthChecks(cliAgents);
   });
 
-  app.get("/workflows", async () => {
-    return activeRunner.listWorkflows();
+  app.get<{
+    Querystring: {
+      limit?: string;
+      repositoryPath?: string;
+      status?: string;
+    };
+  }>("/workflows", async (request, reply) => {
+    const workflowStatus = request.query.status
+      ? workflowStatusSchema.safeParse(request.query.status)
+      : undefined;
+
+    if (workflowStatus && !workflowStatus.success) {
+      return reply.code(400).send({
+        error: "invalid_workflow_status",
+        allowedStatuses: workflowStatusSchema.options
+      });
+    }
+
+    const repositoryPath = request.query.repositoryPath
+      ? resolve(request.query.repositoryPath)
+      : undefined;
+    const workflows = activeRunner.listWorkflows().filter((workflow) => {
+      if (workflowStatus?.data && workflow.status !== workflowStatus.data) {
+        return false;
+      }
+
+      if (
+        repositoryPath &&
+        (!workflow.repositoryPath ||
+          resolve(workflow.repositoryPath) !== repositoryPath)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return limitToRecent(workflows, request.query.limit);
   });
 
   app.get<{

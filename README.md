@@ -189,6 +189,7 @@ GET  /health
 GET  /agents
 GET  /agents/health
 GET  /workflows
+GET  /workflows?status=<status>&repositoryPath=<path>&limit=<n>
 GET  /repositories
 POST /repositories
 DELETE /repositories/:id

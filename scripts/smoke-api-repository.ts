@@ -295,6 +295,24 @@ async function main() {
     );
     log("second run reached needs_review with passing gate and patch artifact");
 
+    const filteredWorkflows = await request(
+      baseUrl,
+      "GET",
+      `/workflows?status=needs_review&repositoryPath=${encodeURIComponent(repositoryPath)}&limit=1`,
+    );
+    assert(
+      filteredWorkflows.status === 200,
+      `Filtered workflows returned ${filteredWorkflows.status}`,
+    );
+    const filteredWorkflowRows =
+      filteredWorkflows.body as unknown as Array<JsonObject>;
+    assert(
+      filteredWorkflowRows.length === 1 &&
+        filteredWorkflowRows[0]?.id === workflowId,
+      "Filtered workflow history did not return the review-ready repository workflow.",
+    );
+    log("workflow history filters isolate repository runs by status");
+
     const report = await request(
       baseUrl,
       "GET",

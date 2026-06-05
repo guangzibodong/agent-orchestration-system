@@ -261,6 +261,81 @@ describe("runner API", () => {
     expect(report.taskResults[0].patch).toContain("+worktree runner");
   });
 
+  it("filters workflow history by status and repository path before limiting", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-filter-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const firstRepositoryWorkflowResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "First repository workflow",
+        repositoryPath: repoPath,
+        tasks: [
+          {
+            id: "noop",
+            agent: "shell",
+            command: `${node} -e "console.log('first')"`
+          }
+        ],
+        qualityGates: []
+      }
+    });
+    const secondRepositoryWorkflowResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "Second repository workflow",
+        repositoryPath: repoPath,
+        tasks: [
+          {
+            id: "noop",
+            agent: "shell",
+            command: `${node} -e "console.log('second')"`
+          }
+        ],
+        qualityGates: []
+      }
+    });
+    const firstRepositoryWorkflow = firstRepositoryWorkflowResponse.json();
+    const secondRepositoryWorkflow = secondRepositoryWorkflowResponse.json();
+
+    const filteredResponse = await app.inject({
+      method: "GET",
+      url: `/workflows?status=ready&repositoryPath=${encodeURIComponent(
+        repoPath
+      )}&limit=1`
+    });
+    const invalidStatusResponse = await app.inject({
+      method: "GET",
+      url: "/workflows?status=not-real"
+    });
+
+    expect(filteredResponse.statusCode).toBe(200);
+    expect(filteredResponse.json()).toEqual([
+      expect.objectContaining({
+        id: secondRepositoryWorkflow.id,
+        status: "ready",
+        repositoryPath: repoPath
+      })
+    ]);
+    expect(filteredResponse.json()).not.toEqual([
+      expect.objectContaining({
+        id: firstRepositoryWorkflow.id
+      })
+    ]);
+    expect(invalidStatusResponse.statusCode).toBe(400);
+    expect(invalidStatusResponse.json()).toMatchObject({
+      error: "invalid_workflow_status"
+    });
+  });
+
   it("serves persisted workflow artifacts through a bounded API endpoint", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-test-"));
     tempRoots.push(demoRoot);
