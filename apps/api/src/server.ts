@@ -74,6 +74,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const artifactRoot = join(root, ".mawo", "artifacts");
   const env = options.env ?? process.env;
   const apiToken = env.MAWO_API_TOKEN?.trim();
+  const deploymentMode =
+    env.NODE_ENV === "production" ? "production" : "development";
   const allowedRepositoryRoots = parseAllowedRepositoryRoots(
     env.MAWO_ALLOWED_REPOSITORY_ROOTS
   );
@@ -210,12 +212,23 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       .listJobs()
       .filter((job) => job.status === "queued" || job.status === "running")
       .length;
-    const checks = [...storeChecks, gitCheck, agentsCheck];
+    const productionConfigCheck = createProductionConfigCheck({
+      deploymentMode,
+      apiToken,
+      allowedRepositoryRoots
+    });
+    const checks = [
+      ...storeChecks,
+      gitCheck,
+      agentsCheck,
+      productionConfigCheck
+    ];
 
     return {
       ok: checks.every((check) => check.ok),
       service: "mawo-api",
       checkedAt,
+      deploymentMode,
       protectedByToken: Boolean(apiToken),
       root,
       activeJobs,
@@ -1080,4 +1093,44 @@ function createGitCliCheck() {
     status: "failed",
     message: result.stderr.trim() || "git --version failed"
   };
+}
+
+function createProductionConfigCheck(input: {
+  deploymentMode: "development" | "production";
+  apiToken?: string;
+  allowedRepositoryRoots: string[];
+}) {
+  const missing =
+    input.deploymentMode === "production"
+      ? [
+          !isProductionApiToken(input.apiToken) ? "MAWO_API_TOKEN" : undefined,
+          input.allowedRepositoryRoots.length === 0
+            ? "MAWO_ALLOWED_REPOSITORY_ROOTS"
+            : undefined
+        ].filter((item): item is string => Boolean(item))
+      : [];
+  const ok = missing.length === 0;
+
+  return {
+    id: "production_config",
+    label: "Production security config",
+    ok,
+    status: ok ? "ready" : "blocked",
+    deploymentMode: input.deploymentMode,
+    protectedByToken: Boolean(input.apiToken),
+    allowedRepositoryRootsConfigured: input.allowedRepositoryRoots.length > 0,
+    missing
+  };
+}
+
+function isProductionApiToken(apiToken?: string): boolean {
+  if (!apiToken) {
+    return false;
+  }
+
+  if (apiToken === "change-me-before-production") {
+    return false;
+  }
+
+  return apiToken.length >= 20;
 }

@@ -189,6 +189,47 @@ describe("runner API", () => {
     expect(JSON.stringify(readiness)).not.toContain("{promptFile}");
   });
 
+  it("blocks production readiness when security deployment settings are placeholders", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-readiness-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        NODE_ENV: "production",
+        MAWO_API_TOKEN: "change-me-before-production",
+        MAWO_ALLOWED_REPOSITORY_ROOTS: ""
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/readiness",
+      headers: {
+        authorization: "Bearer change-me-before-production"
+      }
+    });
+    const readiness = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(readiness).toMatchObject({
+      ok: false,
+      deploymentMode: "production",
+      protectedByToken: true
+    });
+    expect(readiness.checks).toContainEqual(
+      expect.objectContaining({
+        id: "production_config",
+        ok: false,
+        status: "blocked",
+        missing: expect.arrayContaining([
+          "MAWO_API_TOKEN",
+          "MAWO_ALLOWED_REPOSITORY_ROOTS"
+        ])
+      })
+    );
+    expect(JSON.stringify(readiness)).not.toContain("change-me-before-production");
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

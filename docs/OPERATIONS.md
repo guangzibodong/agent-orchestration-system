@@ -131,20 +131,23 @@ template. Real agents can be `healthy`, `auth_unchecked`, `auth_failed`, or
 
 Expected readiness response includes deployability checks for `.mawo/state`,
 `.mawo/artifacts`, Git CLI availability, agent health, token protection, and
-active queue pressure. In production, treat `ok=false` as a deployment blocker
-until each degraded check is resolved:
+active queue pressure. In production it also enforces a `production_config`
+gate for `MAWO_API_TOKEN` and `MAWO_ALLOWED_REPOSITORY_ROOTS`; treat `ok=false`
+as a deployment blocker until each degraded check is resolved:
 
 ```json
 {
   "ok": true,
   "service": "mawo-api",
+  "deploymentMode": "production",
   "protectedByToken": true,
   "activeJobs": 0,
   "checks": [
     { "id": "state_store", "ok": true, "status": "ready" },
     { "id": "artifact_store", "ok": true, "status": "ready" },
     { "id": "git_cli", "ok": true, "status": "ready" },
-    { "id": "agents", "ok": true, "status": "ready" }
+    { "id": "agents", "ok": true, "status": "ready" },
+    { "id": "production_config", "ok": true, "status": "ready" }
   ]
 }
 ```
@@ -446,7 +449,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `docker compose config` succeeds on the target host.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /readiness` returns `ok=true`, reports token protection, and marks
-      `state_store`, `artifact_store`, `git_cli`, and `agents` as ready.
+      `state_store`, `artifact_store`, `git_cli`, `agents`, and
+      `production_config` as ready.
 - [ ] `GET /agents/health` returns the built-in fake agent as healthy and no
       configured production agent reports `missing_command` or `auth_failed`.
 - [ ] Web starts and can reach the configured API URL from the browser.

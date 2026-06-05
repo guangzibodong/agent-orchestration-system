@@ -216,6 +216,9 @@ async function main() {
           (check) => check.id === "git_cli" && check.ok === true,
         ) &&
         readinessChecks.some((check) => check.id === "agents" && check.ok === true),
+        readinessChecks.some(
+          (check) => check.id === "production_config" && check.ok === true,
+        ),
       "Readiness endpoint did not report all production checks as ready.",
     );
     assert(

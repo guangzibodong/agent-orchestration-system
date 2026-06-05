@@ -298,6 +298,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 
 - 目前是 local-first 系统，有 API token 保护，但没有用户账号、角色权限、租户隔离。
 - API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
+- `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
 - workflow、job history、仓库注册表和审计事件是文件持久化，暂不支持多 API 副本并发写。
 - job queue 运行器仍在单 API 进程内；API 重启后历史会恢复，但重启前 queued/running job 会被标记为 failed，需要人工重试。
 - Docker Compose 里有 Postgres/Redis，但当前主路径还没有切到数据库和 Redis queue。
