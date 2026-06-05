@@ -146,11 +146,12 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   app.get<{
-    Querystring: { workflowId?: string };
+    Querystring: { workflowId?: string; limit?: string };
   }>("/audit-events", async (request) => {
-    return auditStore.list({
+    const events = auditStore.list({
       workflowId: request.query.workflowId
     });
+    return limitToRecent(events, request.query.limit);
   });
 
   app.get("/repositories", async () => {
@@ -487,8 +488,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
   });
 
-  app.get("/jobs", async () => {
-    return queue.listJobs();
+  app.get<{
+    Querystring: { limit?: string };
+  }>("/jobs", async (request) => {
+    return limitToRecent(queue.listJobs(), request.query.limit);
   });
 
   app.post<{
@@ -570,4 +573,18 @@ function isRepositoryPathAllowed(path: string, allowedRoots: string[]): boolean 
       candidate.startsWith(`${normalizedRoot}${sep}`)
     );
   });
+}
+
+function limitToRecent<T>(items: T[], value?: string): T[] {
+  if (!value) {
+    return items;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return items;
+  }
+
+  return items.slice(-Math.min(parsed, 100));
 }

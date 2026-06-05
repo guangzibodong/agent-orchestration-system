@@ -424,6 +424,32 @@ describe("runner API", () => {
     );
   });
 
+  it("limits audit event history to the most recent events", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-audit-limit-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    await app.inject({ method: "POST", url: "/workflows/demo" });
+    await app.inject({ method: "POST", url: "/workflows/worktree-demo" });
+    await app.inject({ method: "POST", url: "/workflows/agent-demo" });
+
+    const allResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events"
+    });
+    const limitedResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events?limit=2"
+    });
+    const events = allResponse.json();
+    const limited = limitedResponse.json();
+
+    expect(limitedResponse.statusCode).toBe(200);
+    expect(limited.map((event: { id: string }) => event.id)).toEqual(
+      events.slice(-2).map((event: { id: string }) => event.id)
+    );
+  });
+
   it("restores completed job history when the API is rebuilt", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-persist-test-"));
     tempRoots.push(demoRoot);
@@ -466,6 +492,39 @@ describe("runner API", () => {
           status: "completed"
         })
       ])
+    );
+  });
+
+  it("limits job history to the most recent jobs", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-limit-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const first = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+    const second = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+    const third = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+
+    await app.inject({ method: "POST", url: `/workflows/${first.id}/enqueue` });
+    await app.inject({ method: "POST", url: `/workflows/${second.id}/enqueue` });
+    await app.inject({ method: "POST", url: `/workflows/${third.id}/enqueue` });
+
+    const allResponse = await app.inject({ method: "GET", url: "/jobs" });
+    const limitedResponse = await app.inject({
+      method: "GET",
+      url: "/jobs?limit=2"
+    });
+    const jobs = allResponse.json();
+    const limited = limitedResponse.json();
+
+    expect(limitedResponse.statusCode).toBe(200);
+    expect(limited.map((job: { id: string }) => job.id)).toEqual(
+      jobs.slice(-2).map((job: { id: string }) => job.id)
     );
   });
 

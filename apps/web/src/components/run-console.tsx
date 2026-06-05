@@ -376,12 +376,12 @@ export function RunConsole() {
   }, []);
 
   const loadAuditEvents = useCallback(async () => {
-    const events = await api<unknown[]>("/audit-events");
+    const events = await api<unknown[]>("/audit-events?limit=8");
     setAuditEvents(events.map((event) => auditEventSchema.parse(event)));
   }, []);
 
   const loadJobHistory = useCallback(async () => {
-    const jobs = await api<unknown[]>("/jobs");
+    const jobs = await api<unknown[]>("/jobs?limit=8");
     setJobHistory(jobs.map((item) => workflowJobSchema.parse(item)));
   }, []);
 
