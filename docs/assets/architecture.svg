@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Agent orchestration system architecture</title>
+  <desc id="desc">A layered architecture showing web console, API, runner, queue, stores, agents, git worktrees, and quality gates.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 34px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #475569; }
+      .label { font: 700 18px Arial, sans-serif; fill: #0f172a; }
+      .small { font: 400 13px Arial, sans-serif; fill: #475569; }
+      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 10; }
+      .primary { fill: #e0f2fe; stroke: #0284c7; }
+      .green { fill: #dcfce7; stroke: #16a34a; }
+      .amber { fill: #fef3c7; stroke: #d97706; }
+      .rose { fill: #ffe4e6; stroke: #e11d48; }
+      .line { stroke: #475569; stroke-width: 2.3; fill: none; marker-end: url(#arrow); }
+      .band { fill: #eef2ff; stroke: #c7d2fe; stroke-width: 1.5; rx: 12; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="680"/>
+  <text x="60" y="60" class="title">Agent Orchestration System</text>
+  <text x="60" y="88" class="subtitle">Coordinate multiple coding agents with isolated worktrees, quality gates, review, artifacts, and audit trails.</text>
+
+  <rect x="54" y="122" width="1092" height="106" class="band"/>
+  <rect x="82" y="150" width="230" height="52" class="box primary"/>
+  <text x="104" y="181" class="label">Next.js Web Console</text>
+  <text x="340" y="166" class="small">Create workflows, enqueue runs, cancel jobs, review outputs, inspect reports.</text>
+  <path d="M 315 176 L 455 176" class="line"/>
+  <rect x="470" y="150" width="230" height="52" class="box primary"/>
+  <text x="514" y="181" class="label">Fastify API</text>
+  <path d="M 704 176 L 844 176" class="line"/>
+  <rect x="860" y="150" width="230" height="52" class="box primary"/>
+  <text x="905" y="181" class="label">Shared Schemas</text>
+
+  <rect x="54" y="260" width="1092" height="188" class="band"/>
+  <text x="82" y="292" class="label">Orchestration Core</text>
+  <rect x="82" y="320" width="190" height="72" class="box green"/>
+  <text x="112" y="350" class="label">Job Queue</text>
+  <text x="104" y="374" class="small">enqueue, cancel, active guard</text>
+  <rect x="318" y="320" width="210" height="72" class="box green"/>
+  <text x="358" y="350" class="label">Local Runner</text>
+  <text x="338" y="374" class="small">tasks, dependencies, gates</text>
+  <rect x="574" y="320" width="210" height="72" class="box green"/>
+  <text x="610" y="350" class="label">Adapters</text>
+  <text x="602" y="374" class="small">shell, Codex, Claude, Cursor</text>
+  <rect x="830" y="320" width="230" height="72" class="box green"/>
+  <text x="872" y="350" class="label">Aggregator</text>
+  <text x="852" y="374" class="small">report and merge candidate</text>
+  <path d="M 272 356 L 316 356" class="line"/>
+  <path d="M 528 356 L 572 356" class="line"/>
+  <path d="M 784 356 L 828 356" class="line"/>
+
+  <rect x="54" y="482" width="1092" height="142" class="band"/>
+  <text x="82" y="514" class="label">Execution and Persistence</text>
+  <rect x="82" y="540" width="190" height="52" class="box amber"/>
+  <text x="116" y="571" class="label">Git Worktrees</text>
+  <rect x="318" y="540" width="190" height="52" class="box amber"/>
+  <text x="364" y="571" class="label">Quality Gates</text>
+  <rect x="554" y="540" width="190" height="52" class="box rose"/>
+  <text x="590" y="571" class="label">Run State</text>
+  <rect x="790" y="540" width="190" height="52" class="box rose"/>
+  <text x="820" y="571" class="label">Artifacts</text>
+  <rect x="1016" y="540" width="100" height="52" class="box rose"/>
+  <text x="1038" y="571" class="label">Audit</text>
+  <path d="M 423 392 L 210 538" class="line"/>
+  <path d="M 680 392 L 414 538" class="line"/>
+  <path d="M 936 392 L 650 538" class="line"/>
+  <path d="M 936 392 L 886 538" class="line"/>
+  <path d="M 178 392 L 1064 538" class="line"/>
+</svg>

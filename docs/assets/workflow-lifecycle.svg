@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Workflow lifecycle</title>
+  <desc id="desc">Workflow lifecycle from repository selection through queue, isolated execution, quality gates, report, review, and merge candidate.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #fbfdff; }
+      .title { font: 700 32px Arial, sans-serif; fill: #0f172a; }
+      .text { font: 700 16px Arial, sans-serif; fill: #0f172a; }
+      .small { font: 400 13px Arial, sans-serif; fill: #475569; }
+      .node { fill: #ffffff; stroke: #94a3b8; stroke-width: 2; rx: 12; }
+      .run { fill: #dbeafe; stroke: #2563eb; }
+      .gate { fill: #dcfce7; stroke: #16a34a; }
+      .review { fill: #fef3c7; stroke: #d97706; }
+      .fail { fill: #ffe4e6; stroke: #e11d48; }
+      .line { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="520"/>
+  <text x="60" y="58" class="title">Workflow Lifecycle</text>
+
+  <rect x="60" y="110" width="135" height="86" class="node"/>
+  <text x="86" y="144" class="text">1. Repo</text>
+  <text x="82" y="168" class="small">real git repo</text>
+
+  <path d="M 196 153 L 252 153" class="line"/>
+  <rect x="260" y="110" width="135" height="86" class="node"/>
+  <text x="284" y="144" class="text">2. Create</text>
+  <text x="283" y="168" class="small">workflow run</text>
+
+  <path d="M 396 153 L 452 153" class="line"/>
+  <rect x="460" y="110" width="135" height="86" class="node run"/>
+  <text x="490" y="144" class="text">3. Queue</text>
+  <text x="484" y="168" class="small">background job</text>
+
+  <path d="M 596 153 L 652 153" class="line"/>
+  <rect x="660" y="110" width="135" height="86" class="node run"/>
+  <text x="686" y="144" class="text">4. Execute</text>
+  <text x="688" y="168" class="small">worktree task</text>
+
+  <path d="M 796 153 L 852 153" class="line"/>
+  <rect x="860" y="110" width="135" height="86" class="node gate"/>
+  <text x="898" y="144" class="text">5. Gate</text>
+  <text x="890" y="168" class="small">test, lint, build</text>
+
+  <path d="M 928 198 L 928 258" class="line"/>
+  <rect x="860" y="270" width="135" height="86" class="node review"/>
+  <text x="892" y="304" class="text">6. Report</text>
+  <text x="885" y="328" class="small">patch + artifacts</text>
+
+  <path d="M 860 313 L 796 313" class="line"/>
+  <rect x="660" y="270" width="135" height="86" class="node review"/>
+  <text x="690" y="304" class="text">7. Review</text>
+  <text x="695" y="328" class="small">approve/reject</text>
+
+  <path d="M 660 313 L 596 313" class="line"/>
+  <rect x="460" y="270" width="135" height="86" class="node gate"/>
+  <text x="488" y="304" class="text">Merge</text>
+  <text x="489" y="328" class="small">candidate patch</text>
+
+  <path d="M 726 270 C 720 232, 688 218, 654 204 L 600 181" class="line"/>
+  <rect x="260" y="270" width="135" height="86" class="node fail"/>
+  <text x="295" y="304" class="text">Retry</text>
+  <text x="286" y="328" class="small">reset failed run</text>
+  <path d="M 395 313 C 454 250, 498 224, 527 198" class="line"/>
+
+  <rect x="60" y="270" width="135" height="86" class="node fail"/>
+  <text x="91" y="304" class="text">Cancel</text>
+  <text x="82" y="328" class="small">abort process</text>
+  <path d="M 128 270 C 144 222, 240 198, 458 168" class="line"/>
+
+  <text x="60" y="440" class="small">Every important operator action is written to audit-events.json. Every run result can produce report.json and merge-candidate.patch.</text>
+</svg>

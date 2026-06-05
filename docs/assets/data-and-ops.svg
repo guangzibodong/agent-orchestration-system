@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">Runtime data and operations map</title>
+  <desc id="desc">Runtime data map for workflows, jobs, audit events, artifacts, reports, and merge candidates.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 32px Arial, sans-serif; fill: #0f172a; }
+      .label { font: 700 17px Arial, sans-serif; fill: #0f172a; }
+      .mono { font: 400 14px Consolas, monospace; fill: #334155; }
+      .small { font: 400 13px Arial, sans-serif; fill: #475569; }
+      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 10; }
+      .state { fill: #e0f2fe; stroke: #0284c7; }
+      .artifact { fill: #dcfce7; stroke: #16a34a; }
+      .audit { fill: #fef3c7; stroke: #d97706; }
+      .warn { fill: #ffe4e6; stroke: #e11d48; }
+      .line { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="560"/>
+  <text x="60" y="58" class="title">Runtime Data and Operations</text>
+
+  <rect x="70" y="105" width="245" height="300" class="box state"/>
+  <text x="100" y="140" class="label">.mawo/state</text>
+  <text x="100" y="177" class="mono">workflows.json</text>
+  <text x="100" y="204" class="small">workflow status, tasks, gates</text>
+  <text x="100" y="250" class="mono">audit-events.json</text>
+  <text x="100" y="277" class="small">create, enqueue, retry, review</text>
+  <text x="100" y="304" class="small">cancel and operator actions</text>
+
+  <rect x="475" y="105" width="250" height="300" class="box artifact"/>
+  <text x="505" y="140" class="label">.mawo/artifacts</text>
+  <text x="505" y="177" class="mono">report.json</text>
+  <text x="505" y="204" class="mono">merge-candidate.patch</text>
+  <text x="505" y="231" class="mono">merge-candidate.json</text>
+  <text x="505" y="258" class="mono">stdout.txt</text>
+  <text x="505" y="285" class="mono">stderr.txt</text>
+  <text x="505" y="312" class="mono">patch.diff</text>
+
+  <rect x="885" y="105" width="245" height="126" class="box audit"/>
+  <text x="918" y="140" class="label">HTTP Operators</text>
+  <text x="918" y="176" class="small">Run, cancel, retry, review</text>
+  <text x="918" y="201" class="small">Query jobs, reports, audit</text>
+
+  <rect x="885" y="280" width="245" height="126" class="box warn"/>
+  <text x="918" y="315" class="label">Launch Limits</text>
+  <text x="918" y="351" class="small">Queue is in memory today</text>
+  <text x="918" y="376" class="small">Protect API before public use</text>
+
+  <path d="M 885 166 L 727 166" class="line"/>
+  <path d="M 885 187 C 764 245, 662 257, 727 315" class="line"/>
+  <path d="M 475 210 L 318 210" class="line"/>
+  <path d="M 315 265 L 472 265" class="line"/>
+  <path d="M 1008 280 L 1008 234" class="line"/>
+
+  <text x="70" y="462" class="small">Backup .mawo before deploys. Artifacts may include repository paths, prompts, stdout/stderr, patches, and secrets printed by commands.</text>
+</svg>
