@@ -9,7 +9,7 @@ function read(path: string): string {
   return readFileSync(path, "utf8");
 }
 
-function latestMigrationSql(): string {
+function latestRuntimeStateMigrationSql(): string {
   if (!existsSync(migrationsRoot)) {
     return "";
   }
@@ -20,6 +20,17 @@ function latestMigrationSql(): string {
     .at(-1);
 
   return migration ? read(join(migrationsRoot, migration, "migration.sql")) : "";
+}
+
+function allMigrationSql(): string {
+  if (!existsSync(migrationsRoot)) {
+    return "";
+  }
+
+  return readdirSync(migrationsRoot)
+    .sort()
+    .map((migration) => read(join(migrationsRoot, migration, "migration.sql")))
+    .join("\n");
 }
 
 describe("Prisma runtime schema", () => {
@@ -50,10 +61,15 @@ describe("Prisma runtime schema", () => {
     expect(schema).toMatch(/workspace\s+Json\?/);
     expect(schema).toMatch(/diff\s+Json\?/);
     expect(schema).toMatch(/metadata\s+Json\?/);
+    expect(schema).toMatch(/lockedBy\s+String\?/);
+    expect(schema).toMatch(/lockedAt\s+DateTime\?/);
+    expect(schema).toMatch(/leaseExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/attempts\s+Int\s+@default\(0\)/);
+    expect(schema).toContain("@@index([status, leaseExpiresAt])");
   });
 
   it("ships a baseline migration for the runtime schema", () => {
-    const migration = latestMigrationSql();
+    const migration = latestRuntimeStateMigrationSql();
 
     for (const table of [
       "WorkflowRun",
@@ -71,5 +87,19 @@ describe("Prisma runtime schema", () => {
     expect(migration).toContain("CREATE UNIQUE INDEX");
     expect(migration).toContain("CREATE INDEX");
     expect(migration).toContain("ON DELETE CASCADE");
+  });
+
+  it("ships a migration for Postgres worker job leases", () => {
+    const migrations = allMigrationSql();
+
+    expect(migrations).toContain('ALTER TABLE "WorkflowJob" ADD COLUMN "lockedBy"');
+    expect(migrations).toContain('ALTER TABLE "WorkflowJob" ADD COLUMN "lockedAt"');
+    expect(migrations).toContain(
+      'ALTER TABLE "WorkflowJob" ADD COLUMN "leaseExpiresAt"'
+    );
+    expect(migrations).toContain('ALTER TABLE "WorkflowJob" ADD COLUMN "attempts"');
+    expect(migrations).toContain(
+      'CREATE INDEX "WorkflowJob_status_leaseExpiresAt_idx"'
+    );
   });
 });

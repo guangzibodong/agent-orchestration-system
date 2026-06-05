@@ -86,10 +86,15 @@ model WorkflowJob {
   updatedAt     DateTime     @updatedAt
   startedAt     DateTime?
   finishedAt    DateTime?
+  lockedBy      String?
+  lockedAt      DateTime?
+  leaseExpiresAt DateTime?
+  attempts      Int          @default(0)
   workflowRun   WorkflowRun  @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
   auditEvents   AuditEvent[]
 
   @@index([status, updatedAt])
+  @@index([status, leaseExpiresAt])
   @@index([workflowRunId, status])
 }
 

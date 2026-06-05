@@ -16,7 +16,8 @@ the workflow queue is still in-process.
 - Workflow state: `.mawo/state/workflows.json` by default, or Postgres when
   `MAWO_STATE_BACKEND=postgres`
 - Job history: `.mawo/state/jobs.json` by default, or Postgres with the same
-  state backend setting
+  state backend setting. The Postgres job table includes worker lease and
+  attempt fields for external worker claim/heartbeat support.
 - Repository registry: `.mawo/state/repositories.json` by default, or Postgres
 - Audit events: `.mawo/state/audit-events.json` by default, or Postgres
 - Workflow artifacts: `.mawo/artifacts/<workflowId>/`
@@ -500,7 +501,8 @@ back the web process first while keeping the API and `.mawo` untouched.
   are marked failed. Matching running workflows are recovered to `aborted` with
   interrupted task/gate metadata, then require operator retry.
 - Postgres is available as the active workflow state backend with
-  `MAWO_STATE_BACKEND=postgres`. Redis is present in Compose but is not yet the
+  `MAWO_STATE_BACKEND=postgres`, and job rows include worker lease metadata for
+  the external worker queue path. Redis is present in Compose but is not yet the
   active queue backend. `/readiness` reports the active `runtime_backend` and
   blocks if `MAWO_QUEUE_BACKEND` requests an unimplemented backend.
 - API and web are containerized, but production public exposure still requires

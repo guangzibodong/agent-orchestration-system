@@ -58,6 +58,9 @@ function createEmptyPrismaStateClient() {
     },
     workflowJob: {
       findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+      findUnique: vi.fn(async () => null),
+      updateMany: vi.fn(async () => ({ count: 0 })),
       upsert: vi.fn()
     },
     auditEvent: {
@@ -2022,7 +2025,11 @@ describe("runner API", () => {
       createdAt,
       updatedAt,
       startedAt: createdAt,
-      finishedAt: updatedAt
+      finishedAt: updatedAt,
+      lockedBy: null,
+      lockedAt: null,
+      leaseExpiresAt: null,
+      attempts: 0
     };
     const auditEvent = {
       id: "postgres-audit",
@@ -2057,6 +2064,9 @@ describe("runner API", () => {
       },
       workflowJob: {
         findMany: vi.fn(async () => [job]),
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+        updateMany: vi.fn(async () => ({ count: 0 })),
         upsert: vi.fn()
       },
       auditEvent: {
