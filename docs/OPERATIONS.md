@@ -213,6 +213,7 @@ API:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:4000/health
 Invoke-RestMethod http://127.0.0.1:4000/jobs
+Invoke-RestMethod "http://127.0.0.1:4000/jobs?status=canceled&workflowId=<workflowId>&limit=20"
 Invoke-RestMethod http://127.0.0.1:4000/workflows
 Invoke-RestMethod "http://127.0.0.1:4000/workflows?status=needs_review&limit=20"
 Invoke-RestMethod http://127.0.0.1:4000/repositories
@@ -241,6 +242,7 @@ Operational smoke test:
 $workflow = Invoke-RestMethod -Method Post http://127.0.0.1:4000/workflows/demo
 Invoke-RestMethod -Method Post "http://127.0.0.1:4000/workflows/$($workflow.id)/enqueue"
 Invoke-RestMethod http://127.0.0.1:4000/jobs
+Invoke-RestMethod "http://127.0.0.1:4000/jobs?workflowId=$($workflow.id)&limit=5"
 ```
 
 Completed or aborted worktree workflow cleanup:

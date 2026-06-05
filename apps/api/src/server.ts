@@ -3,6 +3,7 @@ import {
   auditEventTypeSchema,
   createRepositoryWorkflowRequestSchema,
   repositoryRegistrationRequestSchema,
+  workflowJobStatusSchema,
   workflowStatusSchema,
   workflowReviewRequestSchema
 } from "@mawo/shared";
@@ -606,9 +607,32 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   app.get<{
-    Querystring: { limit?: string };
-  }>("/jobs", async (request) => {
-    return limitToRecent(queue.listJobs(), request.query.limit);
+    Querystring: { limit?: string; status?: string; workflowId?: string };
+  }>("/jobs", async (request, reply) => {
+    const jobStatus = request.query.status
+      ? workflowJobStatusSchema.safeParse(request.query.status)
+      : undefined;
+
+    if (jobStatus && !jobStatus.success) {
+      return reply.code(400).send({
+        error: "invalid_job_status",
+        allowedStatuses: workflowJobStatusSchema.options
+      });
+    }
+
+    const jobs = queue.listJobs().filter((job) => {
+      if (jobStatus?.data && job.status !== jobStatus.data) {
+        return false;
+      }
+
+      if (request.query.workflowId && job.workflowId !== request.query.workflowId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return limitToRecent(jobs, request.query.limit);
   });
 
   app.post<{

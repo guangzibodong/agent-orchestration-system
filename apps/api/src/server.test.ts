@@ -834,6 +834,80 @@ describe("runner API", () => {
     );
   });
 
+  it("filters job history by status and workflow before applying limits", async () => {
+    vi.useFakeTimers();
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-filter-test-"));
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const first = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+    const second = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+    const third = (
+      await app.inject({ method: "POST", url: "/workflows/demo" })
+    ).json();
+
+    const firstJob = (
+      await app.inject({
+        method: "POST",
+        url: `/workflows/${first.id}/enqueue`
+      })
+    ).json();
+    await app.inject({ method: "POST", url: `/jobs/${firstJob.id}/cancel` });
+    const secondJob = (
+      await app.inject({
+        method: "POST",
+        url: `/workflows/${second.id}/enqueue`
+      })
+    ).json();
+    await app.inject({ method: "POST", url: `/jobs/${secondJob.id}/cancel` });
+    const thirdJob = (
+      await app.inject({
+        method: "POST",
+        url: `/workflows/${third.id}/enqueue`
+      })
+    ).json();
+
+    const filteredResponse = await app.inject({
+      method: "GET",
+      url: `/jobs?status=canceled&workflowId=${second.id}&limit=1`
+    });
+    const filtered = filteredResponse.json();
+
+    expect(filteredResponse.statusCode).toBe(200);
+    expect(filtered).toEqual([
+      expect.objectContaining({
+        id: secondJob.id,
+        workflowId: second.id,
+        status: "canceled"
+      })
+    ]);
+    expect(filtered).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: firstJob.id }),
+        expect.objectContaining({ id: thirdJob.id })
+      ])
+    );
+  });
+
+  it("rejects invalid job history statuses", async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/jobs?status=not-real"
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: "invalid_job_status",
+      allowedStatuses: ["queued", "running", "completed", "failed", "canceled"]
+    });
+  });
+
   it("records audit events for jobs recovered after API restart", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-recovery-audit-test-"));
     const stateRoot = join(demoRoot, ".mawo", "state");

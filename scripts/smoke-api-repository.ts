@@ -725,7 +725,31 @@ async function main() {
       ),
       "Persistent job history did not include the canceled job.",
     );
-    log("job history includes the canceled background job");
+    const filteredJobs = await request(
+      baseUrl,
+      "GET",
+      `/jobs?status=canceled&workflowId=${cancelWorkflowId}&limit=1`,
+    );
+    assert(
+      filteredJobs.status === 200,
+      `Filtered jobs endpoint returned ${filteredJobs.status}`,
+    );
+    const filteredJobHistory =
+      filteredJobs.body as unknown as Array<JsonObject>;
+    assert(
+      filteredJobHistory.length === 1 &&
+        filteredJobHistory[0]?.id === cancelJobId &&
+        filteredJobHistory[0]?.workflowId === cancelWorkflowId &&
+        filteredJobHistory[0]?.status === "canceled",
+      "Filtered job history did not isolate the canceled workflow job.",
+    );
+    const invalidJobStatus = await request(baseUrl, "GET", "/jobs?status=not-real");
+    assert(
+      invalidJobStatus.status === 400 &&
+        invalidJobStatus.body.error === "invalid_job_status",
+      "Invalid job status filter did not return invalid_job_status.",
+    );
+    log("job history includes and filters the canceled background job");
 
     console.log(
       JSON.stringify(
