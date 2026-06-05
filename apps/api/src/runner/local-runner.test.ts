@@ -411,6 +411,8 @@ describe("LocalRunner", () => {
 
     runner.reviewWorkflow(run.id, { decision: "approve" });
     const cleanup = await runner.cleanupWorkflowWorkspaces(run.id);
+    const secondCleanup = await runner.cleanupWorkflowWorkspaces(run.id);
+    const cleanedWorkflow = runner.getWorkflow(run.id);
     const branchCheck = await shell.run({
       command: `git branch --list ${JSON.stringify(branch)}`,
       cwd: repoPath
@@ -429,5 +431,11 @@ describe("LocalRunner", () => {
     ]);
     expect(existsSync(workspacePath ?? "")).toBe(false);
     expect(branchCheck.stdout.trim()).toBe("");
+    expect(cleanedWorkflow?.tasks[0]?.workspace).toBeUndefined();
+    expect(secondCleanup).toMatchObject({
+      workflowId: run.id,
+      status: "empty",
+      cleaned: []
+    });
   });
 });

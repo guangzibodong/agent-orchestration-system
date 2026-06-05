@@ -316,7 +316,10 @@ export class LocalRunner {
         path: task.workspace.path,
         branch: task.workspace.branch
       });
+      task.workspace = undefined;
     }
+
+    this.persist(run);
 
     return {
       workflowId: run.id,
