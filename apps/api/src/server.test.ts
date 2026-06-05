@@ -1152,6 +1152,167 @@ describe("runner API", () => {
     );
   });
 
+  it("recovers interrupted workflow state when active jobs are recovered after API restart", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-recovery-test-"));
+    const stateRoot = join(demoRoot, ".mawo", "state");
+    tempRoots.push(demoRoot);
+    await mkdir(stateRoot, { recursive: true });
+    await writeFile(
+      join(stateRoot, "jobs.json"),
+      JSON.stringify(
+        [
+          {
+            id: "running-job",
+            workflowId: "workflow-restart",
+            status: "running",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:01.000Z",
+            startedAt: "2026-06-05T00:00:01.000Z"
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await writeFile(
+      join(stateRoot, "workflows.json"),
+      JSON.stringify(
+        [
+          {
+            id: "workflow-restart",
+            goal: "Recover interrupted workflow",
+            status: "running",
+            executionMode: "direct",
+            createdAt: "2026-06-05T00:00:00.000Z",
+            updatedAt: "2026-06-05T00:00:01.000Z",
+            tasks: [
+              {
+                id: "running-task",
+                title: "Running task",
+                agent: "shell",
+                command: `${node} -e "console.log('task')"`,
+                status: "running"
+              },
+              {
+                id: "waiting-task",
+                title: "Waiting task",
+                agent: "shell",
+                command: `${node} -e "console.log('waiting')"`,
+                status: "waiting"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "running-gate",
+                title: "Running gate",
+                command: `${node} -e "console.log('gate')"`,
+                status: "running"
+              }
+            ]
+          }
+        ],
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const app = buildApp(undefined, { demoRoot });
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: "/workflows/workflow-restart"
+    });
+    const jobResponse = await app.inject({
+      method: "GET",
+      url: "/jobs/running-job"
+    });
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: "/audit-events?type=job.recovered&workflowId=workflow-restart"
+    });
+    const retryResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/workflow-restart/retry"
+    });
+    const retry = retryResponse.json();
+
+    expect(jobResponse.statusCode).toBe(200);
+    expect(jobResponse.json()).toMatchObject({
+      id: "running-job",
+      status: "failed",
+      error: "Job was interrupted by API restart."
+    });
+    expect(workflowResponse.statusCode).toBe(200);
+    expect(workflowResponse.json()).toMatchObject({
+      id: "workflow-restart",
+      status: "aborted",
+      tasks: [
+        expect.objectContaining({
+          id: "running-task",
+          status: "canceled",
+          result: expect.objectContaining({
+            status: "canceled",
+            metadata: expect.objectContaining({
+              interrupted: "api_restart"
+            })
+          })
+        }),
+        expect.objectContaining({
+          id: "waiting-task",
+          status: "waiting"
+        })
+      ],
+      qualityGates: [
+        expect.objectContaining({
+          id: "running-gate",
+          status: "canceled",
+          result: expect.objectContaining({
+            status: "canceled",
+            metadata: expect.objectContaining({
+              interrupted: "api_restart"
+            })
+          })
+        })
+      ]
+    });
+    expect(auditResponse.statusCode).toBe(200);
+    expect(auditResponse.json()).toContainEqual(
+      expect.objectContaining({
+        type: "job.recovered",
+        actor: "system",
+        workflowId: "workflow-restart",
+        jobId: "running-job",
+        metadata: expect.objectContaining({
+          previousStatus: "running",
+          recoveredStatus: "failed",
+          workflowRecovered: "true",
+          previousWorkflowStatus: "running",
+          recoveredWorkflowStatus: "aborted"
+        })
+      })
+    );
+    expect(retryResponse.statusCode).toBe(200);
+    expect(retry).toMatchObject({
+      id: "workflow-restart",
+      status: "ready",
+      tasks: expect.arrayContaining([
+        expect.objectContaining({
+          id: "running-task",
+          status: "waiting"
+        })
+      ]),
+      qualityGates: expect.arrayContaining([
+        expect.objectContaining({
+          id: "running-gate",
+          status: "waiting"
+        })
+      ])
+    });
+    expect(retry.tasks[0]?.result).toBeUndefined();
+    expect(retry.qualityGates[0]?.result).toBeUndefined();
+  });
+
   it("registers repositories and restores them across API rebuilds", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-registry-test-"));
     const repoPath = await createCommittedRepo();

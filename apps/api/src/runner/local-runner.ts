@@ -178,6 +178,15 @@ export type WorkspaceCleanupPreview = {
   workspaces: WorkspaceCleanupPreviewItem[];
 };
 
+export type InterruptedWorkflowRecoveryResult = {
+  recovered: boolean;
+  workflowId: string;
+  previousStatus?: RunnerWorkflowStatus;
+  status?: RunnerWorkflowStatus;
+  recoveredTasks: string[];
+  recoveredGates: string[];
+};
+
 export type WorkflowRuntimeEvent = {
   type:
     | "workflow.task_started"
@@ -378,6 +387,62 @@ export class LocalRunner {
       workspaceCount: workspaces.length,
       existingCount: workspaces.filter((workspace) => workspace.exists).length,
       workspaces
+    };
+  }
+
+  recoverInterruptedWorkflow(
+    id: string,
+    reason: "api_restart" = "api_restart"
+  ): InterruptedWorkflowRecoveryResult {
+    const run = this.runs.get(id);
+
+    if (!run || run.status !== "running") {
+      return {
+        recovered: false,
+        workflowId: id,
+        previousStatus: run?.status,
+        status: run?.status,
+        recoveredTasks: [],
+        recoveredGates: []
+      };
+    }
+
+    const recoveredTasks: string[] = [];
+    const recoveredGates: string[] = [];
+
+    for (const task of run.tasks) {
+      if (task.status !== "running") {
+        continue;
+      }
+
+      task.status = "canceled";
+      task.result = createInterruptedResult(
+        task.command ?? task.instructions ?? "",
+        reason
+      );
+      recoveredTasks.push(task.id);
+    }
+
+    for (const gate of run.qualityGates) {
+      if (gate.status !== "running") {
+        continue;
+      }
+
+      gate.status = "canceled";
+      gate.result = createInterruptedResult(gate.command, reason);
+      recoveredGates.push(gate.id);
+    }
+
+    const previousStatus = run.status;
+    this.updateStatus(run, "aborted");
+
+    return {
+      recovered: true,
+      workflowId: run.id,
+      previousStatus,
+      status: run.status,
+      recoveredTasks,
+      recoveredGates
     };
   }
 
@@ -722,6 +787,28 @@ function createCanceledResult(command: string): ShellRunResult {
     finishedAt: now,
     metadata: {
       canceled: "true"
+    }
+  };
+}
+
+function createInterruptedResult(
+  command: string,
+  reason: "api_restart"
+): ShellRunResult {
+  const now = new Date().toISOString();
+
+  return {
+    command,
+    status: "canceled",
+    exitCode: 1,
+    stdout: "",
+    stderr: "Command interrupted by API restart.",
+    durationMs: 0,
+    startedAt: now,
+    finishedAt: now,
+    metadata: {
+      canceled: "true",
+      interrupted: reason
     }
   };
 }

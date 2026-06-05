@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { buildApp } from "../apps/api/src/server.js";
@@ -71,6 +71,64 @@ async function createCommittedRepo() {
   return repoPath;
 }
 
+async function seedInterruptedWorkflowState(root: string, node: string) {
+  const stateRoot = join(root, ".mawo", "state");
+  await mkdir(stateRoot, { recursive: true });
+  await writeFile(
+    join(stateRoot, "jobs.json"),
+    JSON.stringify(
+      [
+        {
+          id: "smoke-recovered-job",
+          workflowId: "smoke-recovered-workflow",
+          status: "running",
+          createdAt: "2026-06-05T00:00:00.000Z",
+          updatedAt: "2026-06-05T00:00:01.000Z",
+          startedAt: "2026-06-05T00:00:01.000Z",
+        },
+      ],
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  await writeFile(
+    join(stateRoot, "workflows.json"),
+    JSON.stringify(
+      [
+        {
+          id: "smoke-recovered-workflow",
+          goal: "Recover interrupted workflow smoke",
+          status: "running",
+          executionMode: "direct",
+          createdAt: "2026-06-05T00:00:00.000Z",
+          updatedAt: "2026-06-05T00:00:01.000Z",
+          tasks: [
+            {
+              id: "interrupted-task",
+              title: "Interrupted task",
+              agent: "shell",
+              command: `${node} -e "console.log('interrupted')"`,
+              status: "running",
+            },
+          ],
+          qualityGates: [
+            {
+              id: "interrupted-gate",
+              title: "Interrupted gate",
+              command: `${node} -e "console.log('gate')"`,
+              status: "running",
+            },
+          ],
+        },
+      ],
+      null,
+      2,
+    ),
+    "utf8",
+  );
+}
+
 async function removeTempRoot(root: string): Promise<void> {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
@@ -96,6 +154,7 @@ async function main() {
   const repositoryPath = await createCommittedRepo();
   const counterPath = join(smokeRoot, "attempts.txt").replace(/\\/g, "/");
   const node = JSON.stringify(process.execPath);
+  await seedInterruptedWorkflowState(smokeRoot, node);
   const app = buildApp(undefined, { demoRoot: smokeRoot });
 
   try {
@@ -134,6 +193,78 @@ async function main() {
       "Agent health leaked a command template.",
     );
     log("agent health endpoint reports configured agents without leaking templates");
+
+    const recoveredWorkflow = await request(
+      baseUrl,
+      "GET",
+      "/workflows/smoke-recovered-workflow",
+    );
+    assert(
+      recoveredWorkflow.status === 200,
+      `Recovered workflow returned ${recoveredWorkflow.status}`,
+    );
+    assert(
+      recoveredWorkflow.body.status === "aborted",
+      "Interrupted workflow was not recovered to aborted.",
+    );
+    const recoveredTasks = recoveredWorkflow.body.tasks as Array<JsonObject>;
+    const recoveredGates =
+      recoveredWorkflow.body.qualityGates as Array<JsonObject>;
+    assert(
+      recoveredTasks[0]?.status === "canceled" &&
+        (recoveredTasks[0]?.result as JsonObject | undefined)?.status ===
+          "canceled" &&
+        (
+          (recoveredTasks[0]?.result as JsonObject | undefined)
+            ?.metadata as JsonObject | undefined
+        )?.interrupted === "api_restart",
+      "Interrupted workflow task was not marked canceled with restart metadata.",
+    );
+    assert(
+      recoveredGates[0]?.status === "canceled" &&
+        (
+          (recoveredGates[0]?.result as JsonObject | undefined)
+            ?.metadata as JsonObject | undefined
+        )?.interrupted === "api_restart",
+      "Interrupted workflow gate was not marked canceled with restart metadata.",
+    );
+    const recoveredJob = await request(
+      baseUrl,
+      "GET",
+      "/jobs/smoke-recovered-job",
+    );
+    assert(
+      recoveredJob.body.status === "failed" &&
+        recoveredJob.body.error === "Job was interrupted by API restart.",
+      "Interrupted job was not marked failed after restart.",
+    );
+    const recoveryAudit = await request(
+      baseUrl,
+      "GET",
+      "/audit-events?type=job.recovered&workflowId=smoke-recovered-workflow",
+    );
+    assert(
+      (recoveryAudit.body as unknown as Array<JsonObject>).some((event) => {
+        const metadata = event.metadata as JsonObject | undefined;
+        return (
+          event.jobId === "smoke-recovered-job" &&
+          metadata?.workflowRecovered === "true" &&
+          metadata.recoveredWorkflowStatus === "aborted"
+        );
+      }),
+      "Recovery audit event did not include workflow recovery metadata.",
+    );
+    const recoveredRetry = await request(
+      baseUrl,
+      "POST",
+      "/workflows/smoke-recovered-workflow/retry",
+    );
+    assert(
+      recoveredRetry.status === 200 &&
+        recoveredRetry.body.status === "ready",
+      "Recovered interrupted workflow could not be retried.",
+    );
+    log("interrupted running workflow recovers to aborted and can be retried");
 
     const taskCommand = [
       `${node} -e "`,
@@ -925,6 +1056,7 @@ async function main() {
           workspaceCleanup: cleanup.body.status,
           secondWorkspaceCleanup: secondCleanup.body.status,
           workspacePreview: emptyWorkspacePreview.body.workspaceCount,
+          recoveredWorkflow: recoveredRetry.body.status,
           canceledJobId: cancelJobId,
         },
         null,

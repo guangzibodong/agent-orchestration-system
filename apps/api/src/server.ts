@@ -112,6 +112,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         stateFile: join(root, ".mawo", "state", "jobs.json")
       }),
     onJobRecovered: ({ original, recovered }) => {
+      const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
+        recovered.workflowId
+      );
       auditStore.append({
         type: "job.recovered",
         actor: "system",
@@ -120,7 +123,12 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         metadata: {
           previousStatus: original.status,
           recoveredStatus: recovered.status,
-          error: recovered.error ?? ""
+          error: recovered.error ?? "",
+          workflowRecovered: String(workflowRecovery.recovered),
+          previousWorkflowStatus: workflowRecovery.previousStatus ?? "",
+          recoveredWorkflowStatus: workflowRecovery.status ?? "",
+          recoveredTaskIds: workflowRecovery.recoveredTasks.join(","),
+          recoveredGateIds: workflowRecovery.recoveredGates.join(",")
         }
       });
     }
