@@ -581,9 +581,9 @@ function buildSectionRows(
       return [
         { label: "Goal status", value: buildValueStatus(requirement) },
         { label: "What changed", value: buildReviewChangedFiles(requirement) },
-        { label: "Time spent", value: "Pending run evidence" },
+        { label: "Time spent", value: buildValueReportTimeSpent(requirement) },
         { label: "Gates run", value: buildGateSummary(requirement) },
-        { label: "Residual risks", value: `${requirement.riskLevel} risk` },
+        { label: "Residual risks", value: buildValueReportResidualRisks(requirement) },
         { label: "Workflow reduction", value: "Manual review replaces raw log scanning" }
       ];
     case "Audit":
@@ -828,6 +828,93 @@ function buildValueReportEvidenceSource(requirement: RequirementSummary): string
     : "No workflow evidence linked";
 }
 
+function buildValueReportTimeSpent(requirement: RequirementSummary): string {
+  const durationMs = requirement.reviewEvidence?.totalDurationMs;
+
+  return durationMs === undefined
+    ? "Pending run evidence"
+    : formatDuration(durationMs);
+}
+
+function buildValueReportResidualRisks(requirement: RequirementSummary): string {
+  const gateResults = requirement.reviewEvidence?.gateResults ?? [];
+
+  if (!gateResults.length) {
+    return "Pending run evidence";
+  }
+
+  const gateIssues = gateResults.filter((gate) => isGateIssueStatus(gate.status));
+  const requiredIssues = gateIssues.filter((gate) => gate.required);
+  const optionalIssues = gateIssues.filter((gate) => !gate.required);
+
+  if (requiredIssues.length) {
+    return formatRequiredGateRisks(requiredIssues);
+  }
+
+  if (optionalIssues.length) {
+    return formatOptionalGateRisks(optionalIssues);
+  }
+
+  return "No blocking residual gate risks reported; manual review still required";
+}
+
+function isGateIssueStatus(status: string): boolean {
+  return status === "blocked" || status === "canceled" || status === "failed";
+}
+
+function formatRequiredGateRisks(
+  gates: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"]
+): string {
+  const label =
+    gates.length === 1
+      ? `Required gate ${gates[0]?.status ?? "issue"}: ${formatGateRiskTitle(gates[0])}`
+      : `${gates.length} required gate issues: ${gates
+          .map(formatGateRiskTitle)
+          .join(", ")}`;
+
+  return `${label}; ${gates.length === 1 ? "blocks" : "block"} merge approval`;
+}
+
+function formatOptionalGateRisks(
+  gates: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"]
+): string {
+  const noun = gates.length === 1 ? "issue" : "issues";
+
+  return `${gates.length} optional ${noun}: ${gates
+    .map(formatGateRiskLabel)
+    .join(", ")}; does not block merge approval`;
+}
+
+function formatGateRiskLabel(
+  gate:
+    NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"][number] |
+    undefined
+): string {
+  if (!gate) {
+    return "Gate issue";
+  }
+
+  const exitLabel =
+    gate.exitCode === undefined ? "" : ` (exit ${gate.exitCode})`;
+
+  return `${gate.title} ${gate.status}${exitLabel}`;
+}
+
+function formatGateRiskTitle(
+  gate:
+    NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"][number] |
+    undefined
+): string {
+  if (!gate) {
+    return "Gate issue";
+  }
+
+  const exitLabel =
+    gate.exitCode === undefined ? "" : ` (exit ${gate.exitCode})`;
+
+  return `${gate.title}${exitLabel}`;
+}
+
 function formatReportRecommendation(requirement: RequirementSummary): string {
   const recommendation = requirement.reviewEvidence?.reportRecommendation;
 
@@ -849,6 +936,27 @@ function formatReportRecommendation(requirement: RequirementSummary): string {
         .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
         .join(" ");
   }
+}
+
+function formatDuration(durationMs: number): string {
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    return "Pending run evidence";
+  }
+
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)}ms`;
+  }
+
+  const totalSeconds = durationMs / 1000;
+
+  if (totalSeconds < 60) {
+    return `${Number(totalSeconds.toFixed(1))}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.round(totalSeconds % 60);
+
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
 }
 
 function formatDetailList(values: string[]): string {

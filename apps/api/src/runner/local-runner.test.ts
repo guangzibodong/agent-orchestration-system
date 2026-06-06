@@ -173,6 +173,13 @@ describe("LocalRunner", () => {
     expect(report.summary).toContain("2/2 tasks passed");
     expect(report.summary).toContain("1/1 gates passed");
     expect(report.recommendation).toBe("ready_for_review");
+    expect(report.taskResults.map((task) => task.durationMs)).toEqual([
+      expect.any(Number),
+      expect.any(Number)
+    ]);
+    expect(report.gateResults.map((gate) => gate.durationMs)).toEqual([
+      expect.any(Number)
+    ]);
   });
 
   it("emits task and gate lifecycle events while running workflows", async () => {

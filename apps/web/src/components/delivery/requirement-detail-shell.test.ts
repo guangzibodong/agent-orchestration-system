@@ -33,6 +33,7 @@ const requirement: RequirementSummary = {
     evidenceSourceWorkflowId: "workflow-review",
     reportSummary: "1/1 tasks passed; 1/1 gates passed",
     reportRecommendation: "ready_for_review",
+    totalDurationMs: 1500,
     changedFiles: ["apps/web/src/app/page.tsx"],
     patchArtifactPaths: [
       "C:/mawo/artifacts/workflow-review/merge-candidate.patch"
@@ -180,6 +181,12 @@ describe("RequirementDetailShell", () => {
     expect(valueReportHtml).toContain("Review required before manual apply");
     expect(valueReportHtml).toContain("Evidence source");
     expect(valueReportHtml).toContain("Current workflow workflow-review");
+    expect(valueReportHtml).toContain("Time spent");
+    expect(valueReportHtml).toContain("1.5s");
+    expect(valueReportHtml).toContain("Residual risks");
+    expect(valueReportHtml).toContain(
+      "No blocking residual gate risks reported; manual review still required"
+    );
     expect(html).toContain("Changed files under review");
     expect(html).toContain("1 file changed");
     expect(html).toContain("apps/web/src/app/page.tsx");
@@ -239,9 +246,50 @@ describe("RequirementDetailShell", () => {
     expect(valueReportHtml).toContain("Goal not achieved; rework required");
     expect(valueReportHtml).toContain("Current workflow workflow-gate-failed");
     expect(valueReportHtml).toContain("Required gate failed");
+    expect(valueReportHtml).toContain(
+      "Required gate failed: Copy checks (exit 1); blocks merge approval"
+    );
     expect(html).not.toContain("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("Review required before manual apply");
+  });
+
+  it("keeps optional gate issues visible without blocking review in value reports", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          reviewEvidence: {
+            ...requirement.reviewEvidence!,
+            gateResults: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                status: "passed",
+                command: "npm test",
+                required: true,
+                exitCode: 0,
+              },
+              {
+                id: "gate-visual",
+                title: "Visual smoke",
+                status: "failed",
+                command: "npm run smoke:ui",
+                required: false,
+                exitCode: 1,
+              },
+            ],
+          },
+        },
+        artifacts,
+      }),
+    );
+    const valueReportHtml = extractValueReportSection(html);
+
+    expect(valueReportHtml).toContain(
+      "1 optional issue: Visual smoke failed (exit 1); does not block merge approval"
+    );
+    expect(valueReportHtml).not.toContain("medium risk");
   });
 
   it("shows an operator review acceptance surface for review-ready work", () => {

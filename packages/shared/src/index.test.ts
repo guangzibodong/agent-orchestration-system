@@ -140,14 +140,24 @@ describe("workflowRunSchema", () => {
           promptFile: "C:/workspace/.mawo-prompts/fake-agent.prompt.js",
           exitCode: 0,
           stdout: "done",
-          stderr: ""
+          stderr: "",
+          durationMs: 1200
         }
       ],
-      gateResults: []
+      gateResults: [
+        {
+          id: "gate_1",
+          title: "Unit tests",
+          status: "passed",
+          durationMs: 300
+        }
+      ]
     });
 
     expect(run.tasks[0]?.result?.metadata?.agentId).toBe("fake-agent");
     expect(report.taskResults[0]?.agentLabel).toBe("Fake Agent");
+    expect(report.taskResults[0]?.durationMs).toBe(1200);
+    expect(report.gateResults[0]?.durationMs).toBe(300);
   });
 
   it("keeps persisted artifact paths on reports", () => {

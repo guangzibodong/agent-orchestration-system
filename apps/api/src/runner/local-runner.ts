@@ -119,6 +119,7 @@ export type RunReport = {
     exitCode?: number;
     stdout?: string;
     stderr?: string;
+    durationMs?: number;
     workspacePath?: string;
     branch?: string;
     gitStatus?: string;
@@ -136,6 +137,7 @@ export type RunReport = {
     exitCode?: number;
     stdout?: string;
     stderr?: string;
+    durationMs?: number;
     stdoutArtifactPath?: string;
     stderrArtifactPath?: string;
   }>;
@@ -833,6 +835,7 @@ export class LocalRunner {
         exitCode: task.result?.exitCode,
         stdout: task.result?.stdout,
         stderr: task.result?.stderr,
+        durationMs: task.result?.durationMs,
         workspacePath: task.workspace?.path,
         branch: task.workspace?.branch,
         gitStatus: task.diff?.status,
@@ -845,7 +848,8 @@ export class LocalRunner {
         required: isRequiredQualityGate(gate),
         exitCode: gate.result?.exitCode,
         stdout: gate.result?.stdout,
-        stderr: gate.result?.stderr
+        stderr: gate.result?.stderr,
+        durationMs: gate.result?.durationMs
       }))
     };
 

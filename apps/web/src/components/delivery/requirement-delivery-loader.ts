@@ -343,6 +343,7 @@ function buildRequirementReviewEvidence(
     ...(report?.recommendation
       ? { reportRecommendation: report.recommendation }
       : {}),
+    ...buildReportDurationEvidence(report),
     changedFiles,
     patchArtifactPaths,
     gateResults:
@@ -377,6 +378,29 @@ function buildRequirementReviewEvidence(
           }
         }
       : {})
+  };
+}
+
+function buildReportDurationEvidence(
+  report: RunReport | undefined
+): Pick<RequirementReviewEvidence, "totalDurationMs"> {
+  if (!report) {
+    return {};
+  }
+
+  const durations = [
+    ...report.taskResults.map((task) => task.durationMs),
+    ...report.gateResults.map((gate) => gate.durationMs)
+  ].filter((duration): duration is number =>
+    duration !== undefined && Number.isFinite(duration) && duration >= 0
+  );
+
+  if (!durations.length) {
+    return {};
+  }
+
+  return {
+    totalDurationMs: durations.reduce((total, duration) => total + duration, 0)
   };
 }
 

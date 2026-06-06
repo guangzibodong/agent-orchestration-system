@@ -387,7 +387,8 @@ describe("requirement delivery loader", () => {
               stderrArtifactPath:
                 "C:/mawo/artifacts/workflow-linked/tasks/task-1/stderr.txt",
               patchArtifactPath:
-                "C:/mawo/artifacts/workflow-linked/tasks/task-1/patch.diff"
+                "C:/mawo/artifacts/workflow-linked/tasks/task-1/patch.diff",
+              durationMs: 1200
             }
           ],
           gateResults: [
@@ -397,7 +398,8 @@ describe("requirement delivery loader", () => {
               status: "passed",
               exitCode: 0,
               stdoutArtifactPath:
-                "C:/mawo/artifacts/workflow-linked/gates/gate-1/stdout.txt"
+                "C:/mawo/artifacts/workflow-linked/gates/gate-1/stdout.txt",
+              durationMs: 300
             }
           ]
         };
@@ -441,6 +443,7 @@ describe("requirement delivery loader", () => {
     );
     expect(model.requirements[0]?.reviewEvidence).toMatchObject({
       reportSummary: "1/1 tasks passed; 1/1 gates passed",
+      totalDurationMs: 1500,
       mergeCandidate: {
         status: "ready",
         summary: "Merge candidate ready with 2 changed files",

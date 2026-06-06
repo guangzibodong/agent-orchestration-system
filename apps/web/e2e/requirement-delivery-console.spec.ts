@@ -357,7 +357,8 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(detail.getByLabel("Changed files under review")).toContainText(
       "packages/shared/src/index.ts",
     );
-    const valueReport = detail.getByLabel("Value report summary");
+    const valueReportSection = detail.locator("#requirement-detail-value-report");
+    const valueReport = valueReportSection.getByLabel("Value report summary");
     await expect(valueReport).toContainText("Report recommendation");
     await expect(valueReport).toContainText("Ready for review");
     await expect(valueReport).toContainText(
@@ -368,6 +369,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await expect(valueReport).toContainText(
       "Current workflow workflow-needs-review",
+    );
+    await expect(valueReportSection).toContainText("Time spent");
+    await expect(valueReportSection).toContainText("1.5s");
+    await expect(valueReportSection).toContainText(
+      "1 optional issue: Visual smoke failed (exit 1); does not block merge approval",
     );
     await expect(valueReport).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(detail).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
@@ -442,6 +448,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Goal not achieved; rework required",
     );
     await expect(failedValueReport).toContainText("Required gate failed");
+    await expect(detail.locator("#requirement-detail-value-report")).toContainText(
+      "Required gate failed: Copy checks (exit 1); blocks merge approval",
+    );
     await expect(failedValueReport).toContainText(
       "Current workflow workflow-gate-failed",
     );
@@ -1814,6 +1823,7 @@ const requirementEvidenceReport = {
         "C:/mawo/artifacts/workflow-needs-review/tasks/task-view/stderr.txt",
       patchArtifactPath:
         "C:/mawo/artifacts/workflow-needs-review/tasks/task-view/patch.diff",
+      durationMs: 1200,
     },
   ],
   gateResults: [
@@ -1823,6 +1833,7 @@ const requirementEvidenceReport = {
       status: "passed",
       stdoutArtifactPath:
         "C:/mawo/artifacts/workflow-needs-review/gates/gate-view/stdout.txt",
+      durationMs: 300,
     },
     {
       id: "gate-visual",

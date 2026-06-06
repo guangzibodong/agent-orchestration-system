@@ -58,6 +58,7 @@ export type RequirementReviewEvidence = {
   evidenceSourceWorkflowId?: string;
   reportSummary?: string;
   reportRecommendation?: string;
+  totalDurationMs?: number;
   changedFiles: string[];
   patchArtifactPaths: string[];
   gateResults: Array<{
