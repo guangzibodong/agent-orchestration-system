@@ -22,6 +22,12 @@ type FinishClaimedJob = (input: {
   workerId: string;
 }) => Promise<WorkflowJob | undefined>;
 
+type ClaimNextQueuedJob = (input: {
+  workerId: string;
+  now: Date;
+  leaseExpiresAt: Date;
+}) => Promise<WorkflowJob | undefined>;
+
 function createJobClient() {
   const rows: JobRow[] = [];
 
@@ -34,12 +40,12 @@ function createJobClient() {
         );
       },
       async findFirst(args: {
-        where: { status: string };
+        where: JobWhere;
         orderBy: { createdAt: "asc" };
       }) {
         return (
           [...rows]
-            .filter((row) => row.status === args.where.status)
+            .filter((row) => matchesWhere(row, args.where))
             .sort(
               (left, right) =>
                 toTime(left.createdAt) - toTime(right.createdAt)
@@ -50,16 +56,13 @@ function createJobClient() {
         return rows.find((row) => row.id === args.where.id) ?? null;
       },
       async updateMany(args: {
-        where: { id: string; status: string; lockedBy?: string };
+        where: JobWhere;
         data: Partial<Omit<JobRow, "attempts">> & {
           attempts?: { increment: number };
         };
       }) {
-        const row = rows.find(
-          (candidate) =>
-            candidate.id === args.where.id &&
-            candidate.status === args.where.status &&
-            (!args.where.lockedBy || candidate.lockedBy === args.where.lockedBy)
+        const row = rows.find((candidate) =>
+          matchesWhere(candidate, args.where)
         );
 
         if (!row) {
@@ -94,6 +97,51 @@ function createJobClient() {
       }
     }
   };
+}
+
+type JobWhere = {
+  id?: string;
+  status?: string;
+  lockedBy?: string;
+  leaseExpiresAt?: {
+    lte: Date;
+  };
+  OR?: Array<{
+    status: string;
+    leaseExpiresAt?: {
+      lte: Date;
+    };
+  }>;
+};
+
+function matchesWhere(row: JobRow, where: JobWhere): boolean {
+  if (where.OR) {
+    return where.OR.some((condition) => matchesWhere(row, condition));
+  }
+
+  if (where.id && row.id !== where.id) {
+    return false;
+  }
+
+  if (where.status && row.status !== where.status) {
+    return false;
+  }
+
+  if (where.lockedBy && row.lockedBy !== where.lockedBy) {
+    return false;
+  }
+
+  if (where.leaseExpiresAt) {
+    if (!row.leaseExpiresAt) {
+      return false;
+    }
+
+    if (toTime(row.leaseExpiresAt) > where.leaseExpiresAt.lte.getTime()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function toTime(value: Date | string): number {
@@ -212,6 +260,92 @@ describe("PrismaJobStore", () => {
         })
       ])
     );
+  });
+
+  it("reclaims an expired running job lease for another worker", async () => {
+    const client = createJobClient();
+    client.rows.push({
+      id: "job-expired",
+      workflowRunId: "workflow-expired",
+      status: "running",
+      error: "worker exited before finalizing",
+      createdAt: new Date("2026-06-05T00:01:00.000Z"),
+      updatedAt: new Date("2026-06-05T00:02:00.000Z"),
+      startedAt: new Date("2026-06-05T00:02:00.000Z"),
+      finishedAt: null,
+      lockedBy: "worker-a",
+      lockedAt: new Date("2026-06-05T00:02:00.000Z"),
+      leaseExpiresAt: new Date("2026-06-05T00:05:00.000Z"),
+      attempts: 1
+    });
+    const store = new PrismaJobStore(client);
+    const claimNextQueuedJob = (
+      store as unknown as {
+        claimNextQueuedJob?: ClaimNextQueuedJob;
+      }
+    ).claimNextQueuedJob;
+
+    expect(claimNextQueuedJob).toEqual(expect.any(Function));
+
+    const claimed = await claimNextQueuedJob?.call(store, {
+      workerId: "worker-b",
+      now: new Date("2026-06-05T00:06:00.000Z"),
+      leaseExpiresAt: new Date("2026-06-05T00:11:00.000Z")
+    });
+
+    expect(claimed).toMatchObject({
+      id: "job-expired",
+      workflowId: "workflow-expired",
+      status: "running",
+      startedAt: "2026-06-05T00:06:00.000Z"
+    });
+    expect(client.rows[0]).toMatchObject({
+      id: "job-expired",
+      status: "running",
+      error: null,
+      lockedBy: "worker-b",
+      lockedAt: new Date("2026-06-05T00:06:00.000Z"),
+      leaseExpiresAt: new Date("2026-06-05T00:11:00.000Z"),
+      attempts: 2
+    });
+  });
+
+  it("does not reclaim a running job before its lease expires", async () => {
+    const client = createJobClient();
+    client.rows.push({
+      id: "job-active",
+      workflowRunId: "workflow-active",
+      status: "running",
+      error: null,
+      createdAt: new Date("2026-06-05T00:01:00.000Z"),
+      updatedAt: new Date("2026-06-05T00:02:00.000Z"),
+      startedAt: new Date("2026-06-05T00:02:00.000Z"),
+      finishedAt: null,
+      lockedBy: "worker-a",
+      lockedAt: new Date("2026-06-05T00:02:00.000Z"),
+      leaseExpiresAt: new Date("2026-06-05T00:07:00.000Z"),
+      attempts: 1
+    });
+    const store = new PrismaJobStore(client);
+    const claimNextQueuedJob = (
+      store as unknown as {
+        claimNextQueuedJob?: ClaimNextQueuedJob;
+      }
+    ).claimNextQueuedJob;
+
+    await expect(
+      claimNextQueuedJob?.call(store, {
+        workerId: "worker-b",
+        now: new Date("2026-06-05T00:06:00.000Z"),
+        leaseExpiresAt: new Date("2026-06-05T00:11:00.000Z")
+      })
+    ).resolves.toBeUndefined();
+    expect(client.rows[0]).toMatchObject({
+      id: "job-active",
+      lockedBy: "worker-a",
+      leaseExpiresAt: new Date("2026-06-05T00:07:00.000Z"),
+      attempts: 1
+    });
   });
 
   it("renews a running job lease only for the owning worker", async () => {

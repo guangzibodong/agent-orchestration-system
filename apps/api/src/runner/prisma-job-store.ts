@@ -21,6 +21,21 @@ type PrismaWorkflowJobUpdate = Omit<
   "id" | "attempts"
 >;
 
+type PrismaDateTimeFilter = {
+  lte: Date;
+};
+
+type PrismaWorkflowJobWhere = {
+  id?: string;
+  status?: string;
+  lockedBy?: string;
+  leaseExpiresAt?: PrismaDateTimeFilter;
+  OR?: Array<{
+    status: string;
+    leaseExpiresAt?: PrismaDateTimeFilter;
+  }>;
+};
+
 export type ClaimNextQueuedJobInput = {
   workerId: string;
   now: Date;
@@ -44,9 +59,7 @@ export type PrismaJobStoreClient = {
       };
     }): Promise<PrismaWorkflowJobRow[]>;
     findFirst(args: {
-      where: {
-        status: string;
-      };
+      where: PrismaWorkflowJobWhere;
       orderBy: {
         createdAt: "asc";
       };
@@ -57,11 +70,7 @@ export type PrismaJobStoreClient = {
       };
     }): Promise<PrismaWorkflowJobRow | null>;
     updateMany(args: {
-      where: {
-        id: string;
-        status: string;
-        lockedBy?: string;
-      };
+      where: PrismaWorkflowJobWhere;
       data: Partial<PrismaWorkflowJobUpdate> & {
         attempts?: {
           increment: number;
@@ -133,7 +142,17 @@ export class PrismaJobStore {
   ): Promise<WorkflowJob | undefined> {
     const candidate = await this.client.workflowJob.findFirst({
       where: {
-        status: "queued"
+        OR: [
+          {
+            status: "queued"
+          },
+          {
+            status: "running",
+            leaseExpiresAt: {
+              lte: input.now
+            }
+          }
+        ]
       },
       orderBy: {
         createdAt: "asc"
@@ -145,10 +164,7 @@ export class PrismaJobStore {
     }
 
     const claimed = await this.client.workflowJob.updateMany({
-      where: {
-        id: candidate.id,
-        status: "queued"
-      },
+      where: claimableWhere(candidate, input.now),
       data: {
         workflowRunId: candidate.workflowRunId,
         status: "running",
@@ -226,6 +242,26 @@ export class PrismaJobStore {
 
     return await this.getJob(input.job.id);
   }
+}
+
+function claimableWhere(
+  candidate: PrismaWorkflowJobRow,
+  now: Date
+): PrismaWorkflowJobWhere {
+  if (candidate.status === "running") {
+    return {
+      id: candidate.id,
+      status: "running",
+      leaseExpiresAt: {
+        lte: now
+      }
+    };
+  }
+
+  return {
+    id: candidate.id,
+    status: "queued"
+  };
 }
 
 function toWorkflowJobRow(job: WorkflowJob): PrismaWorkflowJobRow {

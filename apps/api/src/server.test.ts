@@ -17,6 +17,21 @@ import { LocalRunner, type LocalWorkflowRun } from "./runner/local-runner.js";
 import { ShellAdapter } from "./runner/shell-adapter.js";
 import type { WorkflowJob } from "./runner/workflow-job-queue.js";
 
+type PrismaWorkflowJobWhere = {
+  id?: string;
+  status?: string;
+  lockedBy?: string;
+  leaseExpiresAt?: {
+    lte: Date;
+  };
+  OR?: Array<{
+    status: string;
+    leaseExpiresAt?: {
+      lte: Date;
+    };
+  }>;
+};
+
 const tempRoots: string[] = [];
 const node = JSON.stringify(process.execPath);
 const shell = new ShellAdapter();
@@ -35,6 +50,42 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function matchesWorkflowJobWhere(
+  row: PrismaWorkflowJobRow,
+  where: PrismaWorkflowJobWhere
+): boolean {
+  if (where.OR) {
+    return where.OR.some((condition) => matchesWorkflowJobWhere(row, condition));
+  }
+
+  if (where.id && row.id !== where.id) {
+    return false;
+  }
+
+  if (where.status && row.status !== where.status) {
+    return false;
+  }
+
+  if (where.lockedBy !== undefined && row.lockedBy !== where.lockedBy) {
+    return false;
+  }
+
+  if (where.leaseExpiresAt) {
+    if (!row.leaseExpiresAt) {
+      return false;
+    }
+
+    if (
+      new Date(row.leaseExpiresAt).getTime() >
+      where.leaseExpiresAt.lte.getTime()
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function createEmptyPrismaStateClient() {
@@ -87,9 +138,13 @@ function createMutablePrismaStateClient(input: {
             new Date(right.updatedAt).getTime()
         )
       ),
-      findFirst: vi.fn(async (args: { where: { status: string } }) =>
+      findFirst: vi.fn(
+        async (args: {
+          where: PrismaWorkflowJobWhere;
+          orderBy: { createdAt: "asc" };
+        }) =>
         [...workflowJobs]
-          .filter((job) => job.status === args.where.status)
+          .filter((job) => matchesWorkflowJobWhere(job, args.where))
           .sort(
             (left, right) =>
               new Date(left.createdAt).getTime() -
@@ -101,17 +156,13 @@ function createMutablePrismaStateClient(input: {
       ),
       updateMany: vi.fn(
         async (args: {
-          where: { id: string; status: string; lockedBy?: string };
+          where: PrismaWorkflowJobWhere;
           data: Partial<Omit<PrismaWorkflowJobRow, "id" | "attempts">> & {
             attempts?: { increment: number };
           };
         }) => {
-          const index = workflowJobs.findIndex(
-            (job) =>
-              job.id === args.where.id &&
-              job.status === args.where.status &&
-              (args.where.lockedBy === undefined ||
-                job.lockedBy === args.where.lockedBy)
+          const index = workflowJobs.findIndex((job) =>
+            matchesWorkflowJobWhere(job, args.where)
           );
 
           if (index < 0) {
