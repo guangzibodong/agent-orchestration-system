@@ -3,6 +3,8 @@
 日期：2026-06-04  
 当前状态：v0.3 Agent Adapter 原型已跑通
 
+> 2026-06-06 更新：本文件保留为技术生产化参考。产品源头已经切换到 `docs/product/PRD.md`、`docs/product/ROLE_WORKFLOW.md`、`docs/product/USER_JOURNEYS.md` 和 `docs/product/UI_INFORMATION_ARCHITECTURE.md`。后续工程实现必须先过需求、UI/API 行为、验收标准和测试计划闸口。
+
 ## 1. 当前已经具备的能力
 
 当前系统已经证明了第一条关键链路：

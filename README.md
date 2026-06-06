@@ -6,6 +6,22 @@
 
 ![System architecture](docs/assets/architecture.svg)
 
+## 当前产品方向
+
+我们不再把首发价值表达成宽泛的“多 Agent 编排”。更清晰的首发定位是：
+
+> 本地代码 Agent 的安全验收台：把真实仓库里的 AI agent 改动变成隔离、可验收、可重跑、可审计、可合并的 patch。
+
+后续开发采用需求先行流程：先确认用户问题和 PRD，再设计 UI 信息架构，最后进入工程实现。新的产品文档在 `docs/product/`：
+
+- `docs/product/PRD.md`：定位、ICP、MVP 范围、成功指标和上线验收。
+- `docs/product/ROLE_WORKFLOW.md`：项目经理、产品经理、用户代表、UI/UX、工程、QA、运维的协作闸口。
+- `docs/product/USER_JOURNEYS.md`：真实 repo 成功、gate 失败、retry、评审交付、unsafe repo 等用户旅程。
+- `docs/product/UI_INFORMATION_ARCHITECTURE.md`：从 Run Console 转为“需求交付控制台”的第一屏和页面结构。
+- `docs/product/FEATURE_BRIEF_TEMPLATE.md`：任何新功能进入开发前必须填写的模板。
+
+![Product-first delivery loop](docs/assets/product-first-delivery-loop.svg)
+
 ## 这个项目解决什么问题
 
 现在 AI coding agent 已经很多，比如 Claude Code、Codex、Cursor。单个 agent 能完成不少任务，但复杂项目里会遇到这些问题：

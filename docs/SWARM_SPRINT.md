@@ -1,60 +1,108 @@
-# MAWO 24-Hour Launch Sprint
+# MAWO Product-First Sprint Board
 
-Started: 2026-06-05
+Started: 2026-06-06
+Status: active working board
 
-This file is the coordination board for the multi-role sprint. It keeps agent
-ownership explicit so parallel work can move fast without overwriting each
-other.
+This board supersedes the old implementation-first 24-hour sprint. The product
+is now driven by requirements, UI design, and acceptance evidence before code.
 
-## Active Automation
+## Active Principle
 
-- Automation id: `agent`
-- Cadence: every 15 minutes
-- Duration: 96 runs, about 24 hours
-- Purpose: continue implementation, verification, and integration until the
-  system is materially closer to launch.
+> No user value, no requirement brief, no UI/API behavior, no acceptance
+> criteria, no engineering work.
 
-## Role Assignments
+The current product wedge is not "multi-agent orchestration" as a broad
+category. The launch wedge is:
 
-| Role | Agent | Ownership | Current Objective |
-| --- | --- | --- | --- |
-| Backend | Kuhn | `apps/api/src/**`, API parts of `packages/shared/src/**` | Add job/workflow cancel support with tests |
-| Frontend | Godel | `apps/web/src/**` logic | Add cancel action and clearer job state handling |
-| UI | Ohm | `apps/web/src/app/globals.css` and display-only UI polish | Tighten responsive layout and overflow behavior |
-| QA | Averroes | `scripts/**`, optional test files | Turn manual HTTP/UI smoke checks into repeatable scripts |
-| Product | Rawls | `docs/**` only | Define fastest launch scope, acceptance criteria, risk tradeoffs |
-| Operations | Meitner | `docs/**`, `.env.example`, light deploy config | Prepare launch/runbook checklist |
-| Lead Integrator | Parent thread | Integration, conflict resolution, verification | Merge role outputs, run full gates, pick next gap |
+> A local coding-agent safety and acceptance console that turns real repository
+> changes into isolated, gated, auditable, merge-ready patches.
 
-## Launch-Critical Capability Backlog
+## Current Role Assignments
 
-1. Cancel queued/running jobs.
-2. Durable audit events for create/run/retry/cancel/review.
-3. Repeatable smoke scripts for real repo workflow paths.
-4. Worktree cleanup and retention policy.
-5. Repository registry with health/dirty-state checks.
-6. Real CLI agent detection and command-template diagnostics.
-7. Deployment/runbook with backup and rollback steps.
-8. Review/merge candidate hardening and artifact browsing.
+| Role | Responsibility | Current Objective |
+| --- | --- | --- |
+| Project Manager | Delivery flow, dependencies, gate discipline | Keep slices from entering development before ready |
+| Product Manager | PRD, scope, non-goals, metrics | Keep P0 focused on real repo trust loop |
+| User Representative | Buyer objections and trial proof | Challenge value and require real repo evidence |
+| UI/UX Designer | Journey, IA, screens, states | Move console from run-first to requirement-first |
+| Tech Lead | Architecture and testable plan | Translate approved briefs into bounded engineering slices |
+| Backend | API, runner, queue, persistence, adapters | Implement only approved backend slices |
+| Frontend | Console flows and states | Implement only approved UI slices |
+| QA | Test plan and verification evidence | Cover success, failure, retry, restart, and smoke |
+| Operations | Env, deployment, readiness, rollback | Keep runbook and deployment safety current |
+| Lead Integrator | Final integration and gates | Resolve conflicts and run full verification |
 
-## Definition of Done for Each Slice
+## Product Documents
 
-- Failing test or explicit verification exists before implementation.
-- Targeted tests pass after implementation.
-- Shared schema and API docs stay in sync when contracts change.
-- UI states are verified for loading, success, failure, and disabled actions.
-- Full gates run before reporting a slice complete:
+| Document | Purpose |
+| --- | --- |
+| `docs/product/PRD.md` | Product positioning, target users, scope, metrics, launch acceptance |
+| `docs/product/ROLE_WORKFLOW.md` | Role responsibilities, stage gates, Definition of Ready/Done |
+| `docs/product/USER_JOURNEYS.md` | Success, failure, retry, review, and unsafe-repo journeys |
+| `docs/product/UI_INFORMATION_ARCHITECTURE.md` | First-screen IA, requirement detail pages, components, UI acceptance |
+| `docs/product/FEATURE_BRIEF_TEMPLATE.md` | Template required before engineering slices |
+| `docs/product/DECISION_LOG.md` | Product decisions and rationale |
+
+## Highest-Value Approved Candidate Slice
+
+The next slice should be briefed before coding:
+
+> Real repo success -> gate failure -> retry success -> merge candidate.
+
+This proves the customer-visible trust loop:
+
+1. A real repo is selected and safety-checked.
+2. A requirement delivery ticket is created.
+3. Tasks run in isolated worktrees.
+4. A required gate fails and blocks merge-ready status.
+5. Retry supersedes stale execution state.
+6. A passing run generates a merge candidate with evidence and `git apply`.
+
+## Definition Of Ready
+
+- Target customer and problem are named.
+- User flow covers success and failure.
+- UI/API behavior is specified.
+- Scope and non-goals are explicit.
+- Acceptance criteria are testable.
+- Test plan includes success, failure, retry, and persistence when relevant.
+- Owner and write scope are assigned.
+
+## Definition Of Done
+
+- Implementation matches approved brief.
+- Targeted tests pass.
+- Full gates pass before claiming completion:
   - `npm run test`
   - `npm run typecheck`
   - `npm run lint`
   - `npm run build`
-- Any API behavior change gets an HTTP smoke check.
+- API changes include HTTP smoke evidence.
+- UI changes include browser smoke or screenshot evidence.
+- Docs and decision log are updated when behavior or positioning changes.
 
-## Integration Rules
+## Backlog Discipline
 
-- Do not revert other roles' changes.
-- Prefer small, bounded patches over large rewrites.
-- Keep API contracts explicit in `packages/shared`.
-- Keep productionization ahead of decorative UI work.
-- If conflicts appear, preserve tested behavior first, then improve ergonomics.
+P0:
 
+- Requirement delivery ticket model.
+- Requirement-first console.
+- Repository safety status on first screen.
+- Gate failure and retry proof loop.
+- Merge candidate evidence panel.
+
+P1:
+
+- Worktree cleanup UI.
+- Artifact browser.
+- Agent configuration diagnostics.
+- Postgres queue hardening.
+- Viewer/operator review workflow.
+
+P2:
+
+- Automatic task decomposition.
+- Full DAG editor.
+- Multi-agent competition.
+- Automatic PR creation.
+- Cloud multi-tenant control plane.

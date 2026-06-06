@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="520" viewBox="0 0 1120 520" role="img" aria-labelledby="title desc">
+  <title id="title">Product-first delivery loop</title>
+  <desc id="desc">A product-first workflow from user problem to requirement, UI, engineering, gates, review, and value report.</desc>
+  <rect width="1120" height="520" fill="#f7f8fb"/>
+  <rect x="32" y="32" width="1056" height="456" rx="16" fill="#ffffff" stroke="#d9dee8"/>
+  <text x="64" y="82" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#172033">Product-first delivery loop</text>
+  <text x="64" y="114" font-family="Arial, sans-serif" font-size="15" fill="#5d6678">Requirement and UI gates come before engineering execution.</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#526071"/>
+    </marker>
+    <style>
+      .card { fill: #ffffff; stroke: #cbd3df; stroke-width: 1.5; }
+      .label { font-family: Arial, sans-serif; font-size: 17px; font-weight: 700; fill: #172033; }
+      .body { font-family: Arial, sans-serif; font-size: 13px; fill: #5d6678; }
+      .tag { font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #176b5d; }
+      .line { stroke: #526071; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="card" x="64" y="164" width="150" height="122" rx="10"/>
+  <text class="tag" x="84" y="194">USER</text>
+  <text class="label" x="84" y="224">Problem</text>
+  <text class="body" x="84" y="250">Pain, current</text>
+  <text class="body" x="84" y="270">workaround, proof</text>
+
+  <path class="line" d="M 214 225 L 270 225"/>
+
+  <rect class="card" x="270" y="164" width="150" height="122" rx="10"/>
+  <text class="tag" x="290" y="194">PRODUCT</text>
+  <text class="label" x="290" y="224">Requirement</text>
+  <text class="body" x="290" y="250">Scope, non-goals,</text>
+  <text class="body" x="290" y="270">acceptance</text>
+
+  <path class="line" d="M 420 225 L 476 225"/>
+
+  <rect class="card" x="476" y="164" width="150" height="122" rx="10"/>
+  <text class="tag" x="496" y="194">UI/UX</text>
+  <text class="label" x="496" y="224">Journey</text>
+  <text class="body" x="496" y="250">Screens, states,</text>
+  <text class="body" x="496" y="270">next actions</text>
+
+  <path class="line" d="M 626 225 L 682 225"/>
+
+  <rect class="card" x="682" y="164" width="150" height="122" rx="10"/>
+  <text class="tag" x="702" y="194">ENGINEERING</text>
+  <text class="label" x="702" y="224">Build</text>
+  <text class="body" x="702" y="250">API, runner, UI,</text>
+  <text class="body" x="702" y="270">persistence</text>
+
+  <path class="line" d="M 832 225 L 888 225"/>
+
+  <rect class="card" x="888" y="164" width="150" height="122" rx="10"/>
+  <text class="tag" x="908" y="194">QA</text>
+  <text class="label" x="908" y="224">Gates</text>
+  <text class="body" x="908" y="250">Success, failure,</text>
+  <text class="body" x="908" y="270">retry, restart</text>
+
+  <path class="line" d="M 963 286 C 963 348, 782 348, 782 348"/>
+
+  <rect class="card" x="624" y="336" width="158" height="96" rx="10"/>
+  <text class="tag" x="644" y="364">REVIEW</text>
+  <text class="label" x="644" y="394">Merge candidate</text>
+  <text class="body" x="644" y="418">Patch plus evidence</text>
+
+  <path class="line" d="M 624 384 C 450 384, 318 336, 318 286"/>
+
+  <rect x="264" y="334" width="210" height="98" rx="10" fill="#eef8f5" stroke="#95d2c6"/>
+  <text x="286" y="366" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#176b5d">Learning loop</text>
+  <text x="286" y="394" font-family="Arial, sans-serif" font-size="13" fill="#3c6f66">If value, usability, or trust fails,</text>
+  <text x="286" y="414" font-family="Arial, sans-serif" font-size="13" fill="#3c6f66">return to requirement and UI gates.</text>
+</svg>
