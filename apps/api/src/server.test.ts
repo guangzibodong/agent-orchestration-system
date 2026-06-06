@@ -891,6 +891,110 @@ describe("runner API", () => {
     expect(snapshot.workerHealth.summary.healthyWorkers).toBe(1);
   });
 
+  it("refreshes persisted workflow state before building operations snapshots", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-operations-refresh-test-"));
+    tempRoots.push(demoRoot);
+    const now = new Date().toISOString();
+    let storedWorkflows: LocalWorkflowRun[] = [
+      {
+        id: "workflow-refresh",
+        goal: "Refresh before snapshot",
+        status: "ready",
+        executionMode: "direct",
+        repositoryId: "repo-refresh",
+        createdAt: now,
+        updatedAt: now,
+        tasks: [],
+        qualityGates: []
+      }
+    ];
+    const runner = new LocalRunner(undefined, {
+      runStore: {
+        list: vi.fn(async () => storedWorkflows),
+        save: vi.fn()
+      }
+    });
+    const app = buildApp(runner, {
+      demoRoot,
+      env: {
+        MAWO_WORKER_STALE_MS: "60000"
+      }
+    });
+
+    await app.ready();
+    expect(runner.getWorkflow("workflow-refresh")?.status).toBe("ready");
+
+    storedWorkflows = [
+      {
+        ...storedWorkflows[0]!,
+        status: "needs_review",
+        updatedAt: new Date().toISOString()
+      }
+    ];
+    const response = await app.inject({
+      method: "GET",
+      url: "/operations/snapshot?repositoryId=repo-refresh"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().summary.needsReviewWorkflows).toBe(1);
+  });
+
+  it("refreshes persisted workflow state before review decisions", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-review-refresh-test-"));
+    tempRoots.push(demoRoot);
+    const now = new Date().toISOString();
+    let storedWorkflows: LocalWorkflowRun[] = [
+      {
+        id: "workflow-review-refresh",
+        goal: "Review after external worker",
+        status: "ready",
+        executionMode: "direct",
+        repositoryId: "repo-review-refresh",
+        createdAt: now,
+        updatedAt: now,
+        tasks: [],
+        qualityGates: []
+      }
+    ];
+    const runner = new LocalRunner(undefined, {
+      runStore: {
+        list: vi.fn(async () => storedWorkflows),
+        save: vi.fn((run: LocalWorkflowRun) => {
+          storedWorkflows = [run];
+        })
+      }
+    });
+    const app = buildApp(runner, { demoRoot });
+
+    await app.ready();
+    storedWorkflows = [
+      {
+        ...storedWorkflows[0]!,
+        status: "needs_review",
+        updatedAt: new Date().toISOString()
+      }
+    ];
+    const response = await app.inject({
+      method: "POST",
+      url: "/workflows/workflow-review-refresh/review",
+      payload: {
+        decision: "approve",
+        note: "External worker finished"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: "workflow-review-refresh",
+      status: "completed",
+      review: {
+        decision: "approved",
+        note: "External worker finished"
+      }
+    });
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

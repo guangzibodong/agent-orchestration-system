@@ -150,6 +150,32 @@ describe("PostgresWorkflowWorker", () => {
     ]);
   });
 
+  it("waits for worker audit events before returning a completed job", async () => {
+    const job = createJob();
+    const { runner, store } = createHarness(job);
+    const persistedEvents: PostgresWorkflowWorkerEvent[] = [];
+    const worker = new PostgresWorkflowWorker({
+      jobStore: store,
+      runner,
+      workerId: "worker-a",
+      now: () => new Date("2026-06-05T00:02:00.000Z"),
+      eventSink: async (event) => {
+        await Promise.resolve();
+        persistedEvents.push(event);
+      }
+    });
+
+    const result = await worker.runOnce();
+
+    expect(result.status).toBe("completed");
+    expect(persistedEvents.map((event) => event.type)).toEqual([
+      "job.claimed",
+      "worker.heartbeat",
+      "job.completed",
+      "worker.heartbeat"
+    ]);
+  });
+
   it("returns idle when there is no queued job to claim", async () => {
     const { runner, saved, store } = createHarness();
     const events: PostgresWorkflowWorkerEvent[] = [];

@@ -11,6 +11,10 @@ import {
 } from "../apps/api/src/postgres-smoke-helpers.js";
 import { FileArtifactStore } from "../apps/api/src/runner/file-artifact-store.js";
 import { LocalRunner } from "../apps/api/src/runner/local-runner.js";
+import {
+  appendPostgresRunnerAuditEvent,
+  appendPostgresWorkerAuditEvent
+} from "../apps/api/src/runner/postgres-audit-events.js";
 import { PostgresWorkflowWorker } from "../apps/api/src/runner/postgres-workflow-worker.js";
 import { PrismaAuditStore } from "../apps/api/src/runner/prisma-audit-store.js";
 import { PrismaJobStore } from "../apps/api/src/runner/prisma-job-store.js";
@@ -150,46 +154,25 @@ function createPostgresSmokeWorker(root: string): PostgresWorkflowWorker {
       root: join(root, ".mawo", "artifacts")
     }),
     eventSink: (event) => {
-      void auditStore
-        .append({
-          type: event.type,
-          actor: "runner",
-          workflowId: event.workflowId,
-          metadata: {
-            ...(event.taskId ? { taskId: event.taskId } : {}),
-            ...(event.gateId ? { gateId: event.gateId } : {}),
-            ...(event.status ? { status: event.status } : {}),
-            ...(event.exitCode !== undefined
-              ? { exitCode: String(event.exitCode) }
-              : {}),
-            ...(event.durationMs !== undefined
-              ? { durationMs: String(event.durationMs) }
-              : {})
-          }
-        })
-        .catch((error: unknown) => {
+      void appendPostgresRunnerAuditEvent(auditStore, event).catch(
+        (error: unknown) => {
           console.error("[smoke:api:postgres] failed to append runner audit event");
           console.error(error);
-        });
+        }
+      );
     }
   });
 
   return new PostgresWorkflowWorker({
     runner,
     jobStore: new PrismaJobStore(prisma),
-    eventSink: (event) => {
-      void auditStore
-        .append({
-          type: event.type,
-          actor: event.actor,
-          ...(event.workflowId ? { workflowId: event.workflowId } : {}),
-          ...(event.jobId ? { jobId: event.jobId } : {}),
-          metadata: event.metadata
-        })
-        .catch((error: unknown) => {
+    eventSink: async (event) => {
+      try {
+        await appendPostgresWorkerAuditEvent(auditStore, event);
+      } catch (error: unknown) {
           console.error("[smoke:api:postgres] failed to append worker audit event");
           console.error(error);
-        });
+      }
     },
     workerId: "postgres-smoke-worker",
     leaseMs: 5 * 60 * 1000,
@@ -364,6 +347,35 @@ export async function main() {
       "Workflow did not reach needs_review through the Postgres-backed API."
     );
     log("workflow and job lifecycle persisted through Postgres");
+
+    const operationsSnapshot = await request(
+      baseUrl,
+      "GET",
+      `/operations/snapshot?repositoryId=${createdIds.repositoryId}&limit=4`
+    );
+    const operationsSummary = operationsSnapshot.body.summary as JsonObject | undefined;
+    const operationsJobs = operationsSnapshot.body.jobs as unknown as JsonObject[];
+    assert(
+      operationsSnapshot.status === 200,
+      `GET /operations/snapshot returned ${operationsSnapshot.status}`
+    );
+    assert(
+      operationsSnapshot.body.repositoryId === createdIds.repositoryId,
+      "Operations snapshot did not preserve the repository scope."
+    );
+    assert(
+      Number(operationsSummary?.needsReviewWorkflows ?? 0) > 0,
+      "Operations snapshot did not report the needs-review workflow."
+    );
+    assert(
+      Number(operationsSummary?.healthyWorkers ?? 0) > 0,
+      "Operations snapshot did not include the Postgres worker heartbeat summary."
+    );
+    assert(
+      operationsJobs.some((job) => job.id === jobId && job.status === "completed"),
+      "Operations snapshot did not include the completed Postgres job."
+    );
+    log("operations snapshot aggregates Postgres jobs, readiness, and worker health");
 
     const reviewResponse = await request(
       baseUrl,

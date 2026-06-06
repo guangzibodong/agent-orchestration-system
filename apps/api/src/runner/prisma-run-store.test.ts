@@ -229,4 +229,43 @@ describe("PrismaRunStore", () => {
 
     await expect(store.list()).resolves.toEqual([run]);
   });
+
+  it("lets a runner refresh workflow state written by another process", async () => {
+    const client = createRunClient();
+    const store = new PrismaRunStore(client);
+    const initial: LocalWorkflowRun = {
+      id: "workflow-1",
+      goal: "External worker sync",
+      status: "ready",
+      executionMode: "direct",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:01:00.000Z",
+      tasks: [
+        {
+          id: "implement",
+          title: "Implement",
+          agent: "shell",
+          command: "echo ok",
+          status: "waiting"
+        }
+      ],
+      qualityGates: []
+    };
+    const externallyCompleted: LocalWorkflowRun = {
+      ...initial,
+      status: "needs_review",
+      updatedAt: "2026-06-05T00:05:00.000Z",
+      tasks: [
+        {
+          ...initial.tasks[0]!,
+          status: "passed"
+        }
+      ]
+    };
+
+    await store.save(initial);
+    await store.save(externallyCompleted);
+
+    await expect(store.list()).resolves.toEqual([externallyCompleted]);
+  });
 });

@@ -30,6 +30,7 @@ import {
   type AgentSummary,
   type MergeCandidate,
   type MergeCandidateApplyResult,
+  type OperationsSnapshot,
   type ReadinessResponse,
   type RepositoryRecord,
   type RunReport,
@@ -93,6 +94,7 @@ import {
   buildArtifactPreviewPath,
   type ArtifactPreviewResponse
 } from "@/components/artifact-preview";
+import { buildOperationsSummaryCards } from "@/components/operations-summary-display";
 import { loadOperationsSnapshot } from "@/components/operations-snapshot";
 import {
   buildWorkerHealthDisplay,
@@ -201,6 +203,8 @@ export function RunConsole() {
   const [agentHealth, setAgentHealth] = useState<AgentHealth[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
+  const [operationsSummary, setOperationsSummary] =
+    useState<OperationsSnapshot["summary"]>();
   const [readiness, setReadiness] = useState<ReadinessResponse>();
   const [workerHealth, setWorkerHealth] = useState<WorkerHealthResponse>();
   const [jobTimeline, setJobTimeline] = useState<JobTimelineResponse>();
@@ -241,6 +245,11 @@ export function RunConsole() {
   const operationsScopeLabel = selectedOperationsRepository
     ? selectedOperationsRepository.name
     : "All repositories";
+  const operationsSummaryCards = useMemo(
+    () =>
+      operationsSummary ? buildOperationsSummaryCards(operationsSummary) : [],
+    [operationsSummary]
+  );
   const auditEventSummary = useMemo(
     () => summarizeAuditEvents(auditEvents),
     [auditEvents]
@@ -628,6 +637,7 @@ export function RunConsole() {
     const snapshot = await loadOperationsSnapshot(api, {
       repositoryId: operationsRepositoryId || undefined
     });
+    setOperationsSummary(snapshot.summary);
     setAuditEvents(snapshot.auditEvents);
     setJobHistory(snapshot.jobs);
     setReadiness(snapshot.readiness);
@@ -652,6 +662,7 @@ export function RunConsole() {
         const snapshot = await loadOperationsSnapshot(api, {
           repositoryId: nextOperationsRepositoryId || undefined
         });
+        setOperationsSummary(snapshot.summary);
         setAuditEvents(snapshot.auditEvents);
         setJobHistory(snapshot.jobs);
         setReadiness(snapshot.readiness);
@@ -1156,6 +1167,31 @@ export function RunConsole() {
             </select>
           </label>
         </section>
+
+        {operationsSummaryCards.length > 0 ? (
+          <section
+            aria-label="Operations snapshot summary"
+            className="operationsSummaryPanel"
+          >
+            <div className="sectionHeader">
+              <h3>Operations Summary</h3>
+              <span>{operationsScopeLabel}</span>
+            </div>
+            <div className="operationsSummaryGrid">
+              {operationsSummaryCards.map((card) => (
+                <article
+                  aria-label={`${card.label}: ${card.detail}`}
+                  className={`operationsSummaryCard ${card.severity}`}
+                  key={card.id}
+                >
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <p>{card.detail}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {workerHealth && workerHealthSummary ? (
           <section className="workerHealthPanel">

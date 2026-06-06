@@ -95,6 +95,7 @@ model WorkflowJob {
 
   @@index([status, updatedAt])
   @@index([status, leaseExpiresAt])
+  @@index([lockedBy, leaseExpiresAt])
   @@index([workflowRunId, status])
 }
 

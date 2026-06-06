@@ -312,6 +312,12 @@ export class LocalRunner {
     await this.pendingPersistence;
   }
 
+  async refreshFromStore(): Promise<void> {
+    await this.ready();
+    await this.flush();
+    await this.restoreRuns();
+  }
+
   isReady(): boolean {
     return this.readyState;
   }

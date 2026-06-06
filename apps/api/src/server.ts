@@ -458,6 +458,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.get<{
     Querystring: { limit?: string; repositoryId?: string };
   }>("/operations/snapshot", async (request) => {
+    await activeRunner.refreshFromStore();
     const repositoryId = request.query.repositoryId?.trim() || undefined;
     const limit = request.query.limit || "8";
     const [readiness, workerHealth, jobs, auditEvents] = await Promise.all([
@@ -508,6 +509,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       status?: string;
     };
   }>("/workflows", async (request, reply) => {
+    await activeRunner.refreshFromStore();
     const workflowStatus = request.query.status
       ? workflowStatusSchema.safeParse(request.query.status)
       : undefined;
@@ -805,6 +807,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       });
     }
 
+    await activeRunner.refreshFromStore();
     if (!activeRunner.getWorkflow(request.params.id)) {
       return reply.code(404).send({ error: "workflow_not_found" });
     }
@@ -887,6 +890,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.get<{
     Params: { id: string };
   }>("/workflows/:id", async (request, reply) => {
+    await activeRunner.refreshFromStore();
     const run = activeRunner.getWorkflow(request.params.id);
 
     if (!run) {

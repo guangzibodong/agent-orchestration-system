@@ -79,6 +79,57 @@ describe("LocalRunner", () => {
     expect(runner.getWorkflow(persistedRun.id)).toEqual(persistedRun);
   });
 
+  it("refreshes workflow state written by another runner through the run store", async () => {
+    const persistedRun: LocalWorkflowRun = {
+      id: "shared-workflow",
+      goal: "External worker state",
+      status: "ready",
+      executionMode: "direct",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:01:00.000Z",
+      tasks: [
+        {
+          id: "implement",
+          title: "Implement",
+          agent: "shell",
+          command: "echo ok",
+          status: "waiting"
+        }
+      ],
+      qualityGates: []
+    };
+    const externallyUpdatedRun: LocalWorkflowRun = {
+      ...persistedRun,
+      status: "needs_review",
+      updatedAt: "2026-06-05T00:02:00.000Z",
+      tasks: [
+        {
+          ...persistedRun.tasks[0]!,
+          status: "passed"
+        }
+      ]
+    };
+    let storedRuns = [persistedRun];
+    const store = {
+      list() {
+        return storedRuns;
+      },
+      save(run: LocalWorkflowRun) {
+        storedRuns = [run];
+      }
+    } as RunStore;
+    const runner = new LocalRunner(undefined, { runStore: store });
+
+    await runner.ready();
+    expect(runner.getWorkflow(persistedRun.id)?.status).toBe("ready");
+
+    storedRuns = [externallyUpdatedRun];
+    await runner.refreshFromStore();
+
+    expect(runner.getWorkflow(persistedRun.id)).toEqual(externallyUpdatedRun);
+    expect(runner.listWorkflows()).toEqual([externallyUpdatedRun]);
+  });
+
   it("runs workflow tasks and quality gates into a review-ready report", async () => {
     const runner = new LocalRunner();
 

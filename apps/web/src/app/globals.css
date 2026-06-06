@@ -264,11 +264,79 @@ h2 {
 }
 
 .operationsScopePanel h3,
+.operationsSummaryPanel h3,
 .workerHealthPanel h3,
 .readinessPanel h3,
 .repositoryRegistry h3 {
   margin: 0;
   font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.operationsSummaryPanel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px;
+}
+
+.operationsSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.operationsSummaryCard {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 112px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-left: 4px solid #cfd6df;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 10px;
+}
+
+.operationsSummaryCard.healthy {
+  border-left-color: var(--success);
+}
+
+.operationsSummaryCard.warning {
+  border-left-color: var(--warning);
+}
+
+.operationsSummaryCard.danger {
+  border-left-color: var(--danger);
+}
+
+.operationsSummaryCard.neutral {
+  border-left-color: #8792a3;
+}
+
+.operationsSummaryCard span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.operationsSummaryCard strong {
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.operationsSummaryCard p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
