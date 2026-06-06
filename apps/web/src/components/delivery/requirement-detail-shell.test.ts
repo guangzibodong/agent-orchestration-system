@@ -206,6 +206,44 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain("<details open");
   });
 
+  it("explains retained worktree cleanup policy for review evidence", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          workspaceCleanup: {
+            statusLabel: "Cleanup blocked until review is recorded",
+            summary: "1 tracked worktree, 1 retained for review evidence",
+            policy:
+              "Retain isolated worktrees while review evidence is pending; cleanup is available after delivery, abort, or archive.",
+            rows: [
+              {
+                task: "Update auth guard",
+                branch: "mawo/workflow-review/task-1",
+                path: "C:/mawo/worktrees/workflow-review/task-1",
+                status: "Retained",
+              },
+            ],
+          },
+        },
+        artifacts,
+      }),
+    );
+
+    expect(html).toContain("Worktree cleanup");
+    expect(html).toContain("Cleanup blocked until review is recorded");
+    expect(html).toContain("1 tracked worktree, 1 retained for review evidence");
+    expect(html).toContain(
+      "Retain isolated worktrees while review evidence is pending; cleanup is available after delivery, abort, or archive.",
+    );
+    expect(html).toContain("Update auth guard");
+    expect(html).toContain("mawo/workflow-review/task-1");
+    expect(html).toContain("C:/mawo/worktrees/workflow-review/task-1");
+    expect(html).toContain("Retained");
+    expect(html).not.toContain("Clean Workspaces");
+    expect(html).not.toContain("Cleanup now");
+  });
+
   it("renders read-only controls and banner in viewer mode", () => {
     const html = renderDetail(true);
 

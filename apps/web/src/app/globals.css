@@ -815,6 +815,58 @@ button {
   overflow-wrap: anywhere;
 }
 
+.requirementWorkspaceCleanup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+  background: #f8fbfc;
+  padding: 12px;
+}
+
+.requirementWorkspaceCleanup h3 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.requirementWorkspaceCleanupList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requirementWorkspaceCleanupList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  min-width: 0;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+}
+
+.requirementWorkspaceCleanupList strong,
+.requirementWorkspaceCleanupList span,
+.requirementWorkspaceCleanupList small {
+  overflow-wrap: anywhere;
+}
+
+.requirementWorkspaceCleanupList span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.requirementWorkspaceCleanupList small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .artifactDrawer {
   min-width: 0;
   border-top: 1px solid var(--panel-border);

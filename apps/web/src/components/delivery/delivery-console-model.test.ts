@@ -301,6 +301,95 @@ describe("delivery console model", () => {
     });
   });
 
+  it("derives worktree cleanup visibility from linked workflow workspaces", () => {
+    const summary = mapWorkflowToRequirementSummary({
+      ...baseWorkflow,
+      status: "needs_review",
+      executionMode: "worktree",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          status: "passed",
+          workspace: {
+            path: "C:/worktrees/shop/task-1",
+            branch: "mawo/workflow-123/task-1",
+            repoPath: "C:/work/shop"
+          }
+        }
+      ]
+    });
+
+    expect(summary.workspaceCleanup).toEqual({
+      policy:
+        "Retain isolated worktrees while review evidence is pending; cleanup is available after delivery, abort, or archive.",
+      rows: [
+        {
+          branch: "mawo/workflow-123/task-1",
+          path: "C:/worktrees/shop/task-1",
+          status: "Retained",
+          task: "Patch checkout"
+        }
+      ],
+      statusLabel: "Cleanup blocked until review is recorded",
+      summary: "1 tracked worktree, 1 retained for review evidence"
+    });
+  });
+
+  it("omits worktree cleanup visibility when no workspace is linked", () => {
+    expect(mapWorkflowToRequirementSummary(baseWorkflow).workspaceCleanup).toBeUndefined();
+  });
+
+  it("keeps terminal and failed worktree cleanup copy scoped to policy state", () => {
+    const worktreeWorkflow: WorkflowRun = {
+      ...baseWorkflow,
+      executionMode: "worktree",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          status: "passed",
+          workspace: {
+            path: "C:/worktrees/shop/task-1",
+            branch: "mawo/workflow-123/task-1",
+            repoPath: "C:/work/shop"
+          }
+        }
+      ]
+    };
+
+    expect(
+      mapWorkflowToRequirementSummary({
+        ...worktreeWorkflow,
+        status: "completed"
+      }).workspaceCleanup
+    ).toMatchObject({
+      statusLabel: "Cleanup ready",
+      summary: "1 tracked worktree, 1 ready for cleanup",
+      rows: [
+        expect.objectContaining({
+          status: "Cleanup ready"
+        })
+      ]
+    });
+
+    expect(
+      mapWorkflowToRequirementSummary({
+        ...worktreeWorkflow,
+        status: "gate_failed"
+      }).workspaceCleanup
+    ).toMatchObject({
+      statusLabel: "Cleanup handled by retry",
+      summary:
+        "1 tracked worktree, retry clears stale worktrees before fresh evidence",
+      rows: [
+        expect.objectContaining({
+          status: "Retry cleanup"
+        })
+      ]
+    });
+  });
+
   it("marks missing repository safety as blocked setup work", () => {
     const summary = mapWorkflowToRequirementSummary({
       ...baseWorkflow,

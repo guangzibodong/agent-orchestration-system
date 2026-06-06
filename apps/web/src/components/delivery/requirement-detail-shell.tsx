@@ -159,6 +159,7 @@ export function RequirementDetailShell({
             {section.title === "Execution" ? (
               <>
                 <ArtifactDrawer artifacts={artifacts} />
+                <RequirementWorkspaceCleanup requirement={requirement} />
                 <RequirementDetailLifecycleActions
                   actionState={actionState}
                   disabled={actionDisabled || !onLifecycleAction}
@@ -182,6 +183,54 @@ export function RequirementDetailShell({
           </section>
         ))}
       </div>
+    </section>
+  );
+}
+
+function RequirementWorkspaceCleanup({
+  requirement,
+}: {
+  requirement?: RequirementSummary;
+}) {
+  const cleanup = requirement?.workspaceCleanup;
+
+  if (!cleanup) {
+    return null;
+  }
+
+  return (
+    <section
+      className="requirementWorkspaceCleanup"
+      aria-label="Worktree cleanup"
+    >
+      <div>
+        <p className="eyebrow">Workspace cleanup</p>
+        <h3>Worktree cleanup</h3>
+      </div>
+      <dl className="requirementDetailMetaGrid">
+        <div className="requirementDetailMetaItem">
+          <dt>Status</dt>
+          <dd>{cleanup.statusLabel}</dd>
+        </div>
+        <div className="requirementDetailMetaItem">
+          <dt>Tracked worktrees</dt>
+          <dd>{cleanup.summary}</dd>
+        </div>
+        <div className="requirementDetailMetaItem">
+          <dt>Cleanup policy</dt>
+          <dd>{cleanup.policy}</dd>
+        </div>
+      </dl>
+      <ul className="requirementWorkspaceCleanupList">
+        {cleanup.rows.map((row) => (
+          <li key={`${row.branch}:${row.path}`}>
+            <strong>{row.task}</strong>
+            <span>{row.status}</span>
+            <small>{row.branch}</small>
+            <small>{row.path}</small>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

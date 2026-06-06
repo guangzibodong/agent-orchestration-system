@@ -5,6 +5,7 @@ import type {
   WorkflowRun,
   WorkflowStatus
 } from "@mawo/shared";
+import { canCleanupWorkflowStatus } from "../workflow-actions";
 
 export type RequirementStage =
   | "draft"
@@ -78,6 +79,18 @@ export type RequirementReviewEvidence = {
   };
 };
 
+export type RequirementWorkspaceCleanupSummary = {
+  statusLabel: string;
+  summary: string;
+  policy: string;
+  rows: Array<{
+    task: string;
+    branch: string;
+    path: string;
+    status: string;
+  }>;
+};
+
 export type RequirementSummary = {
   id: string;
   source?: "requirement" | "workflow";
@@ -99,6 +112,7 @@ export type RequirementSummary = {
   artifactLinks?: RequirementArtifactLink[];
   qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
+  workspaceCleanup?: RequirementWorkspaceCleanupSummary;
   actionBlockReason?: string;
   availableActions: RequirementLifecycleAction[];
 };
@@ -136,6 +150,8 @@ export type DeliveryConsoleModelContext = {
 
 const noAutoMergePolicyLabel =
   "No MAWO auto-merge; manual git apply outside MAWO";
+const workspaceCleanupPolicy =
+  "Retain isolated worktrees while review evidence is pending; cleanup is available after delivery, abort, or archive.";
 
 const statusStageMap: Record<WorkflowRun["status"], RequirementStage> = {
   draft: "draft",
@@ -550,6 +566,7 @@ export function mapWorkflowToRequirementSummary(
   workflow: WorkflowRun
 ): RequirementSummary {
   const workflowRunStatusLabel = formatWorkflowStatus(workflow.status);
+  const workspaceCleanup = buildWorkspaceCleanupSummary(workflow);
 
   return {
     id: workflow.id,
@@ -573,6 +590,7 @@ export function mapWorkflowToRequirementSummary(
       ...(gate.command ? { command: gate.command } : {}),
       required: true
     })),
+    ...(workspaceCleanup ? { workspaceCleanup } : {}),
     ...(workflow.review?.decision
       ? { reviewDecision: workflow.review.decision }
       : {}),
@@ -616,6 +634,7 @@ export function mapRequirementTicketToSummary(
     availableActions,
     repositorySafety
   );
+  const workspaceCleanup = buildWorkspaceCleanupSummary(workflow);
 
   return {
     id: requirement.id,
@@ -648,12 +667,98 @@ export function mapRequirementTicketToSummary(
       command: gate.command,
       required: gate.required
     })),
+    ...(workspaceCleanup ? { workspaceCleanup } : {}),
     ...(workflow?.review?.decision
       ? { reviewDecision: workflow.review.decision }
       : {}),
     ...(actionBlockReason ? { actionBlockReason } : {}),
     availableActions
   };
+}
+
+function buildWorkspaceCleanupSummary(
+  workflow?: WorkflowRun
+): RequirementWorkspaceCleanupSummary | undefined {
+  if (!workflow) {
+    return undefined;
+  }
+
+  const rows = workflow.tasks.flatMap((task) =>
+    task.workspace
+      ? [
+          {
+            branch: task.workspace.branch,
+            path: task.workspace.path,
+            status: buildWorkspaceCleanupRowStatus(workflow.status),
+            task: task.title
+          }
+        ]
+      : []
+  );
+
+  if (!rows.length) {
+    return undefined;
+  }
+
+  return {
+    policy: workspaceCleanupPolicy,
+    rows,
+    statusLabel: buildWorkspaceCleanupStatusLabel(workflow.status),
+    summary: buildWorkspaceCleanupSummaryText(workflow.status, rows.length)
+  };
+}
+
+function buildWorkspaceCleanupStatusLabel(status: WorkflowStatus): string {
+  if (status === "needs_review") {
+    return "Cleanup blocked until review is recorded";
+  }
+
+  if (canCleanupWorkflowStatus(status)) {
+    return "Cleanup ready";
+  }
+
+  if (status === "gate_failed" || status === "failed") {
+    return "Cleanup handled by retry";
+  }
+
+  return "Cleanup pending";
+}
+
+function buildWorkspaceCleanupSummaryText(
+  status: WorkflowStatus,
+  count: number
+): string {
+  const noun = count === 1 ? "tracked worktree" : "tracked worktrees";
+
+  if (status === "needs_review") {
+    return `${count} ${noun}, ${count} retained for review evidence`;
+  }
+
+  if (canCleanupWorkflowStatus(status)) {
+    return `${count} ${noun}, ${count} ready for cleanup`;
+  }
+
+  if (status === "gate_failed" || status === "failed") {
+    return `${count} ${noun}, retry clears stale worktrees before fresh evidence`;
+  }
+
+  return `${count} ${noun}, cleanup waits for terminal evidence`;
+}
+
+function buildWorkspaceCleanupRowStatus(status: WorkflowStatus): string {
+  if (status === "needs_review") {
+    return "Retained";
+  }
+
+  if (canCleanupWorkflowStatus(status)) {
+    return "Cleanup ready";
+  }
+
+  if (status === "gate_failed" || status === "failed") {
+    return "Retry cleanup";
+  }
+
+  return "Pending";
 }
 
 function filterRepositoryBlockedLifecycleActions(
