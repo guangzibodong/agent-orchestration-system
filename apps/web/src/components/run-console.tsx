@@ -32,6 +32,7 @@ import {
   type ReadinessResponse,
   type RepositoryRecord,
   type RunReport,
+  type WorkerHealthResponse,
   type WorkflowJob,
   type WorkflowRun,
   type WorkspaceCleanupPreview,
@@ -87,6 +88,10 @@ import {
   type ArtifactPreviewResponse
 } from "@/components/artifact-preview";
 import { loadOperationsSnapshot } from "@/components/operations-snapshot";
+import {
+  buildWorkerHealthDisplay,
+  summarizeWorkerHealth
+} from "@/components/worker-health-display";
 import {
   buildWorkflowListDisplay,
   summarizeWorkflowList
@@ -189,6 +194,7 @@ export function RunConsole() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [jobHistory, setJobHistory] = useState<WorkflowJob[]>([]);
   const [readiness, setReadiness] = useState<ReadinessResponse>();
+  const [workerHealth, setWorkerHealth] = useState<WorkerHealthResponse>();
   const [jobTimeline, setJobTimeline] = useState<JobTimelineResponse>();
   const [workspaceCleanupPreview, setWorkspaceCleanupPreview] =
     useState<WorkspaceCleanupPreview>();
@@ -251,6 +257,14 @@ export function RunConsole() {
     () =>
       readiness ? buildReadinessCheckDisplay(readiness.checks) : [],
     [readiness]
+  );
+  const workerHealthSummary = useMemo(
+    () => (workerHealth ? summarizeWorkerHealth(workerHealth) : undefined),
+    [workerHealth]
+  );
+  const workerHealthDisplay = useMemo(
+    () => (workerHealth ? buildWorkerHealthDisplay(workerHealth) : []),
+    [workerHealth]
   );
   const jobTimelineDisplay = useMemo(
     () => (jobTimeline ? buildJobTimelineDisplay(jobTimeline) : undefined),
@@ -321,6 +335,13 @@ export function RunConsole() {
         icon: Play
       },
       {
+        label: "Workers",
+        value: workerHealthSummary
+          ? `${workerHealthSummary.healthy}/${workerHealthSummary.total}`
+          : "0/0",
+        icon: Bot
+      },
+      {
         label: "Readiness",
         value: readinessSummary?.statusLabel ?? "Unknown",
         icon: CheckCircle2
@@ -332,6 +353,7 @@ export function RunConsole() {
       jobHistorySummary,
       readinessSummary,
       repositorySummary,
+      workerHealthSummary,
       workflow,
       workflowListSummary
     ]
@@ -596,6 +618,7 @@ export function RunConsole() {
     setAuditEvents(snapshot.auditEvents);
     setJobHistory(snapshot.jobs);
     setReadiness(snapshot.readiness);
+    setWorkerHealth(snapshot.workerHealth);
   }, [operationsRepositoryId]);
 
   const deleteRepository = useCallback(
@@ -618,6 +641,8 @@ export function RunConsole() {
         });
         setAuditEvents(snapshot.auditEvents);
         setJobHistory(snapshot.jobs);
+        setReadiness(snapshot.readiness);
+        setWorkerHealth(snapshot.workerHealth);
       } catch (apiError) {
         setError(
           apiError instanceof Error
@@ -1087,6 +1112,75 @@ export function RunConsole() {
             </select>
           </label>
         </section>
+
+        {workerHealth && workerHealthSummary ? (
+          <section className="workerHealthPanel">
+            <div className="sectionHeader">
+              <h3>Worker Processes</h3>
+              <span className={`healthBadge ${workerHealthSummary.severity}`}>
+                {workerHealthSummary.statusLabel}
+              </span>
+            </div>
+            <dl className="readinessMeta">
+              <div>
+                <dt>Workers</dt>
+                <dd>
+                  {workerHealthSummary.healthy}/{workerHealthSummary.total} healthy
+                </dd>
+              </div>
+              <div>
+                <dt>Running</dt>
+                <dd>{workerHealthSummary.running}</dd>
+              </div>
+              <div>
+                <dt>Stale</dt>
+                <dd>{workerHealthSummary.stale}</dd>
+              </div>
+              <div>
+                <dt>Window</dt>
+                <dd>{workerHealthSummary.staleAfterLabel}</dd>
+              </div>
+            </dl>
+            <div className="workerHealthList">
+              {workerHealthDisplay.map((worker) => (
+                <article className="workerHealthItem" key={worker.workerId}>
+                  <div>
+                    <strong>{worker.workerId}</strong>
+                    <span className={`healthBadge ${worker.severity}`}>
+                      {worker.healthLabel}
+                    </span>
+                  </div>
+                  <p>{worker.detail}</p>
+                  <dl className="artifactMeta">
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{worker.statusLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Age</dt>
+                      <dd>{worker.ageLabel}</dd>
+                    </div>
+                    {worker.jobLabel ? (
+                      <div>
+                        <dt>Job</dt>
+                        <dd>{worker.jobLabel}</dd>
+                      </div>
+                    ) : null}
+                    {worker.workflowLabel ? (
+                      <div>
+                        <dt>Workflow</dt>
+                        <dd>{worker.workflowLabel}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </article>
+              ))}
+              {workerHealthDisplay.length === 0 ? (
+                <div className="reportBox muted">No worker heartbeats</div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {readiness && readinessSummary ? (
           <section className="readinessPanel">

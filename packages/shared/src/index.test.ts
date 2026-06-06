@@ -6,6 +6,7 @@ import {
   repositoryRegistrationRequestSchema,
   repositoryRecordSchema,
   readinessResponseSchema,
+  workerHealthResponseSchema,
   mergeCandidateSchema,
   runReportSchema,
   workflowReviewRequestSchema,
@@ -348,6 +349,42 @@ describe("workflowRunSchema", () => {
     expect(readiness.ok).toBe(false);
     expect(readiness.deploymentMode).toBe("production");
     expect(readiness.checks[1]?.status).toBe("blocked");
+  });
+
+  it("accepts worker health responses", () => {
+    const health = workerHealthResponseSchema.parse({
+      ok: true,
+      checkedAt: "2026-06-06T01:30:05.079Z",
+      staleAfterMs: 60000,
+      summary: {
+        totalWorkers: 2,
+        healthyWorkers: 1,
+        staleWorkers: 1
+      },
+      workers: [
+        {
+          workerId: "worker-a",
+          healthy: true,
+          status: "running",
+          lastSeenAt: "2026-06-06T01:30:00.000Z",
+          ageMs: 5079,
+          workflowId: "workflow-1",
+          jobId: "job-1"
+        },
+        {
+          workerId: "worker-b",
+          healthy: false,
+          status: "idle",
+          lastSeenAt: "2026-06-06T01:20:00.000Z",
+          ageMs: 605079,
+          lastJobStatus: "completed"
+        }
+      ]
+    });
+
+    expect(health.summary.healthyWorkers).toBe(1);
+    expect(health.workers[0]?.jobId).toBe("job-1");
+    expect(health.workers[1]?.lastJobStatus).toBe("completed");
   });
 
   it("accepts workflow review decisions", () => {

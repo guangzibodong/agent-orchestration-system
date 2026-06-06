@@ -176,6 +176,29 @@ export const readinessResponseSchema = z.object({
   checks: z.array(readinessCheckSchema)
 });
 
+export const workerHealthSchema = z.object({
+  workerId: z.string().min(1),
+  healthy: z.boolean(),
+  status: z.string().min(1),
+  lastSeenAt: z.string(),
+  ageMs: z.number().nonnegative(),
+  workflowId: z.string().optional(),
+  jobId: z.string().optional(),
+  lastJobStatus: z.string().optional()
+});
+
+export const workerHealthResponseSchema = z.object({
+  ok: z.boolean(),
+  checkedAt: z.string(),
+  staleAfterMs: z.number().positive(),
+  summary: z.object({
+    totalWorkers: z.number().int().nonnegative(),
+    healthyWorkers: z.number().int().nonnegative(),
+    staleWorkers: z.number().int().nonnegative()
+  }),
+  workers: z.array(workerHealthSchema)
+});
+
 export const workflowReviewRequestSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   note: z.string().min(1).optional()
@@ -347,6 +370,8 @@ export type AgentSummary = z.infer<typeof agentSummarySchema>;
 export type AgentHealth = z.infer<typeof agentHealthSchema>;
 export type ReadinessCheck = z.infer<typeof readinessCheckSchema>;
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
+export type WorkerHealth = z.infer<typeof workerHealthSchema>;
+export type WorkerHealthResponse = z.infer<typeof workerHealthResponseSchema>;
 export type WorkflowReviewRequest = z.infer<
   typeof workflowReviewRequestSchema
 >;

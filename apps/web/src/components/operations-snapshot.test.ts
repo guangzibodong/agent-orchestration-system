@@ -32,6 +32,28 @@ describe("operations snapshot", () => {
         };
       }
 
+      if (path === "/workers/health") {
+        return {
+          ok: true,
+          checkedAt: "2026-06-05T19:54:24.148Z",
+          staleAfterMs: 60000,
+          summary: {
+            totalWorkers: 1,
+            healthyWorkers: 1,
+            staleWorkers: 0
+          },
+          workers: [
+            {
+              workerId: "worker-a",
+              healthy: true,
+              status: "idle",
+              lastSeenAt: "2026-06-05T19:54:20.000Z",
+              ageMs: 4148
+            }
+          ]
+        };
+      }
+
       return [
         {
           id: "job-1",
@@ -46,11 +68,13 @@ describe("operations snapshot", () => {
     expect(requests).toEqual([
       "/audit-events?limit=8",
       "/jobs?limit=8",
-      "/readiness"
+      "/readiness",
+      "/workers/health"
     ]);
     expect(snapshot.auditEvents[0]?.type).toBe("workflow.enqueued");
     expect(snapshot.jobs[0]?.status).toBe("queued");
     expect(snapshot.readiness.ok).toBe(true);
+    expect(snapshot.workerHealth.summary.healthyWorkers).toBe(1);
   });
 
   it("scopes audit and job history to a selected repository", async () => {
@@ -71,6 +95,20 @@ describe("operations snapshot", () => {
           };
         }
 
+        if (path === "/workers/health") {
+          return {
+            ok: true,
+            checkedAt: "2026-06-05T19:54:24.148Z",
+            staleAfterMs: 60000,
+            summary: {
+              totalWorkers: 0,
+              healthyWorkers: 0,
+              staleWorkers: 0
+            },
+            workers: []
+          };
+        }
+
         return [];
       },
       { repositoryId: "repo 1" }
@@ -79,7 +117,8 @@ describe("operations snapshot", () => {
     expect(requests).toEqual([
       "/audit-events?limit=8&repositoryId=repo+1",
       "/jobs?limit=8&repositoryId=repo+1",
-      "/readiness"
+      "/readiness",
+      "/workers/health"
     ]);
   });
 });

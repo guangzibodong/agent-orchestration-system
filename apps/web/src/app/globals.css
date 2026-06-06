@@ -232,6 +232,7 @@ h2 {
 }
 
 .operationsScopePanel,
+.workerHealthPanel,
 .readinessPanel,
 .repositoryPanel,
 .repositoryRegistrationPanel {
@@ -263,6 +264,7 @@ h2 {
 }
 
 .operationsScopePanel h3,
+.workerHealthPanel h3,
 .readinessPanel h3,
 .repositoryRegistry h3 {
   margin: 0;
@@ -270,10 +272,14 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.workerHealthPanel,
 .readinessPanel {
   align-items: stretch;
 }
 
+.workerHealthPanel > .sectionHeader,
+.workerHealthPanel > .readinessMeta,
+.workerHealthPanel > .workerHealthList,
 .readinessPanel > .sectionHeader,
 .readinessPanel > .readinessMeta,
 .readinessPanel > .readinessList {
@@ -307,6 +313,7 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.workerHealthList,
 .readinessList {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
@@ -314,6 +321,7 @@ h2 {
   min-width: 0;
 }
 
+.workerHealthItem,
 .readinessItem {
   display: grid;
   gap: 6px;
@@ -324,6 +332,7 @@ h2 {
   padding: 10px;
 }
 
+.workerHealthItem > div:first-child,
 .readinessItem > div:first-child {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -332,11 +341,13 @@ h2 {
   min-width: 0;
 }
 
+.workerHealthItem strong,
 .readinessItem strong {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 
+.workerHealthItem p,
 .readinessItem p {
   margin: 0;
   color: var(--muted);
