@@ -357,6 +357,19 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(detail.getByLabel("Changed files under review")).toContainText(
       "packages/shared/src/index.ts",
     );
+    const valueReport = detail.getByLabel("Value report summary");
+    await expect(valueReport).toContainText("Report recommendation");
+    await expect(valueReport).toContainText("Ready for review");
+    await expect(valueReport).toContainText(
+      "1/1 tasks passed; 1 required gate passed; 1 optional gate failed",
+    );
+    await expect(valueReport).toContainText(
+      "Review required before manual apply",
+    );
+    await expect(valueReport).toContainText(
+      "Current workflow workflow-needs-review",
+    );
+    await expect(valueReport).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(detail).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(detail).not.toContainText("diff --git");
     const detailDrawer = page.locator(".requirementDetailShell .artifactDrawer");
@@ -420,6 +433,21 @@ test.describe("Requirement Delivery Console smoke", () => {
 
     await page.locator(".requirementDetailDisclosure > summary").click();
     const detail = page.locator(".requirementDetailShell");
+    const failedValueReport = detail.getByLabel("Value report summary");
+    await expect(failedValueReport).toContainText("Fix failed gates");
+    await expect(failedValueReport).toContainText(
+      "1/1 tasks passed; 0/1 gates passed",
+    );
+    await expect(failedValueReport).toContainText(
+      "Goal not achieved; rework required",
+    );
+    await expect(failedValueReport).toContainText("Required gate failed");
+    await expect(failedValueReport).toContainText(
+      "Current workflow workflow-gate-failed",
+    );
+    await expect(failedValueReport).not.toContainText(
+      "RAW_GATE_STDOUT_SHOULD_NOT_RENDER",
+    );
     await expect(detail.getByRole("button", { name: "Approve" })).toBeDisabled();
     await expect(detail.getByRole("button", { name: "Reject" })).toBeDisabled();
     expect(mutatingRequests).toEqual([]);

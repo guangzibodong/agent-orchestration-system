@@ -160,6 +160,10 @@ export function RequirementDetailShell({
               <RequirementChangedFilesStrip requirement={requirement} />
             ) : null}
 
+            {section.title === "Value Report" ? (
+              <RequirementValueReportSummary requirement={requirement} />
+            ) : null}
+
             {section.title === "Execution" ? (
               <>
                 <ArtifactDrawer artifacts={artifacts} />
@@ -187,6 +191,46 @@ export function RequirementDetailShell({
           </section>
         ))}
       </div>
+    </section>
+  );
+}
+
+function RequirementValueReportSummary({
+  requirement,
+}: {
+  requirement?: RequirementSummary;
+}) {
+  if (!requirement) {
+    return null;
+  }
+
+  return (
+    <section
+      className="requirementValueReportSummary"
+      aria-label="Value report summary"
+    >
+      <div>
+        <p className="eyebrow">Value report summary</p>
+        <strong>{buildValueStatus(requirement)}</strong>
+      </div>
+      <dl className="requirementValueReportGrid">
+        <div>
+          <dt>Report recommendation</dt>
+          <dd>{formatReportRecommendation(requirement)}</dd>
+        </div>
+        <div>
+          <dt>Report summary</dt>
+          <dd>{buildValueReportSummary(requirement)}</dd>
+        </div>
+        <div>
+          <dt>Outcome</dt>
+          <dd>{buildValueReportOutcome(requirement)}</dd>
+        </div>
+        <div>
+          <dt>Evidence source</dt>
+          <dd>{buildValueReportEvidenceSource(requirement)}</dd>
+        </div>
+      </dl>
     </section>
   );
 }
@@ -748,6 +792,63 @@ function buildValueStatus(requirement: RequirementSummary): string {
   }
 
   return "Goal outcome pending";
+}
+
+function buildValueReportSummary(requirement: RequirementSummary): string {
+  return requirement.reviewEvidence?.reportSummary ?? buildReviewSummary(requirement);
+}
+
+function buildValueReportOutcome(requirement: RequirementSummary): string {
+  if (requirement.executionStatus === "gate_failed") {
+    return "Required gate failed";
+  }
+
+  if (requirement.executionStatus === "completed") {
+    return "Delivery reviewed and recorded";
+  }
+
+  if (requirement.reviewEvidence?.reportRecommendation === "ready_for_review") {
+    return "Review required before manual apply";
+  }
+
+  if (requirement.executionStatus === "needs_review") {
+    return "Review required before manual apply";
+  }
+
+  return buildMergeCandidateStatus(requirement);
+}
+
+function buildValueReportEvidenceSource(requirement: RequirementSummary): string {
+  const workflowId =
+    requirement.reviewEvidence?.evidenceSourceWorkflowId ??
+    requirement.workflowRunId;
+
+  return workflowId
+    ? `Current workflow ${workflowId}`
+    : "No workflow evidence linked";
+}
+
+function formatReportRecommendation(requirement: RequirementSummary): string {
+  const recommendation = requirement.reviewEvidence?.reportRecommendation;
+
+  if (!recommendation) {
+    return "Recommendation pending";
+  }
+
+  switch (recommendation) {
+    case "ready_for_review":
+      return "Ready for review";
+    case "fix_failed_gates":
+      return "Fix failed gates";
+    case "fix_failed_tasks":
+      return "Fix failed tasks";
+    default:
+      return recommendation
+        .split("_")
+        .filter(Boolean)
+        .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+        .join(" ");
+  }
 }
 
 function formatDetailList(values: string[]): string {

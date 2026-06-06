@@ -31,6 +31,8 @@ const requirement: RequirementSummary = {
   workflowRunStatusLabel: "Needs review",
   reviewEvidence: {
     evidenceSourceWorkflowId: "workflow-review",
+    reportSummary: "1/1 tasks passed; 1/1 gates passed",
+    reportRecommendation: "ready_for_review",
     changedFiles: ["apps/web/src/app/page.tsx"],
     patchArtifactPaths: [
       "C:/mawo/artifacts/workflow-review/merge-candidate.patch"
@@ -141,6 +143,7 @@ const safetyBlockedRequirement: RequirementSummary = {
 describe("RequirementDetailShell", () => {
   it("renders the frozen requirement detail sections around review evidence", () => {
     const html = renderDetail();
+    const valueReportHtml = extractValueReportSection(html);
 
     for (const section of [
       "Overview",
@@ -166,6 +169,17 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Quality gates passed");
     expect(html).toContain("Unit tests required passed (exit 0): npm test");
     expect(html).toContain("Merge candidate ready with 1 changed file");
+    expect(valueReportHtml).toContain(
+      'aria-label="Value report summary"'
+    );
+    expect(valueReportHtml).toContain("Report recommendation");
+    expect(valueReportHtml).toContain("Ready for review");
+    expect(valueReportHtml).toContain("Report summary");
+    expect(valueReportHtml).toContain("1/1 tasks passed; 1/1 gates passed");
+    expect(valueReportHtml).toContain("Outcome");
+    expect(valueReportHtml).toContain("Review required before manual apply");
+    expect(valueReportHtml).toContain("Evidence source");
+    expect(valueReportHtml).toContain("Current workflow workflow-review");
     expect(html).toContain("Changed files under review");
     expect(html).toContain("1 file changed");
     expect(html).toContain("apps/web/src/app/page.tsx");
@@ -178,6 +192,56 @@ describe("RequirementDetailShell", () => {
     );
     expect(html).not.toContain("Merge candidate ready for manual apply");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
+    expect(valueReportHtml).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
+  });
+
+  it("summarizes failed gate reports without exposing raw gate output", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          requirementStage: "needs_rework",
+          executionStatus: "gate_failed",
+          reviewEvidence: {
+            evidenceSourceWorkflowId: "workflow-gate-failed",
+            reportSummary: "1/1 tasks passed; 0/1 gates passed",
+            reportRecommendation: "fix_failed_gates",
+            changedFiles: ["apps/web/src/app/page.tsx"],
+            patchArtifactPaths: [],
+            gateResults: [
+              {
+                id: "gate-1",
+                title: "Copy checks",
+                status: "failed",
+                command: "npm run copy:check",
+                required: true,
+                exitCode: 1,
+              },
+            ],
+          },
+        },
+        artifacts: [
+          {
+            id: "gate-stdout",
+            kind: "stdout",
+            label: "Copy checks stdout",
+            href: "/workflows/workflow-gate-failed/artifact?path=stdout.txt",
+            rawContent: "RAW_GATE_STDOUT_SHOULD_NOT_RENDER",
+          } as ArtifactDrawerLink & { rawContent: string },
+        ],
+      }),
+    );
+    const valueReportHtml = extractValueReportSection(html);
+
+    expect(valueReportHtml).toContain("Value report summary");
+    expect(valueReportHtml).toContain("Fix failed gates");
+    expect(valueReportHtml).toContain("1/1 tasks passed; 0/1 gates passed");
+    expect(valueReportHtml).toContain("Goal not achieved; rework required");
+    expect(valueReportHtml).toContain("Current workflow workflow-gate-failed");
+    expect(valueReportHtml).toContain("Required gate failed");
+    expect(html).not.toContain("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
+    expect(valueReportHtml).not.toContain("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
+    expect(valueReportHtml).not.toContain("Review required before manual apply");
   });
 
   it("shows an operator review acceptance surface for review-ready work", () => {
@@ -293,3 +357,13 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("No artifacts linked yet");
   });
 });
+
+function extractValueReportSection(html: string): string {
+  const start = html.indexOf('id="requirement-detail-value-report"');
+  const end = html.indexOf('id="requirement-detail-audit"');
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+}

@@ -878,6 +878,58 @@ button {
   overflow-wrap: anywhere;
 }
 
+.requirementValueReportSummary {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #d9e6dd;
+  border-radius: 8px;
+  background: #f4faf6;
+  padding: 12px;
+}
+
+.requirementValueReportSummary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.requirementValueReportSummary strong {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.requirementValueReportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr));
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.requirementValueReportGrid div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.requirementValueReportGrid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.requirementValueReportGrid dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .requirementReviewAcceptance {
   display: grid;
   gap: 10px;
