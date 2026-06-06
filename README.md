@@ -116,6 +116,7 @@ $env:PATH = "$root\.tools\node;$root\.tools\git\cmd;$env:PATH"
 .\.tools\node\npm.cmd run lint
 .\.tools\node\npm.cmd run build
 .\.tools\node\npm.cmd run smoke:api
+.\.tools\node\npm.cmd run smoke:backup:restore
 # 需要可用的 DATABASE_URL 和已部署迁移：
 .\.tools\node\npm.cmd run smoke:api:postgres
 ```

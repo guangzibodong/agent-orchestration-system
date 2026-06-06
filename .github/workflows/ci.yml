@@ -74,6 +74,9 @@ jobs:
       - name: API smoke
         run: npm run smoke:api
 
+      - name: File backup restore smoke
+        run: npm run smoke:backup:restore
+
       - name: API smoke with Postgres queue worker
         run: npm run smoke:api:postgres
 

@@ -265,8 +265,11 @@ $env:MAWO_QUEUE_BACKEND = "postgres"
 The smoke verifies `/readiness` reports Postgres as the active state and queue
 backends, creates a repository workflow, enqueues it, runs a one-shot Postgres
 worker claim/execution cycle, and checks the workflow/job rows through Prisma.
-For normal operation, keep one or more Postgres workers running after traffic is
-switched.
+This local Postgres smoke still depends on a valid `DATABASE_URL` and a reachable
+database with migrations applied. If the operator host has no local Postgres or
+`DATABASE_URL` is not configured, record the result as an environment blocker;
+do not count that run as product validation or a passed rollout gate. For normal
+operation, keep one or more Postgres workers running after traffic is switched.
 
 Postgres worker process:
 
@@ -503,6 +506,33 @@ tar -xzf .backups/mawo-YYYYMMDD-HHMMSS.tgz
 Retention suggestion for first launch: keep every pre-deploy backup for 7 days,
 then keep one daily backup for 30 days.
 
+File-backed backup/restore acceptance smoke:
+
+```powershell
+.\.tools\node\npm.cmd run smoke:backup:restore
+```
+
+The expected smoke command is `npm run smoke:backup:restore`. It validates the
+file-backed `.mawo` recovery path against real runtime data, not only a static
+archive operation. A passing run should:
+
+1. Create or prepare a real git repository workflow through the API.
+2. Run the workflow far enough to persist workflow state, report data, merge
+   candidate metadata, artifacts, repository registry entries, job history, and
+   audit/readiness-relevant state under `.mawo`.
+3. Create a backup of the live `.mawo` directory.
+4. Deliberately damage or delete the runtime state after backup, including the
+   workflow state that would otherwise prove the system still has the run.
+5. Restore `.mawo` from the backup.
+6. Restart the API against the restored file-backed state.
+7. Verify the restored API can read the workflow, serve the report, expose the
+   merge candidate, return expected artifacts, and report readiness checks for
+   state/artifact access.
+
+Treat this smoke as a file-backed state recovery gate only. It does not prove
+the Postgres runtime path, external worker topology, production exposure, TLS,
+operator identity, or public launch readiness.
+
 ## 9. Rollback
 
 Fast rollback steps:
@@ -586,7 +616,15 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `docker compose config` succeeds on the target host.
 - [ ] `npm run smoke:api:postgres` passes if `MAWO_STATE_BACKEND=postgres` or
       `MAWO_QUEUE_BACKEND=postgres` is part of the rollout; it exercises
-      Postgres API enqueue plus a one-shot worker claim/execute cycle.
+      Postgres API enqueue plus a one-shot worker claim/execute cycle. This
+      requires `DATABASE_URL` and a reachable migrated Postgres database; if
+      local Postgres is absent, mark the check as environment-blocked, not
+      product-passed.
+- [ ] `npm run smoke:backup:restore` passes for the file-backed `.mawo`
+      runtime; it creates a real repository workflow, backs up `.mawo`,
+      damages or deletes state, restores the backup, restarts the API, and
+      verifies workflow/report/merge candidate/artifacts/readiness from the
+      restored state.
 - [ ] `MAWO_WORKER_ONCE=1 npm run worker:postgres` can start against the target
       Postgres database if the external worker path is part of the rollout.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
