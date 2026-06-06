@@ -21,6 +21,7 @@
     "smoke:api:requirements": "node scripts/smoke-api-requirements.mjs",
     "smoke:api:postgres": "node scripts/smoke-api-postgres.mjs",
     "smoke:ui": "playwright test apps/web/e2e/requirement-delivery-console.spec.ts --project=chromium",
+    "launch:gate:local": "node scripts/launch-gate-local.mjs",
     "worker:postgres": "node scripts/worker-postgres.mjs",
     "test:watch": "node node_modules/vitest/vitest.mjs",
     "lint": "eslint .",

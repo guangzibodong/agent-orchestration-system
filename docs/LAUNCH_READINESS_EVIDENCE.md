@@ -16,6 +16,12 @@ Commands run from the repository root on `main` at commit `c78f63e`.
 
 Current decision: `not-ready` until the target deployment environment is selected and its production readiness checks pass there.
 
+Run `npm.cmd run launch:gate:local` from the repository root before release
+tagging to generate timestamped JSON and Markdown evidence under
+`output/launch-readiness/`. The command runs the frozen local engineering and
+P0 smoke gates, records branch/commit/dirty files, and marks Postgres checks as
+`external-blocked` when `DATABASE_URL` is not available.
+
 The local file-backed runtime has passed the core P0 product proof:
 
 1. Real repo path can be registered and safety-checked.

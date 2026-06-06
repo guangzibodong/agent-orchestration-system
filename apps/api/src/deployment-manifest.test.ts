@@ -152,4 +152,19 @@ describe("deployment manifests", () => {
     expect(worker).toContain("PrismaJobStore");
     expect(worker).toContain("PrismaRunStore");
   });
+
+  it("provides a local launch gate evidence entrypoint", () => {
+    const packageJson = read("package.json");
+    const wrapper = read("scripts/launch-gate-local.mjs");
+    const runner = read("scripts/launch-gate-local.ts");
+    const evidenceDoc = read("docs/LAUNCH_READINESS_EVIDENCE.md");
+
+    expect(packageJson).toContain("\"launch:gate:local\"");
+    expect(wrapper).toContain("scripts/launch-gate-local.ts");
+    expect(wrapper).toContain(".tools");
+    expect(runner).toContain("buildLaunchGatePlan");
+    expect(runner).toContain("output/launch-readiness");
+    expect(runner).toContain("renderLaunchGateMarkdown");
+    expect(evidenceDoc).toContain("npm.cmd run launch:gate:local");
+  });
 });
