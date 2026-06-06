@@ -141,6 +141,51 @@ test.describe("Requirement Delivery Console smoke", () => {
     });
   });
 
+  test("surfaces report artifact paths for requirement ticket evidence", async ({
+    page,
+  }) => {
+    await mockApi(page, mixedWorkflows, {
+      reports: {
+        "requirement-viewer-readable": requirementEvidenceReport,
+      },
+      requirements: requirementTickets,
+    });
+
+    await page.goto("/");
+
+    const evidence = page.getByLabel("Gate Result / Review Evidence");
+    const evidenceDrawer = evidence.getByLabel("Read-only evidence links");
+    await evidenceDrawer.getByText("Evidence links", { exact: true }).click();
+
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Inspect evidence stdout" }),
+    ).toHaveAttribute(
+      "href",
+      "/workflows/workflow-needs-review/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-needs-review%2Ftasks%2Ftask-view%2Fstdout.txt",
+    );
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Inspect evidence stderr" }),
+    ).toBeVisible();
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Inspect evidence patch" }),
+    ).toBeVisible();
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Evidence visible stdout" }),
+    ).toBeVisible();
+
+    await page.locator(".requirementDetailDisclosure > summary").click();
+    const detail = page.getByLabel("Requirement detail sections");
+    await expect(detail).toBeVisible();
+    const detailDrawer = page.locator(".requirementDetailShell .artifactDrawer");
+    await detailDrawer.getByText("Artifacts", { exact: true }).click();
+    await expect(
+      detailDrawer.getByRole("link", { name: "Inspect evidence stdout" }),
+    ).toBeVisible();
+    await expect(
+      detailDrawer.getByRole("link", { name: "Report artifact" }),
+    ).toBeVisible();
+  });
+
   test("keeps gate failed and review evidence visible", async ({ page }) => {
     await mockApi(page, mixedWorkflows);
 
@@ -492,6 +537,7 @@ async function mockApi(
       authorization: string | undefined;
       id: string;
     }) => Promise<unknown> | unknown;
+    reports?: Record<string, unknown>;
     requirements?: RequirementDeliveryTicket[];
   } = {},
 ) {
@@ -541,6 +587,20 @@ async function mockApi(
       return;
     }
 
+    const requirementReportMatch = url.pathname.match(
+      /^\/requirements\/([^/]+)\/report$/,
+    );
+    if (request.method() === "GET" && requirementReportMatch) {
+      const report = options.reports?.[requirementReportMatch[1] ?? ""];
+
+      await route.fulfill(
+        report
+          ? { json: report }
+          : { status: 409, json: { error: "report_not_ready" } },
+      );
+      return;
+    }
+
     const requirementActionMatch = url.pathname.match(
       /^\/requirements\/([^/]+)\/(confirm-plan|enqueue|retry)$/,
     );
@@ -574,6 +634,21 @@ async function mockApi(
     const workflow = workflows.find((item) =>
       url.pathname.startsWith(`/workflows/${item.id}`),
     );
+
+    if (
+      request.method() === "GET" &&
+      workflow &&
+      url.pathname === `/workflows/${workflow.id}/report`
+    ) {
+      const report = options.reports?.[workflow.id];
+
+      await route.fulfill(
+        report
+          ? { json: report }
+          : { status: 409, json: { error: "report_not_ready" } },
+      );
+      return;
+    }
 
     if (
       request.method() === "GET" &&
@@ -925,6 +1000,37 @@ const requirementTickets: RequirementDeliveryTicket[] = [
     updatedAt: "2026-06-06T10:25:00.000Z",
   },
 ];
+
+const requirementEvidenceReport = {
+  workflowId: "workflow-needs-review",
+  reportArtifactPath: "C:/mawo/artifacts/workflow-needs-review/report.json",
+  summary: "1/1 tasks passed; 1/1 gates passed",
+  recommendation: "ready_for_review",
+  failedTasks: [],
+  failedGates: [],
+  taskResults: [
+    {
+      id: "task-view",
+      title: "Inspect evidence",
+      status: "passed",
+      stdoutArtifactPath:
+        "C:/mawo/artifacts/workflow-needs-review/tasks/task-view/stdout.txt",
+      stderrArtifactPath:
+        "C:/mawo/artifacts/workflow-needs-review/tasks/task-view/stderr.txt",
+      patchArtifactPath:
+        "C:/mawo/artifacts/workflow-needs-review/tasks/task-view/patch.diff",
+    },
+  ],
+  gateResults: [
+    {
+      id: "gate-view",
+      title: "Evidence visible",
+      status: "passed",
+      stdoutArtifactPath:
+        "C:/mawo/artifacts/workflow-needs-review/gates/gate-view/stdout.txt",
+    },
+  ],
+};
 
 const readiness = {
   ok: true,

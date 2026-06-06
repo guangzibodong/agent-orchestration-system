@@ -26,7 +26,11 @@ describe("requirement delivery loader", () => {
       ];
     });
 
-    expect(requests).toEqual(["/workflows", "/requirements"]);
+    expect(requests).toEqual([
+      "/workflows",
+      "/requirements",
+      "/workflows/workflow-review/report"
+    ]);
     expect(model.requirements).toHaveLength(1);
     expect(model.requirements[0]).toMatchObject({
       id: "workflow-review",
@@ -108,5 +112,144 @@ describe("requirement delivery loader", () => {
       workflowRunStatusLabel: "Ready",
       availableActions: ["enqueue"]
     });
+  });
+
+  it("loads report artifact paths into read-only drawer links for linked requirements", async () => {
+    const requests: string[] = [];
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [
+          {
+            id: "workflow-linked",
+            goal: "Workflow evidence",
+            repositoryPath: "C:/work/shop",
+            status: "needs_review",
+            updatedAt: "2026-06-06T11:04:00.000Z",
+            tasks: [{ id: "task-1", title: "Patch", status: "passed" }],
+            qualityGates: [
+              { id: "gate-1", title: "Unit tests", status: "passed" }
+            ]
+          }
+        ];
+      }
+
+      if (path === "/requirements") {
+        return [
+          {
+            id: "requirement-linked",
+            title: "Run checkout ticket",
+            repositoryPath: "C:/work/shop",
+            goal: "Run checkout evidence",
+            acceptanceCriteria: ["Evidence is reviewable"],
+            constraints: ["Manual git apply only"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "medium",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch",
+                agent: "shell",
+                instructions: "Patch"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "needs_review",
+            currentWorkflowRunId: "workflow-linked",
+            runLinks: [
+              {
+                workflowRunId: "workflow-linked",
+                status: "needs_review",
+                linkedAt: "2026-06-06T11:05:00.000Z"
+              }
+            ],
+            createdAt: "2026-06-06T11:00:00.000Z",
+            updatedAt: "2026-06-06T11:05:00.000Z"
+          }
+        ];
+      }
+
+      if (path === "/requirements/requirement-linked/report") {
+        return {
+          workflowId: "workflow-linked",
+          reportArtifactPath:
+            "C:/mawo/artifacts/workflow-linked/report.json",
+          summary: "1/1 tasks passed; 1/1 gates passed",
+          recommendation: "ready_for_review",
+          failedTasks: [],
+          failedGates: [],
+          taskResults: [
+            {
+              id: "task-1",
+              title: "Patch checkout",
+              status: "passed",
+              stdoutArtifactPath:
+                "C:/mawo/artifacts/workflow-linked/tasks/task-1/stdout.txt",
+              stderrArtifactPath:
+                "C:/mawo/artifacts/workflow-linked/tasks/task-1/stderr.txt",
+              patchArtifactPath:
+                "C:/mawo/artifacts/workflow-linked/tasks/task-1/patch.diff"
+            }
+          ],
+          gateResults: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              status: "passed",
+              stdoutArtifactPath:
+                "C:/mawo/artifacts/workflow-linked/gates/gate-1/stdout.txt"
+            }
+          ]
+        };
+      }
+
+      return [];
+    });
+
+    expect(requests).toContain("/requirements/requirement-linked/report");
+    expect(model.requirements[0]?.artifactLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Freport.json",
+          kind: "report",
+          label: "Report artifact"
+        }),
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Ftasks%2Ftask-1%2Fstdout.txt",
+          kind: "stdout",
+          label: "Patch checkout stdout"
+        }),
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Ftasks%2Ftask-1%2Fstderr.txt",
+          kind: "stderr",
+          label: "Patch checkout stderr"
+        }),
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Ftasks%2Ftask-1%2Fpatch.diff",
+          kind: "patch",
+          label: "Patch checkout patch"
+        }),
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Fgates%2Fgate-1%2Fstdout.txt",
+          kind: "stdout",
+          label: "Unit tests stdout"
+        })
+      ])
+    );
   });
 });

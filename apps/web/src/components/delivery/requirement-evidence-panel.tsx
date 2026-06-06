@@ -265,5 +265,5 @@ export function buildRequirementEvidenceArtifactLinks(
     });
   }
 
-  return links;
+  return [...links, ...(requirement.artifactLinks ?? [])];
 }

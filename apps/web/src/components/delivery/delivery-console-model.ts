@@ -32,6 +32,15 @@ export type RepositorySafetySummary = {
 
 export type RequirementLifecycleAction = "confirm-plan" | "enqueue" | "retry";
 
+export type RequirementArtifactLink = {
+  id: string;
+  kind: "stdout" | "stderr" | "patch" | "report" | "audit";
+  label: string;
+  href: string;
+  meta?: string;
+  path?: string;
+};
+
 export type RequirementSummary = {
   id: string;
   source?: "requirement" | "workflow";
@@ -50,6 +59,7 @@ export type RequirementSummary = {
   workflowRunStatus?: WorkflowRun["status"];
   workflowRunStatusLabel: string;
   reviewDecision?: "approved" | "rejected";
+  artifactLinks?: RequirementArtifactLink[];
   availableActions: RequirementLifecycleAction[];
 };
 
