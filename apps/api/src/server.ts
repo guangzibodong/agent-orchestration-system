@@ -3,6 +3,7 @@ import {
   auditEventTypeSchema,
   createRequirementDeliveryTicketRequestSchema,
   createRepositoryWorkflowRequestSchema,
+  launchGateEvidenceSchema,
   requirementStatusSchema,
   repositoryRegistrationRequestSchema,
   updateRequirementDeliveryTicketRequestSchema,
@@ -22,6 +23,8 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
+  readFileSync,
   readSync,
   statSync,
   unlinkSync,
@@ -121,6 +124,7 @@ const VIEWER_READ_ENDPOINTS: Array<string | RegExp> = [
   "/agents/health",
   "/workers/health",
   "/operations/snapshot",
+  "/launch/evidence/latest",
   "/repositories",
   /^\/repositories\/[^/]+\/safety$/,
   "/requirements",
@@ -625,6 +629,27 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   };
 
   app.get("/readiness", async () => buildReadinessResponse());
+
+  app.get("/launch/evidence/latest", async (_request, reply) => {
+    try {
+      const evidence = readLatestLaunchGateEvidence(root);
+
+      if (!evidence) {
+        return reply.code(404).send({
+          error: "launch_gate_evidence_not_found",
+          message:
+            "Run npm.cmd run launch:gate:local to generate launch readiness evidence.",
+        });
+      }
+
+      return evidence;
+    } catch (error) {
+      return reply.code(500).send({
+        error: "invalid_launch_gate_evidence",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
 
   app.get("/agents", async () => {
     return createAgentSummaries(cliAgents);
@@ -2074,6 +2099,43 @@ function readArtifactPrefix(path: string, maxBytes: number): string {
   } finally {
     closeSync(file);
   }
+}
+
+function readLatestLaunchGateEvidence(root: string) {
+  const evidenceRoot = join(root, "output", "launch-readiness");
+
+  if (!existsSync(evidenceRoot) || !statSync(evidenceRoot).isDirectory()) {
+    return undefined;
+  }
+
+  const latestAlias = join(evidenceRoot, "latest.json");
+  const latestPath =
+    existsSync(latestAlias) && statSync(latestAlias).isFile()
+      ? latestAlias
+      : readdirSync(evidenceRoot, { withFileTypes: true })
+          .filter(
+            (entry) =>
+              entry.isFile() &&
+              /^\d{4}-\d{2}-\d{2}T.+\.json$/.test(entry.name),
+          )
+          .map((entry) => join(evidenceRoot, entry.name))
+          .sort((left, right) => left.localeCompare(right))
+          .at(-1);
+
+  if (!latestPath) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(latestPath, "utf8")) as unknown;
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Launch gate evidence JSON must be an object.");
+  }
+
+  return launchGateEvidenceSchema.parse({
+    ...parsed,
+    sourcePath: latestPath,
+  });
 }
 
 function createWritableDirectoryCheck(id: string, label: string, path: string) {

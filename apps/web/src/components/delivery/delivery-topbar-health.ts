@@ -1,4 +1,4 @@
-import type { OperationsSnapshot } from "@mawo/shared";
+import type { LaunchGateEvidence, OperationsSnapshot } from "@mawo/shared";
 import { summarizeReadiness } from "../readiness-display";
 import { summarizeWorkerHealth } from "../worker-health-display";
 
@@ -18,6 +18,7 @@ export type DeliveryTopbarHealthIndicator = {
 
 export function buildDeliveryTopbarHealthIndicators(
   snapshot: OperationsSnapshot,
+  launchEvidence?: LaunchGateEvidence,
 ): DeliveryTopbarHealthIndicator[] {
   const readiness = summarizeReadiness(snapshot.readiness);
   const workerHealth = summarizeWorkerHealth(snapshot.workerHealth);
@@ -39,9 +40,9 @@ export function buildDeliveryTopbarHealthIndicators(
     {
       id: "launch",
       label: "Launch",
-      value: buildLaunchValue(readiness),
-      detail: buildLaunchDetail(readiness),
-      severity: readiness.severity,
+      value: buildLaunchValue(readiness, launchEvidence),
+      detail: buildLaunchDetail(readiness, launchEvidence),
+      severity: buildLaunchSeverity(readiness, launchEvidence),
     },
     {
       id: "worker",
@@ -72,7 +73,12 @@ export function buildDeliveryTopbarHealthIndicators(
 
 function buildLaunchValue(
   readiness: ReturnType<typeof summarizeReadiness>,
+  launchEvidence?: LaunchGateEvidence,
 ): string {
+  if (launchEvidence) {
+    return `Local ${launchEvidence.localDecision} / Prod ${launchEvidence.productionDecision}`;
+  }
+
   if (readiness.blockedChecks > 0) {
     return `${readiness.deploymentLabel} blocked`;
   }
@@ -86,7 +92,21 @@ function buildLaunchValue(
 
 function buildLaunchDetail(
   readiness: ReturnType<typeof summarizeReadiness>,
+  launchEvidence?: LaunchGateEvidence,
 ): string {
+  if (launchEvidence) {
+    const failures = launchEvidence.failureSummaries.length;
+    const blockers = launchEvidence.externalBlockers.length;
+
+    return `${failures} ${pluralize(
+      failures,
+      "failure",
+    )}, ${blockers} external ${pluralize(
+      blockers,
+      "blocker",
+    )} from ${launchEvidence.generatedAt}`;
+  }
+
   if (readiness.blockedChecks > 0) {
     return `${readiness.blockedChecks} ${pluralize(
       readiness.blockedChecks,
@@ -102,6 +122,25 @@ function buildLaunchDetail(
   }
 
   return `${readiness.deploymentLabel} readiness has no blockers`;
+}
+
+function buildLaunchSeverity(
+  readiness: ReturnType<typeof summarizeReadiness>,
+  launchEvidence?: LaunchGateEvidence,
+): DeliveryTopbarHealthSeverity {
+  if (!launchEvidence) {
+    return readiness.severity;
+  }
+
+  if (launchEvidence.localDecision === "failed") {
+    return "danger";
+  }
+
+  if (launchEvidence.productionDecision === "blocked") {
+    return "warning";
+  }
+
+  return "healthy";
 }
 
 function buildMissingWorkerSeverity(

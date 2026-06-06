@@ -6,6 +6,7 @@ import {
   repositoryRegistrationRequestSchema,
   repositoryRecordSchema,
   operationsSnapshotSchema,
+  launchGateEvidenceSchema,
   readinessResponseSchema,
   workerHealthResponseSchema,
   mergeCandidateSchema,
@@ -499,6 +500,55 @@ describe("workflowRunSchema", () => {
     expect(snapshot.summary.activeJobs).toBe(2);
     expect(snapshot.repositoryId).toBe("repo-1");
     expect(snapshot.workerHealth.summary.staleWorkers).toBe(1);
+  });
+
+  it("accepts launch gate evidence responses", () => {
+    const evidence = launchGateEvidenceSchema.parse({
+      generatedAt: "2026-06-06T16:35:25.938Z",
+      root: "C:/work",
+      branch: "main",
+      commit: "cfa22af",
+      dirtyFiles: [],
+      checks: [
+        {
+          id: "typecheck",
+          label: "Typecheck",
+          required: true,
+          command: "npm.cmd",
+          args: ["run", "typecheck"],
+          status: "passed",
+          exitCode: 0,
+          durationMs: 4958,
+          stdoutSummary: "ok",
+          stderrSummary: ""
+        },
+        {
+          id: "smoke_api_postgres",
+          label: "Postgres API smoke",
+          required: false,
+          command: "npm.cmd",
+          args: ["run", "smoke:api:postgres"],
+          status: "external-blocked",
+          blockedReason: "DATABASE_URL is not configured."
+        }
+      ],
+      docs: [
+        "docs/LAUNCH_READINESS_EVIDENCE.md",
+        "docs/OPERATIONS.md#11-known-limits",
+        "docs/product/REQUIREMENTS_FREEZE.md"
+      ],
+      localDecision: "passed",
+      productionDecision: "blocked",
+      failureSummaries: [],
+      externalBlockers: [
+        "smoke_api_postgres: DATABASE_URL is not configured."
+      ],
+      sourcePath: "C:/work/output/launch-readiness/latest.json"
+    });
+
+    expect(evidence.localDecision).toBe("passed");
+    expect(evidence.checks[1]?.status).toBe("external-blocked");
+    expect(evidence.sourcePath).toContain("latest.json");
   });
 
   it("accepts workflow review decisions", () => {

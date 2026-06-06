@@ -328,7 +328,10 @@ describe("runner API", () => {
   });
 
   it("allows a viewer token to read operational endpoints", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-viewer-auth-test-"));
+    tempRoots.push(demoRoot);
     const app = buildApp(undefined, {
+      demoRoot,
       env: {
         MAWO_API_TOKEN: "operator-token",
         MAWO_VIEWER_API_TOKEN: "viewer-token",
@@ -343,6 +346,7 @@ describe("runner API", () => {
       { method: "GET", url: "/agents/health" },
       { method: "GET", url: "/workers/health" },
       { method: "GET", url: "/operations/snapshot" },
+      { method: "GET", url: "/launch/evidence/latest" },
       { method: "GET", url: "/repositories" },
       { method: "GET", url: "/repositories/missing-repository/safety" },
       { method: "GET", url: "/requirements" },
@@ -377,9 +381,86 @@ describe("runner API", () => {
     );
 
     expect(responses.map((response) => response.statusCode)).toEqual([
-      200, 200, 200, 200, 200, 200, 404, 200, 404, 404, 404, 200, 404, 404,
-      404, 404, 404, 200, 404, 404, 200,
+      200, 200, 200, 200, 200, 404, 200, 404, 200, 404, 404, 404, 200, 404,
+      404, 404, 404, 404, 200, 404, 404, 200,
     ]);
+  });
+
+  it("returns the latest local launch gate evidence as a viewer-readable endpoint", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-launch-evidence-test-"));
+    tempRoots.push(demoRoot);
+    const evidenceRoot = join(demoRoot, "output", "launch-readiness");
+    await mkdir(evidenceRoot, { recursive: true });
+    await writeFile(
+      join(evidenceRoot, "2026-06-06T16-20-00-000Z.json"),
+      JSON.stringify({
+        generatedAt: "2026-06-06T16:20:00.000Z",
+        root: demoRoot,
+        branch: "main",
+        commit: "old",
+        dirtyFiles: [],
+        checks: [],
+        docs: [],
+        localDecision: "failed",
+        productionDecision: "blocked",
+        failureSummaries: ["old failure"],
+        externalBlockers: [],
+      }),
+      "utf8",
+    );
+    await writeFile(
+      join(evidenceRoot, "2026-06-06T16-35-25-938Z.json"),
+      JSON.stringify({
+        generatedAt: "2026-06-06T16:35:25.938Z",
+        root: demoRoot,
+        branch: "main",
+        commit: "cfa22af",
+        dirtyFiles: [],
+        checks: [
+          {
+            id: "typecheck",
+            label: "Typecheck",
+            required: true,
+            command: "npm.cmd",
+            args: ["run", "typecheck"],
+            status: "passed",
+            exitCode: 0,
+            durationMs: 4958,
+          },
+        ],
+        docs: ["docs/product/REQUIREMENTS_FREEZE.md"],
+        localDecision: "passed",
+        productionDecision: "blocked",
+        failureSummaries: [],
+        externalBlockers: [
+          "smoke_api_postgres: DATABASE_URL is not configured.",
+        ],
+      }),
+      "utf8",
+    );
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        MAWO_API_TOKEN: "operator-token",
+        MAWO_VIEWER_API_TOKEN: "viewer-token",
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/launch/evidence/latest",
+      headers: {
+        authorization: "Bearer viewer-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      generatedAt: "2026-06-06T16:35:25.938Z",
+      localDecision: "passed",
+      productionDecision: "blocked",
+      sourcePath: expect.stringContaining("2026-06-06T16-35-25-938Z.json"),
+    });
   });
 
   it("blocks a viewer token from mutating repositories, workflows, jobs, and merge candidates", async () => {

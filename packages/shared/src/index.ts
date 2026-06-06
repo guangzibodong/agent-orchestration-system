@@ -287,6 +287,43 @@ export const readinessResponseSchema = z.object({
   checks: z.array(readinessCheckSchema),
 });
 
+export const launchGateCheckStatusSchema = z.enum([
+  "passed",
+  "failed",
+  "external-blocked",
+  "not-applicable",
+]);
+
+export const launchGateEvidenceCheckSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  command: z.string().min(1),
+  args: z.array(z.string()),
+  status: launchGateCheckStatusSchema,
+  exitCode: z.number().optional(),
+  durationMs: z.number().nonnegative().optional(),
+  stdoutSummary: z.string().optional(),
+  stderrSummary: z.string().optional(),
+  blockedReason: z.string().optional(),
+  notApplicableReason: z.string().optional(),
+});
+
+export const launchGateEvidenceSchema = z.object({
+  generatedAt: z.string().min(1),
+  root: z.string().min(1),
+  branch: z.string().min(1),
+  commit: z.string().min(1),
+  dirtyFiles: z.array(z.string()),
+  checks: z.array(launchGateEvidenceCheckSchema),
+  docs: z.array(z.string()),
+  localDecision: z.enum(["passed", "failed"]),
+  productionDecision: z.enum(["ready", "blocked"]),
+  failureSummaries: z.array(z.string()),
+  externalBlockers: z.array(z.string()),
+  sourcePath: z.string().min(1).optional(),
+});
+
 export const workerHealthSchema = z.object({
   workerId: z.string().min(1),
   healthy: z.boolean(),
@@ -535,6 +572,10 @@ export type AgentSummary = z.infer<typeof agentSummarySchema>;
 export type AgentHealth = z.infer<typeof agentHealthSchema>;
 export type ReadinessCheck = z.infer<typeof readinessCheckSchema>;
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
+export type LaunchGateEvidence = z.infer<typeof launchGateEvidenceSchema>;
+export type LaunchGateEvidenceCheck = z.infer<
+  typeof launchGateEvidenceCheckSchema
+>;
 export type WorkerHealth = z.infer<typeof workerHealthSchema>;
 export type WorkerHealthResponse = z.infer<typeof workerHealthResponseSchema>;
 export type OperationsSnapshot = z.infer<typeof operationsSnapshotSchema>;

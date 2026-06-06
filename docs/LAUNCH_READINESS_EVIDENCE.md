@@ -22,6 +22,10 @@ tagging to generate timestamped JSON and Markdown evidence under
 P0 smoke gates, records branch/commit/dirty files, and marks Postgres checks as
 `external-blocked` when `DATABASE_URL` is not available.
 
+The API exposes the latest generated JSON at `GET /launch/evidence/latest`;
+the Requirement Delivery Console uses it only as a read-only launch health
+signal.
+
 The local file-backed runtime has passed the core P0 product proof:
 
 1. Real repo path can be registered and safety-checked.

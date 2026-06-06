@@ -27,6 +27,7 @@ import {
 } from "./delivery-topbar-health";
 import type { NewRequirementPayload } from "./new-requirement-payload";
 import { RequirementDeliveryConsole } from "./requirement-delivery-console";
+import { loadLatestLaunchGateEvidence } from "./launch-gate-evidence-loader";
 import { loadRequirementDeliveryModel } from "./requirement-delivery-loader";
 import { buildWorkflowReviewPayload } from "../workflow-review-payload";
 import { loadOperationsSnapshot } from "../operations-snapshot";
@@ -349,13 +350,16 @@ export function RequirementDeliveryConsoleClient() {
 
     async function loadTopbarHealthIndicators() {
       try {
-        const snapshot = await loadOperationsSnapshot(api);
+        const [snapshot, launchEvidence] = await Promise.all([
+          loadOperationsSnapshot(api),
+          loadLatestLaunchGateEvidence(api)
+        ]);
         if (canceled) {
           return;
         }
 
         setTopbarHealthIndicators(
-          buildDeliveryTopbarHealthIndicators(snapshot)
+          buildDeliveryTopbarHealthIndicators(snapshot, launchEvidence)
         );
       } catch {
         if (canceled) {

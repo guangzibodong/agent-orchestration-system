@@ -123,6 +123,33 @@ describe("delivery topbar health", () => {
     );
   });
 
+  it("uses latest launch gate evidence for the launch indicator when available", () => {
+    const indicators = buildDeliveryTopbarHealthIndicators(baseSnapshot, {
+      generatedAt: "2026-06-06T16:35:25.938Z",
+      root: "C:/work",
+      branch: "main",
+      commit: "cfa22af",
+      dirtyFiles: [],
+      checks: [],
+      docs: [],
+      localDecision: "passed",
+      productionDecision: "blocked",
+      failureSummaries: [],
+      externalBlockers: [
+        "smoke_api_postgres: DATABASE_URL is not configured.",
+      ],
+      sourcePath: "C:/work/output/launch-readiness/latest.json",
+    });
+
+    expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
+      expect.objectContaining({
+        value: "Local passed / Prod blocked",
+        detail: "0 failures, 1 external blocker from 2026-06-06T16:35:25.938Z",
+        severity: "warning",
+      }),
+    );
+  });
+
   it("shows failed jobs as the queue danger state", () => {
     const indicators = buildDeliveryTopbarHealthIndicators({
       ...baseSnapshot,
