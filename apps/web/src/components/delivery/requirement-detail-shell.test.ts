@@ -69,7 +69,8 @@ function renderDetail(viewerMode = false): string {
     createElement(RequirementDetailShell, {
       requirement,
       artifacts,
-      viewerMode
+      viewerMode,
+      onReviewAction: () => undefined
     })
   );
 }
@@ -103,6 +104,19 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Patch available for human review");
     expect(html).not.toContain("Merge candidate ready for manual apply");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
+  });
+
+  it("shows an operator review acceptance surface for review-ready work", () => {
+    const html = renderDetail();
+
+    expect(html).toContain("Review acceptance");
+    expect(html).toContain("Human acceptance decision");
+    expect(html).toContain("Ready for approve or reject");
+    expect(html).toContain("Manual apply command");
+    expect(html).toContain("git apply");
+    expect(html).toContain("workflow-review");
+    expect(html).toContain("Approve");
+    expect(html).toContain("Reject");
   });
 
   it("keeps artifacts discoverable but collapsed inside the detail shell", () => {

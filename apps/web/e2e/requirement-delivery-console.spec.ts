@@ -324,6 +324,99 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toHaveCount(0);
   });
 
+  test("operator can approve a review-ready requirement from the detail shell", async ({
+    page,
+  }) => {
+    const reviewRequests: Array<{
+      authorization: string | undefined;
+      decision: string;
+      workflowId: string;
+    }> = [];
+    const reviewWorkflows: WorkflowRun[] = [
+      mixedWorkflows[1] as WorkflowRun,
+    ];
+    const reviewRequirements: RequirementDeliveryTicket[] = [
+      { ...(requirementTickets[0] as RequirementDeliveryTicket) },
+    ];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, reviewWorkflows, {
+      requirements: reviewRequirements,
+      onWorkflowReview: ({ authorization, decision, workflowId }) => {
+        reviewRequests.push({ authorization, decision, workflowId });
+        reviewWorkflows[0] = {
+          ...(reviewWorkflows[0] as WorkflowRun),
+          status: "completed",
+          review: {
+            decision: "approved",
+            note: "Approved from Requirement Delivery Console",
+            reviewedAt: "2026-06-06T11:20:00.000Z",
+          },
+          updatedAt: "2026-06-06T11:20:00.000Z",
+        };
+        updateRequirement(reviewRequirements, "requirement-viewer-readable", {
+          status: "delivered",
+          updatedAt: "2026-06-06T11:20:00.000Z",
+          runLinks: [
+            {
+              workflowRunId: "workflow-needs-review",
+              status: "completed",
+              linkedAt: "2026-06-06T11:20:00.000Z",
+            },
+          ],
+        });
+
+        return reviewWorkflows[0];
+      },
+    });
+
+    await page.goto("/");
+
+    await expectMetric(page, "Waiting Review", "1");
+    await expect(page.locator(".decisionQueuePanel")).toContainText(
+      "Review merge candidate",
+    );
+    await page.locator(".requirementDetailDisclosure > summary").click();
+
+    const detail = page.locator(".requirementDetailShell");
+    const reviewActions = detail.getByLabel("Review actions");
+    await expect(
+      reviewActions.getByRole("button", { name: "Approve" }),
+    ).toBeEnabled();
+    await expect(
+      reviewActions.getByRole("button", { name: "Reject" }),
+    ).toBeEnabled();
+    await reviewActions.getByRole("button", { name: "Approve" }).click();
+
+    await expect
+      .poll(() => reviewRequests, {
+        message: "wait for workflow review request",
+      })
+      .toEqual([
+        {
+          authorization: "Bearer operator-token",
+          decision: "approve",
+          workflowId: "workflow-needs-review",
+        },
+      ]);
+    await expect(page.getByLabel("Review decision")).toContainText(
+      "Review approved: Viewer readable requirement",
+    );
+    await expectMetric(page, "Waiting Review", "0");
+    await expect(page.locator(".decisionQueuePanel")).not.toContainText(
+      "Review merge candidate",
+    );
+    await expect(page.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Approved delivery",
+    );
+  });
+
   test("keeps key requirement labels inside the mobile viewport", async ({
     page,
   }) => {
@@ -650,6 +743,11 @@ async function mockApi(
       authorization: string | undefined;
       id: string;
     }) => Promise<unknown> | unknown;
+    onWorkflowReview?: (request: {
+      authorization: string | undefined;
+      decision: "approve" | "reject";
+      workflowId: string;
+    }) => Promise<unknown> | unknown;
     onMutatingRequest?: (request: {
       method: string;
       pathname: string;
@@ -799,6 +897,39 @@ async function mockApi(
       url.pathname === `/workflows/${workflow.id}`
     ) {
       await route.fulfill({ json: workflow });
+      return;
+    }
+
+    if (
+      request.method() === "POST" &&
+      workflow &&
+      url.pathname === `/workflows/${workflow.id}/review`
+    ) {
+      if (request.headers().authorization === "Bearer viewer-token") {
+        await route.fulfill({
+          status: 403,
+          json: {
+            error: "forbidden",
+            message: "This endpoint requires an operator token.",
+            requiredRole: "operator",
+            role: "viewer",
+          },
+        });
+        return;
+      }
+
+      const payload = request.postDataJSON() as {
+        decision?: "approve" | "reject";
+      };
+      const body = await options.onWorkflowReview?.({
+        authorization: request.headers().authorization,
+        decision: payload.decision ?? "approve",
+        workflowId: workflow.id,
+      });
+      await route.fulfill({
+        status: 200,
+        json: body ?? workflow,
+      });
       return;
     }
 

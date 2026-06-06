@@ -31,6 +31,7 @@ export type RepositorySafetySummary = {
 };
 
 export type RequirementLifecycleAction = "confirm-plan" | "enqueue" | "retry";
+export type RequirementReviewAction = "approve" | "reject";
 
 export type RequirementArtifactLink = {
   id: string;

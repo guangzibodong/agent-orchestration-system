@@ -14,6 +14,8 @@ import { useState } from "react";
 import type {
   DeliveryConsoleModel,
   RequirementLifecycleAction,
+  RequirementReviewAction,
+  RequirementSummary,
 } from "./delivery-console-model";
 import {
   buildDecisionQueueDisplay,
@@ -39,11 +41,23 @@ type RequirementDeliveryConsoleProps = {
     requirementId: string,
     action: RequirementLifecycleAction,
   ) => Promise<void> | void;
+  onRequirementReviewAction?: (
+    requirementId: string,
+    workflowRunId: string,
+    action: RequirementReviewAction,
+  ) => Promise<void> | void;
   onNewRequirementSubmit?: (payload: NewRequirementPayload) => Promise<void> | void;
 };
 
 type RequirementActionState = {
   action: RequirementLifecycleAction;
+  message: string;
+  requirementId: string;
+  status: "error" | "loading" | "success";
+};
+
+type RequirementReviewActionState = {
+  action: RequirementReviewAction;
   message: string;
   requirementId: string;
   status: "error" | "loading" | "success";
@@ -67,6 +81,16 @@ const successActionMessages: Record<RequirementLifecycleAction, string> = {
   retry: "Retry reset to ready",
 };
 
+const reviewLoadingActionLabels: Record<RequirementReviewAction, string> = {
+  approve: "Approving review",
+  reject: "Rejecting review",
+};
+
+const reviewSuccessActionMessages: Record<RequirementReviewAction, string> = {
+  approve: "Review approved",
+  reject: "Review rejected",
+};
+
 export function RequirementDeliveryConsole({
   model,
   syncMessage,
@@ -74,6 +98,7 @@ export function RequirementDeliveryConsole({
   viewerMode = false,
   initialNewRequirementPanelOpen = false,
   onRequirementLifecycleAction,
+  onRequirementReviewAction,
   onNewRequirementSubmit,
 }: RequirementDeliveryConsoleProps) {
   const [isNewRequirementPanelOpen, setIsNewRequirementPanelOpen] = useState(
@@ -82,6 +107,8 @@ export function RequirementDeliveryConsole({
   const [newRequirementMessage, setNewRequirementMessage] = useState<string>();
   const [requirementActionState, setRequirementActionState] =
     useState<RequirementActionState>();
+  const [requirementReviewActionState, setRequirementReviewActionState] =
+    useState<RequirementReviewActionState>();
   const [selectedRequirementId, setSelectedRequirementId] = useState<string>();
   const queueRows = buildRequirementQueueRows(model.requirements);
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
@@ -151,6 +178,52 @@ export function RequirementDeliveryConsole({
     }
   }
 
+  async function handleRequirementReviewAction(
+    requirement: RequirementSummary,
+    action: RequirementReviewAction,
+  ) {
+    if (!requirement.workflowRunId) {
+      setRequirementReviewActionState({
+        action,
+        message: "Linked workflow run is required before review",
+        requirementId: requirement.id,
+        status: "error",
+      });
+      return;
+    }
+
+    setRequirementReviewActionState({
+      action,
+      message: `${reviewLoadingActionLabels[action]} for ${requirement.title}`,
+      requirementId: requirement.id,
+      status: "loading",
+    });
+
+    try {
+      await onRequirementReviewAction?.(
+        requirement.id,
+        requirement.workflowRunId,
+        action,
+      );
+      setRequirementReviewActionState({
+        action,
+        message: `${reviewSuccessActionMessages[action]}: ${requirement.title}`,
+        requirementId: requirement.id,
+        status: "success",
+      });
+    } catch (error: unknown) {
+      setRequirementReviewActionState({
+        action,
+        message:
+          error instanceof Error
+            ? error.message
+            : `${reviewSuccessActionMessages[action]} failed: ${requirement.title}`,
+        requirementId: requirement.id,
+        status: "error",
+      });
+    }
+  }
+
   return (
     <main className="deliveryShell" aria-labelledby="delivery-title">
       <section className="deliveryTopbar">
@@ -193,6 +266,22 @@ export function RequirementDeliveryConsole({
       {newRequirementMessage ? (
         <section className="deliverySyncBanner" aria-label="New requirement">
           {newRequirementMessage}
+        </section>
+      ) : null}
+
+      {requirementReviewActionState ? (
+        <section
+          className={
+            requirementReviewActionState.status === "error"
+              ? "deliverySyncBanner danger"
+              : "deliverySyncBanner"
+          }
+          aria-label="Review decision"
+          role={
+            requirementReviewActionState.status === "error" ? "alert" : "status"
+          }
+        >
+          {requirementReviewActionState.message}
         </section>
       ) : null}
 
@@ -376,6 +465,7 @@ export function RequirementDeliveryConsole({
             <RequirementDetailShell
               actionState={requirementActionState}
               artifacts={selectedRequirementArtifacts}
+              reviewActionState={requirementReviewActionState}
               requirement={selectedRequirement}
               showViewerBanner={false}
               onLifecycleAction={(action) =>
@@ -384,6 +474,12 @@ export function RequirementDeliveryConsole({
                       selectedRequirement.id,
                       action,
                     )
+                  : undefined
+              }
+              onReviewAction={
+                onRequirementReviewAction && selectedRequirement
+                  ? (action) =>
+                      handleRequirementReviewAction(selectedRequirement, action)
                   : undefined
               }
               viewerMode={viewerMode}

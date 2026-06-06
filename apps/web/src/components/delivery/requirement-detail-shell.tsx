@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type {
   RequirementLifecycleAction,
+  RequirementReviewAction,
   RequirementStage,
   RequirementSummary
 } from "./delivery-console-model";
@@ -20,9 +21,15 @@ type RequirementDetailShellProps = {
     requirementId: string;
     status: "error" | "loading" | "success";
   };
+  reviewActionState?: {
+    action: RequirementReviewAction;
+    requirementId: string;
+    status: "error" | "loading" | "success";
+  };
   requirement?: RequirementSummary;
   artifacts?: ArtifactDrawerLink[];
   onLifecycleAction?: (action: RequirementLifecycleAction) => void;
+  onReviewAction?: (action: RequirementReviewAction) => void;
   viewerMode?: boolean;
   showViewerBanner?: boolean;
 };
@@ -74,9 +81,11 @@ const lifecycleLoadingLabels: Record<RequirementLifecycleAction, string> = {
 
 export function RequirementDetailShell({
   actionState,
+  reviewActionState,
   requirement,
   artifacts = [],
   onLifecycleAction,
+  onReviewAction,
   viewerMode = false,
   showViewerBanner = true,
 }: RequirementDetailShellProps) {
@@ -160,34 +169,122 @@ export function RequirementDetailShell({
             ) : null}
 
             {section.title === "Review" ? (
-              <div className="requirementDetailActions" aria-label="Review actions">
-                <button className="secondaryButton" disabled type="button">
-                  <Check size={16} aria-hidden="true" />
-                  Approve
-                </button>
-                <button className="secondaryButton dangerButton" disabled type="button">
-                  <X size={16} aria-hidden="true" />
-                  Reject
-                </button>
-                <button
-                  className="secondaryButton"
-                  disabled={
-                    actionDisabled ||
-                    !onLifecycleAction ||
-                    !requirement?.availableActions.includes("retry")
-                  }
-                  onClick={() => onLifecycleAction?.("retry")}
-                  type="button"
-                >
-                  <RefreshCw size={16} aria-hidden="true" />
-                  Retry
-                </button>
-              </div>
+              <RequirementReviewAcceptance
+                artifacts={artifacts}
+                disabled={actionDisabled}
+                onLifecycleAction={onLifecycleAction}
+                onReviewAction={onReviewAction}
+                requirement={requirement}
+                reviewActionState={reviewActionState}
+                viewerMode={viewerMode}
+              />
             ) : null}
           </section>
         ))}
       </div>
     </section>
+  );
+}
+
+function RequirementReviewAcceptance({
+  artifacts,
+  disabled,
+  onLifecycleAction,
+  onReviewAction,
+  requirement,
+  reviewActionState,
+  viewerMode,
+}: {
+  artifacts: ArtifactDrawerLink[];
+  disabled: boolean;
+  onLifecycleAction?: (action: RequirementLifecycleAction) => void;
+  onReviewAction?: (action: RequirementReviewAction) => void;
+  requirement?: RequirementSummary;
+  reviewActionState?: RequirementDetailShellProps["reviewActionState"];
+  viewerMode: boolean;
+}) {
+  const reviewReady =
+    requirement?.executionStatus === "needs_review" &&
+    Boolean(requirement.workflowRunId);
+  const reviewLoading =
+    reviewActionState?.status === "loading" &&
+    reviewActionState.requirementId === requirement?.id;
+  const reviewDisabled = disabled || !onReviewAction || !reviewReady || reviewLoading;
+  const patchPath = artifacts.find(
+    (artifact) => artifact.kind === "patch" && artifact.path,
+  )?.path;
+  const applyCommand = patchPath
+    ? `git apply "${patchPath}"`
+    : "git apply <merge-candidate.patch>";
+
+  return (
+    <div className="requirementReviewAcceptance">
+      <section
+        className="requirementReviewDecision"
+        aria-label="Review acceptance"
+      >
+        <div>
+          <p className="eyebrow">Human acceptance decision</p>
+          <h3>Review acceptance</h3>
+        </div>
+        <dl className="requirementReviewDecisionGrid">
+          <div>
+            <dt>Decision state</dt>
+            <dd>{buildReviewDecisionState(requirement, viewerMode)}</dd>
+          </div>
+          <div>
+            <dt>Gate conclusion</dt>
+            <dd>{requirement ? buildGateSummary(requirement) : "Gate evidence pending"}</dd>
+          </div>
+          <div>
+            <dt>Workflow run</dt>
+            <dd>{requirement?.workflowRunId ?? "No workflow run linked"}</dd>
+          </div>
+          <div>
+            <dt>Manual apply command</dt>
+            <dd>{applyCommand}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <div className="requirementDetailActions" aria-label="Review actions">
+        <button
+          className="secondaryButton"
+          disabled={reviewDisabled}
+          onClick={() => onReviewAction?.("approve")}
+          type="button"
+        >
+          <Check size={16} aria-hidden="true" />
+          {reviewLoading && reviewActionState?.action === "approve"
+            ? "Approving"
+            : "Approve"}
+        </button>
+        <button
+          className="secondaryButton dangerButton"
+          disabled={reviewDisabled}
+          onClick={() => onReviewAction?.("reject")}
+          type="button"
+        >
+          <X size={16} aria-hidden="true" />
+          {reviewLoading && reviewActionState?.action === "reject"
+            ? "Rejecting"
+            : "Reject"}
+        </button>
+        <button
+          className="secondaryButton"
+          disabled={
+            disabled ||
+            !onLifecycleAction ||
+            !requirement?.availableActions.includes("retry")
+          }
+          onClick={() => onLifecycleAction?.("retry")}
+          type="button"
+        >
+          <RefreshCw size={16} aria-hidden="true" />
+          Retry
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -449,6 +546,38 @@ function buildReviewSummary(requirement: RequirementSummary): string {
   }
 
   return "Review evidence is pending";
+}
+
+function buildReviewDecisionState(
+  requirement: RequirementSummary | undefined,
+  viewerMode: boolean,
+): string {
+  if (!requirement) {
+    return "Select a requirement before review";
+  }
+
+  if (viewerMode) {
+    return "Viewer read-only; operator token required";
+  }
+
+  if (
+    requirement.executionStatus === "needs_review" &&
+    requirement.workflowRunId
+  ) {
+    return "Ready for approve or reject";
+  }
+
+  if (requirement.executionStatus === "gate_failed") {
+    return "Blocked until failed required gates pass";
+  }
+
+  if (requirement.executionStatus === "completed") {
+    return requirement.reviewDecision === "approved"
+      ? "Approved delivery recorded"
+      : "Review already recorded";
+  }
+
+  return "Review decisions unlock after quality gates pass";
 }
 
 function buildValueStatus(requirement: RequirementSummary): string {

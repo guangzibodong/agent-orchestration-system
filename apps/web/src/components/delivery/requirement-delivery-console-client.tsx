@@ -17,11 +17,13 @@ import {
 import {
   buildDeliveryConsoleModel,
   type DeliveryConsoleModel,
-  type RequirementLifecycleAction
+  type RequirementLifecycleAction,
+  type RequirementReviewAction
 } from "./delivery-console-model";
 import type { NewRequirementPayload } from "./new-requirement-payload";
 import { RequirementDeliveryConsole } from "./requirement-delivery-console";
 import { loadRequirementDeliveryModel } from "./requirement-delivery-loader";
+import { buildWorkflowReviewPayload } from "../workflow-review-payload";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
@@ -123,6 +125,35 @@ export function RequirementDeliveryConsoleClient() {
     setMessage(buildLifecycleMessage(action, lifecycleResult.requirement));
   }
 
+  async function handleRequirementReviewAction(
+    requirementId: string,
+    workflowRunId: string,
+    action: RequirementReviewAction
+  ) {
+    const result = await api(`/workflows/${workflowRunId}/review`, {
+      method: "POST",
+      body: JSON.stringify(buildWorkflowReviewPayload(action))
+    });
+    const workflow = workflowRunSchema.parse(result);
+    const nextWorkflowOverridesById = {
+      ...workflowOverridesById,
+      [workflow.id]: workflow
+    };
+
+    setWorkflowOverridesById(nextWorkflowOverridesById);
+    const nextModel = await loadRequirementDeliveryModel(
+      api,
+      {},
+      {
+        jobStatusByRequirementId,
+        workflowOverrides: buildWorkflowOverrides(nextWorkflowOverridesById)
+      }
+    );
+    setModel(nextModel);
+    setLoadState("ready");
+    setMessage(buildReviewMessage(action, requirementId, nextModel));
+  }
+
   useEffect(() => {
     let canceled = false;
 
@@ -177,6 +208,7 @@ export function RequirementDeliveryConsoleClient() {
       syncTone={loadState === "error" ? "danger" : "muted"}
       viewerMode={viewerMode}
       onRequirementLifecycleAction={handleRequirementLifecycleAction}
+      onRequirementReviewAction={handleRequirementReviewAction}
       onNewRequirementSubmit={handleNewRequirementSubmit}
     />
   );
@@ -243,4 +275,18 @@ function buildLifecycleMessage(
     case "retry":
       return `Retry reset to ready: ${title}`;
   }
+}
+
+function buildReviewMessage(
+  action: RequirementReviewAction,
+  requirementId: string,
+  model: DeliveryConsoleModel
+): string {
+  const title =
+    model.requirements.find((requirement) => requirement.id === requirementId)
+      ?.title ?? "Requirement";
+
+  return action === "approve"
+    ? `Review approved: ${title}`
+    : `Review rejected: ${title}`;
 }
