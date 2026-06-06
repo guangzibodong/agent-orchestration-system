@@ -187,6 +187,20 @@ degraded check is resolved:
 }
 ```
 
+Local file-backed production readiness smoke:
+
+```powershell
+.\.tools\node\npm.cmd run smoke:readiness:production
+```
+
+This starts the API in production mode against a temporary `.mawo` root with a
+strong operator token, restricted `MAWO_ALLOWED_REPOSITORY_ROOTS`, file state,
+in-process queue, and `MAWO_API_REPLICA_COUNT=1`. It verifies `/health` remains
+public, unauthenticated `/readiness` is rejected, authenticated `/readiness`
+returns `ok=true`, and the readiness payload does not leak agent command
+templates. Treat this as the local file-backed production profile gate; it does
+not replace the Postgres smoke for Postgres-backed launches.
+
 ## 4. Docker Compose Stack
 
 Docker Compose can run the API, web console, Postgres, Redis, and a named
@@ -625,6 +639,10 @@ back the web process first while keeping the API and `.mawo` untouched.
       damages or deletes state, restores the backup, restarts the API, and
       verifies workflow/report/merge candidate/artifacts/readiness from the
       restored state.
+- [ ] `npm run smoke:readiness:production` passes for the file-backed
+      production profile, proving token-protected readiness, restricted
+      repository roots, single-replica topology, file state, and in-process
+      queue are deployable together.
 - [ ] `MAWO_WORKER_ONCE=1 npm run worker:postgres` can start against the target
       Postgres database if the external worker path is part of the rollout.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.

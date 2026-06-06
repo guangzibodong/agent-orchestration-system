@@ -112,6 +112,7 @@ describe("deployment manifests", () => {
     expect(workflow).toContain("npm run lint");
     expect(workflow).toContain("npm run build");
     expect(workflow).toContain("npm run smoke:api");
+    expect(workflow).toContain("npm run smoke:readiness:production");
     expect(workflow).toContain("npm run smoke:api:postgres");
     expect(workflow).toContain("MAWO_API_TOKEN: smoke-secret");
   });
@@ -168,5 +169,23 @@ describe("deployment manifests", () => {
     expect(runner).toContain("renderLaunchGateMarkdown");
     expect(evidenceDoc).toContain("npm.cmd run launch:gate:local");
     expect(evidenceDoc).toContain("npm.cmd run launch:gate:postgres");
+  });
+
+  it("provides a file-backed production readiness smoke entrypoint", () => {
+    const packageJson = read("package.json");
+    const wrapper = read("scripts/smoke-production-readiness.mjs");
+    const smoke = read("scripts/smoke-production-readiness.ts");
+    const helper = read("apps/api/src/production-readiness-smoke-helpers.ts");
+    const operations = read("docs/OPERATIONS.md");
+
+    expect(packageJson).toContain("\"smoke:readiness:production\"");
+    expect(wrapper).toContain("scripts/smoke-production-readiness.ts");
+    expect(smoke).toContain('NODE_ENV: "production"');
+    expect(smoke).toContain("MAWO_ALLOWED_REPOSITORY_ROOTS");
+    expect(smoke).toContain("MAWO_API_REPLICA_COUNT");
+    expect(smoke).toContain("assertProductionReadinessSmokeReady");
+    expect(helper).toContain("deploymentMode=production");
+    expect(helper).toContain("activeQueueBackend");
+    expect(operations).toContain("npm.cmd run smoke:readiness:production");
   });
 });

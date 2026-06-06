@@ -11,6 +11,7 @@ Commands run from the repository root on `main` at commit `c78f63e`.
 | `npm.cmd run smoke:api` | Passed | Real temporary git repo registered, required gate failure blocked merge candidate with `409`, retry reset workflow, retry run reached `needs_review`, report artifact was readable, merge candidate was ready, manual apply updated the target repo, audit and cleanup checks passed. |
 | `npm.cmd run smoke:api:requirements` | Passed | Viewer can read requirements and is blocked from writes, operator can create/confirm/enqueue a requirement, failed required gate synced requirement to `needs_rework`, requirement retry reset current evidence, retry enqueue produced `needs_review`, requirement report and merge candidate endpoints returned `200`. |
 | `npm.cmd run smoke:backup:restore` | Passed | File-backed `.mawo` state was backed up, damaged/restored, API restarted, restored workflow/report/merge candidate/artifacts/readiness were readable. |
+| `npm.cmd run smoke:readiness:production` | Required before release | Starts the API in production mode with a strong token, restricted repository root, file state, in-process queue, and one API replica; verifies unauthenticated readiness is rejected and authenticated readiness reports no blockers without leaking command templates. |
 
 ## Current Launch Decision
 
@@ -19,7 +20,8 @@ Current decision: `not-ready` until the target deployment environment is selecte
 Run `npm.cmd run launch:gate:local` from the repository root before release
 tagging to generate timestamped JSON and Markdown evidence under
 `output/launch-readiness/`. The command runs the frozen local engineering and
-P0 smoke gates, records branch/commit/dirty files, and marks Postgres checks as
+P0 smoke gates, including the file-backed production readiness smoke, records
+branch/commit/dirty files, and marks Postgres checks as
 `external-blocked` when `DATABASE_URL` is not available.
 
 The API exposes the latest generated JSON at `GET /launch/evidence/latest`;
@@ -46,6 +48,7 @@ The local file-backed runtime has passed the core P0 product proof:
 ## Remaining Release Gates
 
 - Run `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run test`, `npm.cmd run build`, and `npm.cmd run smoke:ui` fresh immediately before release tagging.
+- Run `npm.cmd run smoke:readiness:production` for the local file-backed production profile before release tagging.
 - Run `npm.cmd run smoke:api:postgres` if the launch target uses `MAWO_STATE_BACKEND=postgres` or `MAWO_QUEUE_BACKEND=postgres`. This requires `DATABASE_URL`, migrated schema, and a reachable Postgres instance.
 - Check `GET /readiness` in the actual production configuration and confirm no blocker remains.
 - Verify production secrets are not examples: `MAWO_API_TOKEN`, optional `MAWO_VIEWER_API_TOKEN`, `MAWO_ALLOWED_REPOSITORY_ROOTS`, and `POSTGRES_PASSWORD` when using Compose/Postgres.

@@ -19,6 +19,7 @@
     "smoke:api": "node scripts/smoke-api-repository.mjs",
     "smoke:backup:restore": "node scripts/smoke-file-backup-restore.mjs",
     "smoke:api:requirements": "node scripts/smoke-api-requirements.mjs",
+    "smoke:readiness:production": "node scripts/smoke-production-readiness.mjs",
     "smoke:api:postgres": "node scripts/smoke-api-postgres.mjs",
     "smoke:ui": "playwright test apps/web/e2e/requirement-delivery-console.spec.ts --project=chromium",
     "launch:gate:local": "node scripts/launch-gate-local.mjs",

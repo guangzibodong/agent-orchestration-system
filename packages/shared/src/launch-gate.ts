@@ -71,6 +71,11 @@ const frozenLocalChecks = [
   ["smoke_api", "API smoke", "smoke:api"],
   ["smoke_api_requirements", "Requirement API smoke", "smoke:api:requirements"],
   ["smoke_backup_restore", "Backup restore smoke", "smoke:backup:restore"],
+  [
+    "smoke_production_readiness",
+    "Production readiness smoke",
+    "smoke:readiness:production",
+  ],
 ] as const;
 
 const postgresChecks = [

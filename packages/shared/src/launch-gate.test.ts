@@ -28,6 +28,7 @@ describe("launch gate planning", () => {
       "smoke_api",
       "smoke_api_requirements",
       "smoke_backup_restore",
+      "smoke_production_readiness",
     ]);
 
     expect(plan.find((check) => check.id === "smoke_api_postgres")).toMatchObject({
