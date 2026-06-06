@@ -1,4 +1,5 @@
 import type { RequirementSummary } from "./delivery-console-model";
+import { ArtifactDrawer, type ArtifactDrawerLink } from "./artifact-drawer";
 
 type RequirementEvidenceTone = "danger" | "warning" | "success" | "muted";
 
@@ -13,6 +14,7 @@ type RequirementEvidenceDisplay = {
   statusLabel: string;
   summary: string;
   items: RequirementEvidenceItem[];
+  artifactLinks: ArtifactDrawerLink[];
 };
 
 export function RequirementEvidencePanel({
@@ -43,6 +45,18 @@ export function RequirementEvidencePanel({
           </div>
         ))}
       </dl>
+      {evidence.artifactLinks.length ? (
+        <div
+          className="requirementEvidenceArtifacts"
+          aria-label="Read-only evidence links"
+        >
+          <p>Read-only evidence links</p>
+          <ArtifactDrawer
+            artifacts={evidence.artifactLinks}
+            title="Evidence links"
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -63,16 +77,17 @@ export function buildRequirementEvidenceDisplay(
           value: "Repository safety, quality gate status, and review readiness",
         },
       ],
+      artifactLinks: [],
     };
   }
 
   if (requirement.executionStatus === "gate_failed") {
     return {
       tone: "danger",
-      title: "Required gate failed",
-      statusLabel: "Merge-ready blocked",
+      title: "Gate blocked by required gate",
+      statusLabel: "Gate blocked",
       summary:
-        "A required quality gate did not pass, so this requirement is blocked from a merge-ready decision.",
+        "Required gate failed. Merge candidate approval is blocked until rework produces passing evidence.",
       items: [
         {
           label: "Gate result",
@@ -87,30 +102,45 @@ export function buildRequirementEvidenceDisplay(
           value: requirement.nextAction,
         },
         {
+          label: "Merge candidate",
+          value: "Merge candidate blocked until required gates pass",
+        },
+        {
           label: "Safety reason",
           value:
             requirement.repositorySafety.blockedReason ??
             "Quality gate failure requires rework before review",
         },
       ],
+      artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
+        includeMergeCandidate: false,
+      }),
     };
   }
 
   if (requirement.executionStatus === "needs_review") {
     return {
       tone: "warning",
-      title: "Review merge candidate evidence",
-      statusLabel: "Manual review required",
+      title: "Review-ready merge candidate",
+      statusLabel: "Review ready",
       summary:
-        "Quality gates passed and the merge candidate is ready for a human review decision.",
+        "Quality gates passed and the merge candidate is ready for a human review decision. Manual review required.",
       items: [
         {
           label: "Gate result",
           value: "Quality gates passed",
         },
         {
+          label: "Review evidence",
+          value: "Review merge candidate evidence",
+        },
+        {
           label: "Review action",
           value: requirement.nextAction,
+        },
+        {
+          label: "Merge candidate",
+          value: "Ready for manual apply",
         },
         {
           label: "Merge policy",
@@ -121,11 +151,16 @@ export function buildRequirementEvidenceDisplay(
           value: requirement.updatedAt,
         },
       ],
+      artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
+        includeMergeCandidate: true,
+      }),
     };
   }
 
   if (requirement.executionStatus === "completed") {
-    const approved = requirement.riskLevel === "low";
+    const approved =
+      requirement.reviewDecision === "approved" ||
+      requirement.requirementStage === "delivered";
 
     return {
       tone: approved ? "success" : "muted",
@@ -152,6 +187,9 @@ export function buildRequirementEvidenceDisplay(
           value: requirement.updatedAt,
         },
       ],
+      artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
+        includeMergeCandidate: true,
+      }),
     };
   }
 
@@ -171,5 +209,61 @@ export function buildRequirementEvidenceDisplay(
         value: requirement.repositorySafety.recoveryAction,
       },
     ],
+    artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
+      includeMergeCandidate: false,
+    }),
   };
+}
+
+export function buildRequirementEvidenceArtifactLinks(
+  requirement: RequirementSummary,
+  options: { includeMergeCandidate: boolean },
+): ArtifactDrawerLink[] {
+  const workflowHref =
+    requirement.workflowRunHref ??
+    (requirement.workflowRunId
+      ? `/workflows/${encodeURIComponent(requirement.workflowRunId)}`
+      : undefined);
+  const isWorkflowSource = requirement.source === "workflow";
+  const links: ArtifactDrawerLink[] = [];
+
+  if (workflowHref) {
+    links.push({
+      id: `${requirement.id}:current-workflow`,
+      kind: "audit",
+      label: "Current workflow",
+      href: workflowHref,
+      meta: requirement.workflowRunId
+        ? `${requirement.workflowRunId} / ${requirement.workflowRunStatusLabel}`
+        : requirement.workflowRunStatusLabel,
+    });
+  }
+
+  if (workflowHref) {
+    links.push({
+      id: `${requirement.id}:report`,
+      kind: "report",
+      label: isWorkflowSource ? "Workflow report" : "Requirement report",
+      href: isWorkflowSource
+        ? `${workflowHref}/report`
+        : `/requirements/${encodeURIComponent(requirement.id)}/report`,
+      meta: "Review evidence",
+    });
+  }
+
+  if (options.includeMergeCandidate && workflowHref) {
+    links.push({
+      id: `${requirement.id}:merge-candidate`,
+      kind: "patch",
+      label: "Merge candidate evidence",
+      href: isWorkflowSource
+        ? `${workflowHref}/merge-candidate`
+        : `/requirements/${encodeURIComponent(
+            requirement.id,
+          )}/merge-candidate`,
+      meta: "Patch path and manual apply command",
+    });
+  }
+
+  return links;
 }

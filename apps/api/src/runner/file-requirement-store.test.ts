@@ -224,6 +224,64 @@ describe("FileRequirementStore", () => {
     });
   });
 
+  it("syncs the current workflow status without appending duplicate run links", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-requirement-sync-test-"));
+    tempRoots.push(root);
+    const store = new FileRequirementStore({
+      stateFile: join(root, "state", "requirements.json"),
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-06T00:00:00.000Z"));
+    const ticket = store.create({
+      title: "Synced requirement",
+      repositoryPath: "C:/repo",
+      goal: "Keep ticket status aligned with workflow evidence",
+      acceptanceCriteria: ["Workflow state is visible on the requirement"],
+      tasks: [
+        {
+          title: "Patch",
+          agent: "shell",
+          command: "node patch.js",
+        },
+      ],
+      qualityGates: [
+        {
+          title: "Tests",
+          command: "npm test",
+        },
+      ],
+    });
+    vi.setSystemTime(new Date("2026-06-06T00:01:00.000Z"));
+    store.linkWorkflowRun(ticket.id, {
+      workflowRunId: "workflow-1",
+      workflowStatus: "ready",
+      requirementStatus: "running",
+    });
+
+    vi.setSystemTime(new Date("2026-06-06T00:03:00.000Z"));
+    const synced = store.syncWorkflowRunStatus(ticket.id, {
+      workflowRunId: "workflow-1",
+      workflowStatus: "gate_failed",
+      requirementStatus: "needs_rework",
+    });
+
+    expect(synced).toMatchObject({
+      id: ticket.id,
+      status: "needs_rework",
+      currentWorkflowRunId: "workflow-1",
+      updatedAt: "2026-06-06T00:03:00.000Z",
+      runLinks: [
+        {
+          workflowRunId: "workflow-1",
+          status: "gate_failed",
+          linkedAt: "2026-06-06T00:01:00.000Z",
+        },
+      ],
+    });
+    expect(synced?.runLinks).toHaveLength(1);
+  });
+
   it("rejects plan confirmation until the minimum runnable fields exist", async () => {
     const root = await mkdtemp(join(tmpdir(), "mawo-requirement-block-test-"));
     tempRoots.push(root);

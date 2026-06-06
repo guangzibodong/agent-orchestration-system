@@ -48,6 +48,10 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function nodeEvalCommand(script: string): string {
+  return `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`;
+}
+
 function createRequirementPayload(): JsonObject {
   return {
     title: "Smoke requirement: gated checkout copy",
@@ -88,6 +92,7 @@ function createRequirementPayload(): JsonObject {
 async function main() {
   const smokeRoot = await mkdtemp(join(tmpdir(), "mawo-smoke-requirements-"));
   const repoRoot = await createCommittedRepo();
+  const retryGateMarker = join(smokeRoot, "retry-gate-marker.txt");
   const app = buildApp(undefined, {
     demoRoot: smokeRoot,
     env: {
@@ -260,8 +265,12 @@ async function main() {
       qualityGates: [
         {
           id: "failing-gate",
-          title: "Failing gate",
-          command: `${JSON.stringify(process.execPath)} -e "process.exit(1)"`,
+          title: "Fail once then pass gate",
+          command: nodeEvalCommand(
+            `const fs=require("fs");const marker=${JSON.stringify(
+              retryGateMarker,
+            )};if(fs.existsSync(marker)){process.exit(0)}fs.writeFileSync(marker,"first failure");process.exit(1);`,
+          ),
           required: true,
         },
       ],
@@ -339,6 +348,17 @@ async function main() {
             workflowAfterRun.body.status === "gate_failed",
           "Requirement workflow did not reach gate_failed before retry.",
         );
+        const failedRequirement = await request(
+          app,
+          "GET",
+          `/requirements/${runnableRequirementId}`,
+        );
+        check(
+          failures,
+          isObject(failedRequirement.body) &&
+            failedRequirement.body.status === "needs_rework",
+          "Requirement did not sync to needs_rework after the required gate failed.",
+        );
 
         const retry = await request(
           app,
@@ -353,11 +373,27 @@ async function main() {
         );
 
         if (isObject(retry.body)) {
+          const retriedRequirement = isObject(retry.body.requirement)
+            ? retry.body.requirement
+            : {};
+          const retriedRunLinks = Array.isArray(retriedRequirement.runLinks)
+            ? retriedRequirement.runLinks
+            : [];
+
           check(
             failures,
-            isObject(retry.body.requirement) &&
-              retry.body.requirement.status === "ready_to_run",
+            retriedRequirement.status === "ready_to_run",
             "Requirement retry did not restore ticket status to ready_to_run.",
+          );
+          check(
+            failures,
+            retriedRunLinks.some(
+              (runLink) =>
+                isObject(runLink) &&
+                runLink.workflowRunId === workflowId &&
+                runLink.status === "ready",
+            ),
+            "Requirement retry did not sync the current run link back to ready.",
           );
           check(
             failures,
@@ -366,6 +402,123 @@ async function main() {
             "Requirement retry did not reset workflow status to ready.",
           );
         }
+
+        const retryEnqueue = await request(
+          app,
+          "POST",
+          `/requirements/${runnableRequirementId}/enqueue`,
+        );
+        log(
+          `operator POST /requirements/:id/enqueue after retry -> ${retryEnqueue.status}`,
+        );
+        check(
+          failures,
+          retryEnqueue.status === 202,
+          `Requirement retry enqueue returned ${retryEnqueue.status}; expected 202.`,
+        );
+
+        const retryEnqueueBody = isObject(retryEnqueue.body)
+          ? retryEnqueue.body
+          : {};
+        const retryJob = isObject(retryEnqueueBody.job)
+          ? retryEnqueueBody.job
+          : undefined;
+        const retryJobId = typeof retryJob?.id === "string" ? retryJob.id : "";
+        if (retryJobId) {
+          const completedRetryJob = await waitForJob(app, retryJobId);
+          log(`requirement retry job reached ${completedRetryJob.status}`);
+          check(
+            failures,
+            completedRetryJob.status === "completed",
+            `Requirement retry job ended as ${completedRetryJob.status}; expected completed worker execution.`,
+          );
+        }
+
+        const workflowAfterRetryRun = await request(
+          app,
+          "GET",
+          `/workflows/${workflowId}`,
+        );
+        check(
+          failures,
+          isObject(workflowAfterRetryRun.body) &&
+            workflowAfterRetryRun.body.status === "needs_review",
+          "Requirement workflow did not reach needs_review after retry passed.",
+        );
+
+        const reviewReadyRequirement = await request(
+          app,
+          "GET",
+          `/requirements/${runnableRequirementId}`,
+        );
+        check(
+          failures,
+          isObject(reviewReadyRequirement.body) &&
+            reviewReadyRequirement.body.status === "needs_review",
+          "Requirement did not sync to needs_review after retry passed.",
+        );
+
+        const report = await request(
+          app,
+          "GET",
+          `/requirements/${runnableRequirementId}/report`,
+        );
+        log(`viewer/operator GET /requirements/:id/report -> ${report.status}`);
+        check(
+          failures,
+          report.status === 200 &&
+            isObject(report.body) &&
+            report.body.recommendation === "ready_for_review",
+          `Requirement report returned ${report.status}; expected ready_for_review evidence.`,
+        );
+
+        const candidate = await request(
+          app,
+          "GET",
+          `/requirements/${runnableRequirementId}/merge-candidate`,
+        );
+        log(
+          `viewer/operator GET /requirements/:id/merge-candidate -> ${candidate.status}`,
+        );
+        check(
+          failures,
+          candidate.status === 200 &&
+            isObject(candidate.body) &&
+            candidate.body.status === "ready" &&
+            typeof candidate.body.patch === "string" &&
+            candidate.body.patch.includes("+retry smoke"),
+          `Requirement merge candidate returned ${candidate.status}; expected ready patch evidence.`,
+        );
+
+        const review = await request(
+          app,
+          "POST",
+          `/workflows/${workflowId}/review`,
+          {
+            decision: "approve",
+            note: "Requirement smoke evidence accepted.",
+          },
+        );
+        log(`operator POST /workflows/:id/review -> ${review.status}`);
+        check(
+          failures,
+          review.status === 200 &&
+            isObject(review.body) &&
+            review.body.status === "completed",
+          `Workflow review returned ${review.status}; expected completed workflow.`,
+        );
+
+        const deliveredRequirement = await request(
+          app,
+          "GET",
+          `/requirements/${runnableRequirementId}`,
+        );
+        check(
+          failures,
+          isObject(deliveredRequirement.body) &&
+            deliveredRequirement.body.status === "delivered",
+          "Requirement did not sync to delivered after review approval.",
+        );
       }
     } else {
       failures.push(

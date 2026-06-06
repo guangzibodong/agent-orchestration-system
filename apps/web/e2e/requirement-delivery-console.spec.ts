@@ -25,8 +25,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(consoleShell.getByText("No requirements yet")).toBeVisible();
     await expect(consoleShell.getByText("No decisions waiting")).toBeVisible();
     await expect(
-      consoleShell.getByRole("button", { name: "Legacy Run Console" }),
+      consoleShell.getByRole("link", { name: "Legacy Run Console" }),
     ).toHaveClass(/secondaryButton/);
+    await expect(
+      consoleShell.getByRole("link", { name: "Legacy Run Console" }),
+    ).toHaveAttribute("href", /#legacy-run-console$/);
   });
 
   test("renders KPI, queue, and decision items for mixed workflow states", async ({
@@ -144,8 +147,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.goto("/");
 
     const evidence = page.getByLabel("Gate Result / Review Evidence");
+    await expect(evidence).toContainText("Gate blocked");
     await expect(evidence).toContainText("Required gate failed");
     await expect(evidence).toContainText("Merge-ready blocked");
+    await expect(evidence).toContainText(
+      "Merge candidate blocked until required gates pass",
+    );
     await expect(evidence).toContainText("Retry failed gate");
     await expect(evidence).toContainText(
       "Required gate failed; merge-ready conclusion is blocked.",
@@ -159,11 +166,33 @@ test.describe("Requirement Delivery Console smoke", () => {
 
     const reviewEvidence = page.getByLabel("Gate Result / Review Evidence");
     await expect(reviewEvidence).toContainText(
-      "Review merge candidate evidence",
+      "Review-ready merge candidate",
     );
-    await expect(reviewEvidence).toContainText("Manual review required");
+    await expect(reviewEvidence).toContainText("Review ready");
     await expect(reviewEvidence).toContainText("Quality gates passed");
     await expect(reviewEvidence).toContainText("Manual git apply only");
+
+    const evidenceDrawer = reviewEvidence.getByLabel("Read-only evidence links");
+    await expect(
+      evidenceDrawer.getByText("Evidence links", { exact: true }),
+    ).toBeVisible();
+    await expect(evidenceDrawer.getByText("3 links")).toBeVisible();
+    await evidenceDrawer.getByText("Evidence links", { exact: true }).click();
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Current workflow" }),
+    ).toHaveAttribute("href", "/workflows/workflow-needs-review");
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Workflow report" }),
+    ).toHaveAttribute("href", "/workflows/workflow-needs-review/report");
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Merge candidate evidence" }),
+    ).toHaveAttribute(
+      "href",
+      "/workflows/workflow-needs-review/merge-candidate",
+    );
+    await expect(
+      reviewEvidence.getByRole("button", { name: /apply candidate/i }),
+    ).toHaveCount(0);
   });
 
   test("keeps key requirement labels inside the mobile viewport", async ({
@@ -188,6 +217,24 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Waiting Review",
       "Retry failed gate",
       "Review merge candidate",
+    ]);
+
+    const mobileEvidenceDrawer = page.getByLabel("Read-only evidence links");
+    await expect(mobileEvidenceDrawer.getByText("2 links")).toBeVisible();
+    await mobileEvidenceDrawer
+      .getByText("Evidence links", { exact: true })
+      .click();
+    await expect(
+      mobileEvidenceDrawer.getByRole("link", { name: "Current workflow" }),
+    ).toBeVisible();
+    await expect(
+      mobileEvidenceDrawer.getByRole("link", { name: "Workflow report" }),
+    ).toBeVisible();
+    await expectNoHorizontalDocumentOverflow(page);
+    await expectLabelsInsideViewport(page, [
+      "Evidence links",
+      "Current workflow",
+      "Workflow report",
     ]);
   });
 

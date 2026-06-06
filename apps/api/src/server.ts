@@ -11,6 +11,9 @@ import {
   workflowReviewRequestSchema,
   type WorkflowJob,
   type AuditEvent,
+  type RequirementDeliveryTicket,
+  type RequirementStatus,
+  type WorkflowRun,
 } from "@mawo/shared";
 import Fastify from "fastify";
 import { spawnSync } from "node:child_process";
@@ -149,6 +152,31 @@ function isViewerReadableEndpoint(method: string, url: string): boolean {
   return VIEWER_READ_ENDPOINTS.some((endpoint) =>
     typeof endpoint === "string" ? endpoint === path : endpoint.test(path),
   );
+}
+
+function mapWorkflowToRequirementStatus(
+  workflow: Pick<WorkflowRun, "review" | "status">,
+  currentStatus: RequirementStatus,
+): RequirementStatus {
+  switch (workflow.status) {
+    case "running":
+      return "running";
+    case "gate_failed":
+    case "failed":
+    case "aborted":
+      return "needs_rework";
+    case "needs_review":
+      return "needs_review";
+    case "completed":
+      return workflow.review?.decision === "approved"
+        ? "delivered"
+        : currentStatus;
+    case "archived":
+      return "archived";
+    case "draft":
+    case "ready":
+      return currentStatus;
+  }
 }
 
 function createStateStores(input: {
@@ -342,6 +370,43 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     options.requirementStore ?? stateStores.requirementStore;
   const repositorySafetyInspector =
     options.repositorySafetyInspector ?? inspectRepositorySafety;
+  const requirementEnqueueLocks = new Set<string>();
+  const syncRequirementWithWorkflow = async (
+    requirement: RequirementDeliveryTicket,
+  ): Promise<RequirementDeliveryTicket> => {
+    if (!requirement.currentWorkflowRunId) {
+      return requirement;
+    }
+
+    await activeRunner.refreshFromStore();
+    const workflow = activeRunner.getWorkflow(requirement.currentWorkflowRunId);
+    if (!workflow) {
+      return requirement;
+    }
+
+    const requirementStatus = mapWorkflowToRequirementStatus(
+      workflow,
+      requirement.status,
+    );
+    const currentRunLink = requirement.runLinks.find(
+      (runLink) => runLink.workflowRunId === workflow.id,
+    );
+
+    if (
+      requirement.status === requirementStatus &&
+      currentRunLink?.status === workflow.status
+    ) {
+      return requirement;
+    }
+
+    return (
+      (await requirementStore.syncWorkflowRunStatus(requirement.id, {
+        workflowRunId: workflow.id,
+        workflowStatus: workflow.status,
+        requirementStatus,
+      })) ?? requirement
+    );
+  };
 
   app.register(cors, {
     origin: true,
@@ -819,7 +884,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const repositoryPath = request.query.repositoryPath
       ? resolve(request.query.repositoryPath)
       : undefined;
-    const requirements = (await requirementStore.list()).filter(
+    const syncedRequirements = await Promise.all(
+      (await requirementStore.list()).map(syncRequirementWithWorkflow),
+    );
+    const requirements = syncedRequirements.filter(
       (requirement) => {
         if (
           requirementStatus?.data &&
@@ -859,7 +927,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       return reply.code(404).send({ error: "requirement_not_found" });
     }
 
-    return requirement;
+    return syncRequirementWithWorkflow(requirement);
   });
 
   app.patch<{
@@ -937,9 +1005,19 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       });
     }
 
-    await activeRunner.refreshFromStore();
+    if (requirementEnqueueLocks.has(requirement.id)) {
+      return reply.code(409).send({
+        error: "requirement_enqueue_in_progress",
+        message:
+          "This requirement is already being enqueued. Wait for the current enqueue attempt to finish.",
+        requirementId: requirement.id,
+      });
+    }
 
+    requirementEnqueueLocks.add(requirement.id);
     try {
+      await activeRunner.refreshFromStore();
+
       let workflow = requirement.currentWorkflowRunId
         ? activeRunner.getWorkflow(requirement.currentWorkflowRunId)
         : undefined;
@@ -1092,6 +1170,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       }
 
       throw error;
+    } finally {
+      requirementEnqueueLocks.delete(requirement.id);
     }
   });
 
@@ -1128,9 +1208,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         requirement.currentWorkflowRunId,
       );
       await activeRunner.flush();
-      const nextRequirement = await requirementStore.setStatus(
+      const nextRequirement = await requirementStore.syncWorkflowRunStatus(
         requirement.id,
-        "ready_to_run",
+        {
+          workflowRunId: retry.run.id,
+          workflowStatus: retry.run.status,
+          requirementStatus: "ready_to_run",
+        },
       );
 
       await appendAuditEvent({

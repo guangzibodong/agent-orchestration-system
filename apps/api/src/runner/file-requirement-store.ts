@@ -29,6 +29,10 @@ export type RequirementStore = {
     id: string,
     input: RequirementWorkflowRunLinkInput,
   ): MaybePromise<RequirementDeliveryTicket | undefined>;
+  syncWorkflowRunStatus(
+    id: string,
+    input: RequirementWorkflowRunLinkInput,
+  ): MaybePromise<RequirementDeliveryTicket | undefined>;
   setStatus(
     id: string,
     status: RequirementStatus,
@@ -248,6 +252,21 @@ export class FileRequirementStore implements RequirementStore {
     );
   }
 
+  syncWorkflowRunStatus(
+    id: string,
+    input: RequirementWorkflowRunLinkInput,
+  ): RequirementDeliveryTicket | undefined {
+    return this.replace(id, (existing) =>
+      requirementDeliveryTicketSchema.parse({
+        ...existing,
+        status: input.requirementStatus,
+        currentWorkflowRunId: input.workflowRunId,
+        runLinks: upsertRunLinkStatus(existing.runLinks, input),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
   setStatus(
     id: string,
     status: RequirementStatus,
@@ -309,6 +328,37 @@ function deriveUpdatedStatus(
   }
 
   return existing.status;
+}
+
+function upsertRunLinkStatus(
+  runLinks: RequirementDeliveryTicket["runLinks"],
+  input: RequirementWorkflowRunLinkInput,
+): RequirementDeliveryTicket["runLinks"] {
+  const nextRunLinks = runLinks.map((runLink) =>
+    runLink.workflowRunId === input.workflowRunId
+      ? {
+          ...runLink,
+          status: input.workflowStatus,
+        }
+      : runLink,
+  );
+
+  if (
+    nextRunLinks.some(
+      (runLink) => runLink.workflowRunId === input.workflowRunId,
+    )
+  ) {
+    return nextRunLinks;
+  }
+
+  return [
+    ...nextRunLinks,
+    {
+      workflowRunId: input.workflowRunId,
+      status: input.workflowStatus,
+      linkedAt: new Date().toISOString(),
+    },
+  ];
 }
 
 function derivePlanningStatus(

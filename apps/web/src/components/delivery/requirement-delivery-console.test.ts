@@ -81,6 +81,7 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Decision Queue");
     expect(html).toContain("Review merge candidate");
     expect(html).toContain("Legacy Run Console");
+    expect(html).toContain("href=\"#legacy-run-console\"");
     expect(html).toContain("1 task / 1 gate / 2026-06-06T10:10:00.000Z");
     expect(html).not.toContain("Shell Run");
     expect(html.indexOf("New Requirement")).toBeLessThan(
@@ -125,6 +126,15 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Quality gates passed");
     expect(html).toContain("Manual review required");
     expect(html).not.toContain("Apply Candidate");
+  });
+
+  it("renders review evidence artifacts inside the requirement detail shell", () => {
+    const html = renderConsoleFor([workflow]);
+
+    expect(html).toContain("Evidence links");
+    expect(html).toContain("Artifacts");
+    expect(html).toContain("Merge candidate evidence");
+    expect(html).not.toContain("No artifacts linked yet");
   });
 
   it("shows delivered evidence for approved completed requirements", () => {

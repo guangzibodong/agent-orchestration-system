@@ -77,6 +77,9 @@ jobs:
       - name: API smoke with Postgres queue worker
         run: npm run smoke:api:postgres
 
+      - name: UI smoke
+        run: npm run smoke:ui
+
       - name: API smoke with auth token
         run: npm run smoke:api
         env:

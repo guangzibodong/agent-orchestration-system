@@ -1,11 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { RequirementSummary } from "./delivery-console-model";
 import {
   ArtifactDrawer,
   buildArtifactDrawerGroups,
   type ArtifactDrawerLink
 } from "./artifact-drawer";
+import { RequirementEvidencePanel } from "./requirement-evidence-panel";
 
 const artifactLinks: ArtifactDrawerLink[] = [
   {
@@ -46,6 +48,33 @@ const artifactLinks: ArtifactDrawerLink[] = [
     meta: "5 events"
   }
 ];
+
+const reviewReadyRequirement: RequirementSummary = {
+  id: "requirement-auth",
+  title: "Harden auth checks",
+  repositoryLabel: "C:/work/api",
+  repositorySafety: {
+    repositoryLabel: "C:/work/api",
+    executionModeLabel: "Isolated worktree",
+    branchLabel: "mawo/workflow-review/task-1",
+    headLabel: "abc1234",
+    cleanStateLabel: "Apply clean check required",
+    allowedRootLabel: "Allowed root accepted by API",
+    mergePolicyLabel: "Manual git apply only",
+    recoveryAction: "Run repository preflight before mutating actions"
+  },
+  requirementStage: "needs_review",
+  executionStatus: "needs_review",
+  riskLevel: "medium",
+  nextAction: "Review merge candidate",
+  nodeLabel: "2 tasks / 2 gates",
+  updatedAt: "2026-06-06T10:10:00.000Z",
+  workflowRunHref: "/workflows/workflow-review",
+  workflowRunId: "workflow-review",
+  workflowRunStatus: "needs_review",
+  workflowRunStatusLabel: "Needs review",
+  availableActions: []
+};
 
 describe("ArtifactDrawer", () => {
   it("groups artifact links in evidence order without rendering raw content", () => {
@@ -126,5 +155,80 @@ describe("ArtifactDrawer", () => {
 
     expect(html).toContain("Artifacts");
     expect(html).toContain("No artifacts linked yet");
+  });
+});
+
+describe("RequirementEvidencePanel artifact links", () => {
+  it("surfaces read-only report and merge-candidate links for review-ready evidence", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementEvidencePanel, {
+        requirement: reviewReadyRequirement
+      })
+    );
+
+    expect(html).toContain("Review-ready merge candidate");
+    expect(html).toContain("Review ready");
+    expect(html).toContain("Read-only evidence links");
+    expect(html).toContain("Evidence links");
+    expect(html).toContain("3 links");
+    expect(html).toContain("Current workflow");
+    expect(html).toContain("Requirement report");
+    expect(html).toContain("Merge candidate evidence");
+    expect(html).toContain("href=\"/workflows/workflow-review\"");
+    expect(html).toContain("href=\"/requirements/requirement-auth/report\"");
+    expect(html).toContain(
+      "href=\"/requirements/requirement-auth/merge-candidate\""
+    );
+    expect(html).toContain("Patch path and manual apply command");
+    expect(html).not.toContain("Apply Candidate");
+    expect(html).not.toContain("<button");
+  });
+
+  it("uses workflow-scoped evidence links for legacy workflow summaries", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementEvidencePanel, {
+        requirement: {
+          ...reviewReadyRequirement,
+          id: "workflow-review",
+          source: "workflow"
+        }
+      })
+    );
+
+    expect(html).toContain("Workflow report");
+    expect(html).toContain("href=\"/workflows/workflow-review/report\"");
+    expect(html).toContain(
+      "href=\"/workflows/workflow-review/merge-candidate\""
+    );
+    expect(html).not.toContain("href=\"/requirements/workflow-review/report\"");
+    expect(html).not.toContain(
+      "href=\"/requirements/workflow-review/merge-candidate\""
+    );
+  });
+
+  it("makes a failed gate visibly blocked without offering a merge-candidate link", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementEvidencePanel, {
+        requirement: {
+          ...reviewReadyRequirement,
+          executionStatus: "gate_failed",
+          requirementStage: "needs_rework",
+          nextAction: "Retry failed gate",
+          repositorySafety: {
+            ...reviewReadyRequirement.repositorySafety,
+            blockedReason:
+              "Required gate failed; merge-ready conclusion is blocked."
+          },
+          workflowRunStatus: "gate_failed",
+          workflowRunStatusLabel: "Gate failed"
+        }
+      })
+    );
+
+    expect(html).toContain("Gate blocked by required gate");
+    expect(html).toContain("Gate blocked");
+    expect(html).toContain("Merge candidate blocked until required gates pass");
+    expect(html).toContain("Requirement report");
+    expect(html).not.toContain("Merge candidate evidence");
   });
 });

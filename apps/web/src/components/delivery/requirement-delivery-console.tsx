@@ -23,7 +23,10 @@ import {
 import { NewRequirementPanel } from "./new-requirement-panel";
 import type { NewRequirementPayload } from "./new-requirement-payload";
 import { RequirementDetailShell } from "./requirement-detail-shell";
-import { RequirementEvidencePanel } from "./requirement-evidence-panel";
+import {
+  RequirementEvidencePanel,
+  buildRequirementEvidenceArtifactLinks,
+} from "./requirement-evidence-panel";
 import { buildRequirementStageStepper } from "./requirement-stage-stepper";
 
 type RequirementDeliveryConsoleProps = {
@@ -85,6 +88,13 @@ export function RequirementDeliveryConsole({
   const stageSteps = buildRequirementStageStepper(
     selectedRequirement?.requirementStage ?? "draft",
   );
+  const selectedRequirementArtifacts = selectedRequirement
+    ? buildRequirementEvidenceArtifactLinks(selectedRequirement, {
+        includeMergeCandidate:
+          selectedRequirement.executionStatus === "needs_review" ||
+          selectedRequirement.executionStatus === "completed",
+      })
+    : [];
 
   async function handleNewRequirementSubmit(payload: NewRequirementPayload) {
     setNewRequirementMessage(`Creating requirement draft for ${payload.title}`);
@@ -160,10 +170,10 @@ export function RequirementDeliveryConsole({
             <Plus size={16} aria-hidden="true" />
             New Requirement
           </button>
-          <button className="secondaryButton" type="button">
+          <a className="secondaryButton" href="#legacy-run-console">
             <Settings size={16} aria-hidden="true" />
             Legacy Run Console
-          </button>
+          </a>
         </div>
       </section>
 
@@ -350,6 +360,7 @@ export function RequirementDeliveryConsole({
             <summary>Requirement detail</summary>
             <RequirementDetailShell
               actionState={requirementActionState}
+              artifacts={selectedRequirementArtifacts}
               requirement={selectedRequirement}
               showViewerBanner={false}
               onLifecycleAction={(action) =>

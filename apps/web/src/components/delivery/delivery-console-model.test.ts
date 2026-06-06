@@ -33,6 +33,7 @@ describe("delivery console model", () => {
   it("maps workflow execution state into requirement delivery stages", () => {
     expect(mapWorkflowToRequirementSummary(baseWorkflow)).toEqual({
       id: "workflow-123456789",
+      source: "workflow",
       title: "Fix checkout test flake",
       repositoryLabel: "C:/work/shop",
       repositorySafety: {

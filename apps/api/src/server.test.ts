@@ -54,6 +54,31 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+async function waitForJobStatus(
+  app: ReturnType<typeof buildApp>,
+  jobId: string,
+  status: "canceled" | "completed" | "failed",
+) {
+  let response = await app.inject({
+    method: "GET",
+    url: `/jobs/${jobId}`,
+  });
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (response.json().status === status) {
+      return response;
+    }
+
+    await delay(250);
+    response = await app.inject({
+      method: "GET",
+      url: `/jobs/${jobId}`,
+    });
+  }
+
+  return response;
+}
+
 function matchesWorkflowJobWhere(
   row: PrismaWorkflowJobRow,
   where: PrismaWorkflowJobWhere,
@@ -713,6 +738,331 @@ describe("runner API", () => {
     });
   });
 
+  it("syncs linked requirements to needs_rework when workflow gates fail", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-sync-failed-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Sync failed gate requirement",
+        repositoryPath: repoPath,
+        goal: "Show failed gates as requirement rework",
+        acceptanceCriteria: ["Requirement status follows the failed gate"],
+        tasks: [
+          {
+            id: "patch",
+            title: "Patch README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','sync failed\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "gate",
+            title: "Failing gate",
+            command: `${node} -e "process.exit(1)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    const enqueueBody = enqueueResponse.json();
+
+    let completedJobResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${enqueueBody.job.id}`,
+    });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (completedJobResponse.json().status === "completed") {
+        break;
+      }
+
+      await delay(250);
+      completedJobResponse = await app.inject({
+        method: "GET",
+        url: `/jobs/${enqueueBody.job.id}`,
+      });
+    }
+
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${enqueueBody.workflow.id}`,
+    });
+    const requirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+    const mergeCandidateResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/merge-candidate`,
+    });
+
+    expect(completedJobResponse.json()).toMatchObject({ status: "completed" });
+    expect(workflowResponse.json()).toMatchObject({ status: "gate_failed" });
+    expect(requirementResponse.json()).toMatchObject({
+      id: requirement.id,
+      status: "needs_rework",
+      currentWorkflowRunId: enqueueBody.workflow.id,
+      runLinks: [
+        expect.objectContaining({
+          workflowRunId: enqueueBody.workflow.id,
+          status: "gate_failed",
+        }),
+      ],
+    });
+    expect(mergeCandidateResponse.statusCode).toBe(409);
+    expect(mergeCandidateResponse.json()).toMatchObject({
+      error: "requirement_merge_candidate_not_ready",
+    });
+  });
+
+  it("rejects concurrent requirement enqueue before a duplicate workflow is created", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-concurrent-enqueue-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    let releaseFirstSafety!: () => void;
+    let resolveFirstSafetyStarted!: () => void;
+    let safetyCalls = 0;
+    const firstSafetyStarted = new Promise<void>((resolve) => {
+      resolveFirstSafetyStarted = resolve;
+    });
+    const firstSafetyRelease = new Promise<void>((resolve) => {
+      releaseFirstSafety = resolve;
+    });
+    const app = buildApp(undefined, {
+      demoRoot,
+      repositorySafetyInspector: async () => {
+        safetyCalls += 1;
+
+        if (safetyCalls === 1) {
+          resolveFirstSafetyStarted();
+          await firstSafetyRelease;
+        }
+
+        return {
+          repositoryId: "repo-concurrent",
+          path: repoPath,
+          clean: true,
+          dirty: false,
+          allowedRoot: true,
+          noAutoMerge: true,
+          manualApplyPolicy: "Manual git apply only",
+        };
+      },
+    });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Prevent duplicate requirement enqueue",
+        repositoryPath: repoPath,
+        goal: "Create exactly one workflow for an enqueue request",
+        acceptanceCriteria: ["Concurrent enqueue creates no orphan workflow"],
+        tasks: [
+          {
+            id: "patch",
+            title: "Patch README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','concurrent enqueue\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "gate",
+            title: "Passing gate",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+
+    const firstEnqueue = app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    await firstSafetyStarted;
+    const secondResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    releaseFirstSafety();
+    const firstResponse = await firstEnqueue;
+    const firstBody = firstResponse.json();
+    const secondBody = secondResponse.json();
+
+    if (typeof firstBody.job?.id === "string") {
+      await waitForJobStatus(app, firstBody.job.id, "completed");
+    }
+
+    if (typeof secondBody.job?.id === "string") {
+      await waitForJobStatus(app, secondBody.job.id, "completed");
+    }
+
+    const workflowsResponse = await app.inject({
+      method: "GET",
+      url: "/workflows",
+    });
+    const createdWorkflows = workflowsResponse
+      .json()
+      .filter(
+        (workflow: { goal?: string }) =>
+          workflow.goal === "Create exactly one workflow for an enqueue request",
+      );
+
+    expect(firstResponse.statusCode).toBe(202);
+    expect(secondResponse.statusCode).toBe(409);
+    expect(secondBody).toMatchObject({
+      error: "requirement_enqueue_in_progress",
+    });
+    expect(safetyCalls).toBe(1);
+    expect(createdWorkflows).toHaveLength(1);
+  });
+
+  it("syncs linked requirements to needs_review with report and merge candidate evidence", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-sync-review-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Sync review-ready requirement",
+        repositoryPath: repoPath,
+        goal: "Produce a reviewable merge candidate from a requirement",
+        acceptanceCriteria: ["Report and merge candidate are available"],
+        tasks: [
+          {
+            id: "patch",
+            title: "Patch README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','sync review\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "gate",
+            title: "Passing gate",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    const enqueueBody = enqueueResponse.json();
+    const completedJobResponse = await waitForJobStatus(
+      app,
+      enqueueBody.job.id,
+      "completed",
+    );
+
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${enqueueBody.workflow.id}`,
+    });
+    const requirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+    const reportResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/report`,
+    });
+    const mergeCandidateResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/merge-candidate`,
+    });
+
+    expect(completedJobResponse.json()).toMatchObject({ status: "completed" });
+    expect(workflowResponse.json()).toMatchObject({ status: "needs_review" });
+    expect(requirementResponse.json()).toMatchObject({
+      id: requirement.id,
+      status: "needs_review",
+      currentWorkflowRunId: enqueueBody.workflow.id,
+      runLinks: [
+        expect.objectContaining({
+          workflowRunId: enqueueBody.workflow.id,
+          status: "needs_review",
+        }),
+      ],
+    });
+    expect(reportResponse.statusCode).toBe(200);
+    expect(reportResponse.json()).toMatchObject({
+      workflowId: enqueueBody.workflow.id,
+      recommendation: "ready_for_review",
+    });
+    expect(mergeCandidateResponse.statusCode).toBe(200);
+    expect(mergeCandidateResponse.json()).toMatchObject({
+      workflowId: enqueueBody.workflow.id,
+      status: "ready",
+      patch: expect.stringContaining("+sync review"),
+    });
+
+    const reviewResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${enqueueBody.workflow.id}/review`,
+      payload: {
+        decision: "approve",
+        note: "Requirement evidence accepted",
+      },
+    });
+    const deliveredRequirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+
+    expect(reviewResponse.json()).toMatchObject({
+      id: enqueueBody.workflow.id,
+      status: "completed",
+      review: {
+        decision: "approved",
+      },
+    });
+    expect(deliveredRequirementResponse.json()).toMatchObject({
+      id: requirement.id,
+      status: "delivered",
+      runLinks: [
+        expect.objectContaining({
+          workflowRunId: enqueueBody.workflow.id,
+          status: "completed",
+        }),
+      ],
+    });
+  });
+
   it("rejects requirement enqueue when repository safety blocks execution", async () => {
     const demoRoot = await mkdtemp(
       join(tmpdir(), "mawo-requirement-dirty-test-"),
@@ -814,6 +1164,10 @@ describe("runner API", () => {
       method: "POST",
       url: `/workflows/${workflowId}/run`,
     });
+    const failedRequirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
 
     const retryResponse = await app.inject({
       method: "POST",
@@ -831,12 +1185,28 @@ describe("runner API", () => {
         }),
       ],
     });
+    expect(failedRequirementResponse.json()).toMatchObject({
+      id: requirement.id,
+      status: "needs_rework",
+      runLinks: [
+        expect.objectContaining({
+          workflowRunId: workflowId,
+          status: "gate_failed",
+        }),
+      ],
+    });
     expect(retryResponse.statusCode).toBe(200);
     expect(retryBody).toMatchObject({
       requirement: {
         id: requirement.id,
         status: "ready_to_run",
         currentWorkflowRunId: workflowId,
+        runLinks: [
+          expect.objectContaining({
+            workflowRunId: workflowId,
+            status: "ready",
+          }),
+        ],
       },
       workflow: {
         id: workflowId,

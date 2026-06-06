@@ -34,6 +34,7 @@ export type RequirementLifecycleAction = "confirm-plan" | "enqueue" | "retry";
 
 export type RequirementSummary = {
   id: string;
+  source?: "requirement" | "workflow";
   title: string;
   repositoryLabel: string;
   repositorySafety: RepositorySafetySummary;
@@ -48,6 +49,7 @@ export type RequirementSummary = {
   workflowRunId?: string;
   workflowRunStatus?: WorkflowRun["status"];
   workflowRunStatusLabel: string;
+  reviewDecision?: "approved" | "rejected";
   availableActions: RequirementLifecycleAction[];
 };
 
@@ -389,6 +391,7 @@ export function mapWorkflowToRequirementSummary(
 
   return {
     id: workflow.id,
+    source: "workflow",
     title: workflow.goal,
     repositoryLabel: workflow.repositoryPath ?? "No repository selected",
     repositorySafety: buildRepositorySafety(workflow),
@@ -402,6 +405,9 @@ export function mapWorkflowToRequirementSummary(
     workflowRunId: workflow.id,
     workflowRunStatus: workflow.status,
     workflowRunStatusLabel,
+    ...(workflow.review?.decision
+      ? { reviewDecision: workflow.review.decision }
+      : {}),
     availableActions: buildWorkflowAvailableActions(workflow)
   };
 }
@@ -427,6 +433,7 @@ export function mapRequirementTicketToSummary(
 
   return {
     id: requirement.id,
+    source: "requirement",
     title: requirement.title,
     repositoryLabel:
       requirement.repositoryPath ??
@@ -450,6 +457,9 @@ export function mapRequirementTicketToSummary(
     workflowRunStatusLabel: workflowStatus
       ? formatWorkflowStatus(workflowStatus)
       : "No workflow run linked",
+    ...(workflow?.review?.decision
+      ? { reviewDecision: workflow.review.decision }
+      : {}),
     availableActions: buildRequirementAvailableActions(requirement)
   };
 }
