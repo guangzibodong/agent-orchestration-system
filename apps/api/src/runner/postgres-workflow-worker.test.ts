@@ -231,4 +231,61 @@ describe("PostgresWorkflowWorker", () => {
       }
     ]);
   });
+
+  it("aborts the running workflow when lease renewal loses the claim", async () => {
+    vi.useFakeTimers();
+    const claimed = createJob();
+    const canceled = createJob({
+      status: "canceled",
+      updatedAt: "2026-06-05T00:07:00.000Z",
+      finishedAt: "2026-06-05T00:07:00.000Z"
+    });
+    const store: PostgresWorkflowWorkerJobStore = {
+      claimNextQueuedJob: vi.fn(async () => claimed),
+      finishClaimedJob: vi.fn(async () => undefined),
+      getJob: vi.fn(async () => canceled),
+      renewJobLease: vi.fn(async () => false)
+    };
+    let workflowSignal: AbortSignal | undefined;
+    let finishWorkflow: (() => void) | undefined;
+    const runner: PostgresWorkflowWorkerRunner = {
+      ready: vi.fn(async () => undefined),
+      flush: vi.fn(async () => undefined),
+      runWorkflow: vi.fn(
+        async (_workflowId: string, options?: { signal?: AbortSignal }) => {
+          workflowSignal = options?.signal;
+
+          return await new Promise((resolve) => {
+            finishWorkflow = () => resolve({ id: claimed.workflowId });
+          });
+        }
+      )
+    };
+    const worker = new PostgresWorkflowWorker({
+      jobStore: store,
+      runner,
+      workerId: "worker-a",
+      leaseMs: 10_000,
+      renewIntervalMs: 1_000,
+      now: () => new Date("2026-06-05T00:06:00.000Z")
+    });
+
+    const running = worker.runOnce();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const abortedAfterLostClaim = workflowSignal?.aborted;
+    finishWorkflow?.();
+    const result = await running;
+
+    expect(abortedAfterLostClaim).toBe(true);
+    expect(result).toEqual({
+      status: "canceled",
+      job: canceled
+    });
+    expect(store.renewJobLease).toHaveBeenCalledWith({
+      jobId: "job-1",
+      workerId: "worker-a",
+      now: new Date("2026-06-05T00:06:00.000Z"),
+      leaseExpiresAt: new Date("2026-06-05T00:06:10.000Z")
+    });
+  });
 });

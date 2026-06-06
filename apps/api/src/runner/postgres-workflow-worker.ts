@@ -81,7 +81,7 @@ export class PostgresWorkflowWorker {
     }
 
     const controller = new AbortController();
-    const stopRenewal = this.startLeaseRenewal(claimed.id);
+    const stopRenewal = this.startLeaseRenewal(claimed.id, controller);
 
     try {
       await this.runner.runWorkflow(claimed.workflowId, {
@@ -141,16 +141,24 @@ export class PostgresWorkflowWorker {
     };
   }
 
-  private startLeaseRenewal(jobId: string): () => void {
+  private startLeaseRenewal(
+    jobId: string,
+    controller: AbortController
+  ): () => void {
     const interval = setInterval(() => {
-      void this.jobStore
-        .renewJobLease({
+      void (async () => {
+        const renewed = await this.jobStore.renewJobLease({
           jobId,
           workerId: this.workerId,
           now: this.now(),
           leaseExpiresAt: this.leaseExpiresAt()
-        })
-        .catch(() => undefined);
+        });
+
+        if (!renewed) {
+          controller.abort();
+          clearInterval(interval);
+        }
+      })().catch(() => undefined);
     }, this.renewIntervalMs);
 
     return () => {
