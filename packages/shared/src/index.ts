@@ -322,6 +322,11 @@ export const launchGateEvidenceSchema = z.object({
   failureSummaries: z.array(z.string()),
   externalBlockers: z.array(z.string()),
   sourcePath: z.string().min(1).optional(),
+  currentBranch: z.string().min(1).optional(),
+  currentCommit: z.string().min(1).optional(),
+  currentDirtyFiles: z.array(z.string()).optional(),
+  fresh: z.boolean().optional(),
+  staleReasons: z.array(z.string()).optional(),
 });
 
 export const workerHealthSchema = z.object({

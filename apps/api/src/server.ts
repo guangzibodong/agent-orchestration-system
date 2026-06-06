@@ -2132,10 +2132,106 @@ function readLatestLaunchGateEvidence(root: string) {
     throw new Error("Launch gate evidence JSON must be an object.");
   }
 
-  return launchGateEvidenceSchema.parse({
+  const evidence = launchGateEvidenceSchema.parse({
     ...parsed,
     sourcePath: latestPath,
   });
+  const currentGit = readCurrentGitContext(root);
+
+  if (!currentGit) {
+    return evidence;
+  }
+
+  const staleReasons = buildLaunchGateStaleReasons({
+    evidenceBranch: evidence.branch,
+    evidenceCommit: evidence.commit,
+    evidenceDirtyFiles: evidence.dirtyFiles,
+    currentBranch: currentGit.branch,
+    currentCommit: currentGit.commit,
+    currentDirtyFiles: currentGit.dirtyFiles,
+  });
+
+  return launchGateEvidenceSchema.parse({
+    ...evidence,
+    currentBranch: currentGit.branch,
+    currentCommit: currentGit.commit,
+    currentDirtyFiles: currentGit.dirtyFiles,
+    fresh: staleReasons.length === 0,
+    staleReasons,
+  });
+}
+
+function readCurrentGitContext(root: string):
+  | {
+      branch: string;
+      commit: string;
+      dirtyFiles: string[];
+    }
+  | undefined {
+  const branch = readGitValue(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const commit = readGitValue(root, ["rev-parse", "--short", "HEAD"]);
+
+  if (!branch || !commit) {
+    return undefined;
+  }
+
+  const dirtyFiles = (readGitValue(root, ["status", "--short"]) ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    branch,
+    commit,
+    dirtyFiles,
+  };
+}
+
+function readGitValue(root: string, args: string[]): string | undefined {
+  const result = spawnSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    return undefined;
+  }
+
+  return result.stdout.trim() || undefined;
+}
+
+function buildLaunchGateStaleReasons(input: {
+  evidenceBranch: string;
+  evidenceCommit: string;
+  evidenceDirtyFiles: string[];
+  currentBranch: string;
+  currentCommit: string;
+  currentDirtyFiles: string[];
+}): string[] {
+  const reasons: string[] = [];
+
+  if (input.evidenceBranch !== input.currentBranch) {
+    reasons.push(
+      `Evidence branch ${input.evidenceBranch} does not match current branch ${input.currentBranch}.`,
+    );
+  }
+
+  if (input.evidenceCommit !== input.currentCommit) {
+    reasons.push(
+      `Evidence commit ${input.evidenceCommit} does not match HEAD ${input.currentCommit}.`,
+    );
+  }
+
+  if (input.evidenceDirtyFiles.length > 0) {
+    reasons.push("Evidence was generated while the working tree was dirty.");
+  }
+
+  if (input.currentDirtyFiles.length > 0) {
+    reasons.push("Current working tree is dirty; rerun launch gate after committing.");
+  }
+
+  return reasons;
 }
 
 function createWritableDirectoryCheck(id: string, label: string, path: string) {

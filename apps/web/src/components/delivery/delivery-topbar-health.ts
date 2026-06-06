@@ -75,6 +75,10 @@ function buildLaunchValue(
   readiness: ReturnType<typeof summarizeReadiness>,
   launchEvidence?: LaunchGateEvidence,
 ): string {
+  if (launchEvidence?.fresh === false) {
+    return "Evidence stale";
+  }
+
   if (launchEvidence) {
     return `Local ${launchEvidence.localDecision} / Prod ${launchEvidence.productionDecision}`;
   }
@@ -94,6 +98,10 @@ function buildLaunchDetail(
   readiness: ReturnType<typeof summarizeReadiness>,
   launchEvidence?: LaunchGateEvidence,
 ): string {
+  if (launchEvidence?.fresh === false) {
+    return launchEvidence.staleReasons?.[0] ?? "Rerun launch gate for HEAD.";
+  }
+
   if (launchEvidence) {
     const failures = launchEvidence.failureSummaries.length;
     const blockers = launchEvidence.externalBlockers.length;
@@ -130,6 +138,10 @@ function buildLaunchSeverity(
 ): DeliveryTopbarHealthSeverity {
   if (!launchEvidence) {
     return readiness.severity;
+  }
+
+  if (launchEvidence.fresh === false) {
+    return "danger";
   }
 
   if (launchEvidence.localDecision === "failed") {

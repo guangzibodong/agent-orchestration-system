@@ -463,6 +463,52 @@ describe("runner API", () => {
     });
   });
 
+  it("marks launch gate evidence stale when it does not match the current git state", async () => {
+    const repoPath = await createCommittedRepo();
+    const head = (await run("git rev-parse --short HEAD", repoPath)).stdout.trim();
+    const evidenceRoot = join(repoPath, "output", "launch-readiness");
+    await mkdir(evidenceRoot, { recursive: true });
+    await writeFile(
+      join(evidenceRoot, "2026-06-06T16-35-25-938Z.json"),
+      JSON.stringify({
+        generatedAt: "2026-06-06T16:35:25.938Z",
+        root: repoPath,
+        branch: "main",
+        commit: "old-commit",
+        dirtyFiles: [],
+        checks: [],
+        docs: ["docs/product/REQUIREMENTS_FREEZE.md"],
+        localDecision: "passed",
+        productionDecision: "blocked",
+        failureSummaries: [],
+        externalBlockers: [],
+      }),
+      "utf8",
+    );
+    await writeFile(join(repoPath, "UNCOMMITTED.md"), "dirty\n", "utf8");
+    const app = buildApp(undefined, { demoRoot: repoPath });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/launch/evidence/latest",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      commit: "old-commit",
+      currentCommit: head,
+      currentBranch: "main",
+      fresh: false,
+      currentDirtyFiles: expect.arrayContaining([
+        expect.stringContaining("UNCOMMITTED.md"),
+      ]),
+      staleReasons: [
+        expect.stringContaining("commit"),
+        expect.stringContaining("working tree"),
+      ],
+    });
+  });
+
   it("blocks a viewer token from mutating repositories, workflows, jobs, and merge candidates", async () => {
     const app = buildApp(undefined, {
       env: {

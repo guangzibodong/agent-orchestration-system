@@ -150,6 +150,36 @@ describe("delivery topbar health", () => {
     );
   });
 
+  it("marks stale launch gate evidence as a danger signal", () => {
+    const indicators = buildDeliveryTopbarHealthIndicators(baseSnapshot, {
+      generatedAt: "2026-06-06T16:35:25.938Z",
+      root: "C:/work",
+      branch: "main",
+      commit: "24418a0",
+      dirtyFiles: [],
+      checks: [],
+      docs: [],
+      localDecision: "passed",
+      productionDecision: "blocked",
+      failureSummaries: [],
+      externalBlockers: [],
+      sourcePath: "C:/work/output/launch-readiness/latest.json",
+      currentBranch: "main",
+      currentCommit: "10de896",
+      currentDirtyFiles: [],
+      fresh: false,
+      staleReasons: ["Evidence commit 24418a0 does not match HEAD 10de896."],
+    });
+
+    expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
+      expect.objectContaining({
+        value: "Evidence stale",
+        detail: "Evidence commit 24418a0 does not match HEAD 10de896.",
+        severity: "danger",
+      }),
+    );
+  });
+
   it("shows failed jobs as the queue danger state", () => {
     const indicators = buildDeliveryTopbarHealthIndicators({
       ...baseSnapshot,

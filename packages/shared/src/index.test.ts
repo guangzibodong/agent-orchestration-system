@@ -543,12 +543,18 @@ describe("workflowRunSchema", () => {
       externalBlockers: [
         "smoke_api_postgres: DATABASE_URL is not configured."
       ],
-      sourcePath: "C:/work/output/launch-readiness/latest.json"
+      sourcePath: "C:/work/output/launch-readiness/latest.json",
+      currentBranch: "main",
+      currentCommit: "cfa22af",
+      currentDirtyFiles: [],
+      fresh: true,
+      staleReasons: []
     });
 
     expect(evidence.localDecision).toBe("passed");
     expect(evidence.checks[1]?.status).toBe("external-blocked");
     expect(evidence.sourcePath).toContain("latest.json");
+    expect(evidence.fresh).toBe(true);
   });
 
   it("accepts workflow review decisions", () => {

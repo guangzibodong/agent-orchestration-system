@@ -25,6 +25,9 @@ P0 smoke gates, records branch/commit/dirty files, and marks Postgres checks as
 The API exposes the latest generated JSON at `GET /launch/evidence/latest`;
 the Requirement Delivery Console uses it only as a read-only launch health
 signal.
+The endpoint also annotates the evidence with the current git branch, HEAD,
+dirty files, and `fresh=false` when the evidence no longer matches the working
+tree.
 
 For a Postgres-backed launch target, run `npm.cmd run launch:gate:postgres`.
 That command treats missing `DATABASE_URL`, migrations, and
