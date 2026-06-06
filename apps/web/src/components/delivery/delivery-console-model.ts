@@ -13,10 +13,23 @@ export type RequirementStage =
 
 export type RequirementRiskLevel = "low" | "medium" | "high";
 
+export type RepositorySafetySummary = {
+  repositoryLabel: string;
+  executionModeLabel: string;
+  branchLabel: string;
+  headLabel: string;
+  cleanStateLabel: string;
+  allowedRootLabel: string;
+  mergePolicyLabel: string;
+  blockedReason?: string;
+  recoveryAction: string;
+};
+
 export type RequirementSummary = {
   id: string;
   title: string;
   repositoryLabel: string;
+  repositorySafety: RepositorySafetySummary;
   requirementStage: RequirementStage;
   executionStatus: WorkflowRun["status"];
   riskLevel: RequirementRiskLevel;
@@ -106,6 +119,79 @@ function mapNextAction(workflow: WorkflowRun): string {
   }
 }
 
+function buildRepositorySafety(workflow: WorkflowRun): RepositorySafetySummary {
+  const latestWorkspace = [...workflow.tasks]
+    .reverse()
+    .find((task) => task.workspace)?.workspace;
+  const hasRepository = Boolean(workflow.repositoryPath);
+  const blockedReason = buildRepositoryBlockedReason(workflow, hasRepository);
+
+  return {
+    repositoryLabel: workflow.repositoryPath ?? "No repository selected",
+    executionModeLabel:
+      workflow.executionMode === "worktree" || latestWorkspace
+        ? "Isolated worktree"
+        : "Direct repository",
+    branchLabel: latestWorkspace?.branch ?? "Branch pending preflight",
+    headLabel: "HEAD SHA not reported",
+    cleanStateLabel: hasRepository
+      ? workflow.status === "needs_review" ||
+        workflow.status === "completed" ||
+        workflow.status === "gate_failed"
+        ? "Apply clean check required"
+        : "Clean state pending preflight"
+      : "No repository selected",
+    allowedRootLabel: hasRepository
+      ? "Allowed root accepted by API"
+      : "Allowed root not checked",
+    mergePolicyLabel: "Manual git apply only",
+    blockedReason,
+    recoveryAction: buildRepositoryRecoveryAction(workflow, hasRepository)
+  };
+}
+
+function buildRepositoryBlockedReason(
+  workflow: WorkflowRun,
+  hasRepository: boolean
+): string | undefined {
+  if (!hasRepository) {
+    return "Repository path required before execution.";
+  }
+
+  if (workflow.status === "gate_failed") {
+    return "Required gate failed; merge-ready conclusion is blocked.";
+  }
+
+  if (workflow.status === "failed") {
+    return "Workflow failed before merge-ready evidence was produced.";
+  }
+
+  if (workflow.status === "aborted") {
+    return "Workflow was canceled before delivery evidence was complete.";
+  }
+
+  return undefined;
+}
+
+function buildRepositoryRecoveryAction(
+  workflow: WorkflowRun,
+  hasRepository: boolean
+): string {
+  if (!hasRepository) {
+    return "Register or select a repository";
+  }
+
+  if (workflow.status === "gate_failed") {
+    return "Retry failed gate";
+  }
+
+  if (workflow.status === "failed" || workflow.status === "aborted") {
+    return "Retry workflow";
+  }
+
+  return "Run repository preflight before mutating actions";
+}
+
 export function mapWorkflowToRequirementSummary(
   workflow: WorkflowRun
 ): RequirementSummary {
@@ -113,6 +199,7 @@ export function mapWorkflowToRequirementSummary(
     id: workflow.id,
     title: workflow.goal,
     repositoryLabel: workflow.repositoryPath ?? "No repository selected",
+    repositorySafety: buildRepositorySafety(workflow),
     requirementStage: statusStageMap[workflow.status],
     executionStatus: workflow.status,
     riskLevel: mapRiskLevel(workflow),

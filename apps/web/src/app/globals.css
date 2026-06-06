@@ -251,6 +251,30 @@ button {
   gap: 8px;
 }
 
+.repositorySafetyList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.repositorySafetyList div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.repositorySafetyList dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.repositorySafetyList dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .stageStepper {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 96px), 1fr));

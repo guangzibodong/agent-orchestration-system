@@ -115,11 +115,29 @@ export function RequirementDeliveryConsole({
               <ShieldCheck size={20} aria-hidden="true" />
               <strong>Repository Safety</strong>
             </div>
-            <p>
-              Branch, HEAD, clean/dirty state, allowed-root status, and manual
-              apply policy must be visible before execution.
-            </p>
-            <span>No auto-merge. Patch must be manually applied with git apply.</span>
+            <dl className="repositorySafetyList">
+              {[
+                ["Repository", selectedRequirement?.repositorySafety.repositoryLabel],
+                ["Mode", selectedRequirement?.repositorySafety.executionModeLabel],
+                ["Branch", selectedRequirement?.repositorySafety.branchLabel],
+                ["HEAD", selectedRequirement?.repositorySafety.headLabel],
+                ["Clean state", selectedRequirement?.repositorySafety.cleanStateLabel],
+                ["Allowed root", selectedRequirement?.repositorySafety.allowedRootLabel],
+                ["Merge policy", selectedRequirement?.repositorySafety.mergePolicyLabel]
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value ?? "No requirement selected"}</dd>
+                </div>
+              ))}
+            </dl>
+            {selectedRequirement?.repositorySafety.blockedReason ? (
+              <p>{selectedRequirement.repositorySafety.blockedReason}</p>
+            ) : null}
+            <span>
+              {selectedRequirement?.repositorySafety.recoveryAction ??
+                "Create a requirement to run repository safety checks"}
+            </span>
           </section>
 
           <section aria-label="Stage Stepper">

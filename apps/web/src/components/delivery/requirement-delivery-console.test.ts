@@ -39,6 +39,11 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("New Requirement");
     expect(html).toContain("Requirement Queue");
     expect(html).toContain("Repository Safety");
+    expect(html).toContain("C:/work/api");
+    expect(html).toContain("Apply clean check required");
+    expect(html).toContain("Allowed root accepted by API");
+    expect(html).toContain("Manual git apply only");
+    expect(html).not.toContain("Branch, HEAD, clean/dirty state");
     expect(html).toContain("Stage Stepper");
     expect(html).toContain("Decision Queue");
     expect(html).toContain("Review merge candidate");

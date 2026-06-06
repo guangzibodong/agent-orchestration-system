@@ -34,6 +34,17 @@ describe("delivery console model", () => {
       id: "workflow-123456789",
       title: "Fix checkout test flake",
       repositoryLabel: "C:/work/shop",
+      repositorySafety: {
+        allowedRootLabel: "Allowed root accepted by API",
+        blockedReason: undefined,
+        branchLabel: "Branch pending preflight",
+        cleanStateLabel: "Clean state pending preflight",
+        executionModeLabel: "Direct repository",
+        headLabel: "HEAD SHA not reported",
+        mergePolicyLabel: "Manual git apply only",
+        recoveryAction: "Run repository preflight before mutating actions",
+        repositoryLabel: "C:/work/shop"
+      },
       requirementStage: "ready_to_run",
       executionStatus: "ready",
       riskLevel: "medium",
@@ -66,6 +77,53 @@ describe("delivery console model", () => {
       requirementStage: "delivered",
       nextAction: "Review delivered evidence",
       riskLevel: "low"
+    });
+  });
+
+  it("builds repository safety from real workflow repository and workspace evidence", () => {
+    const summary = mapWorkflowToRequirementSummary({
+      ...baseWorkflow,
+      status: "gate_failed",
+      executionMode: "worktree",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch failing test",
+          status: "failed",
+          workspace: {
+            path: "C:/worktrees/shop/task-1",
+            branch: "mawo/workflow-123/task-1",
+            repoPath: "C:/work/shop"
+          }
+        }
+      ]
+    });
+
+    expect(summary.repositorySafety).toEqual({
+      allowedRootLabel: "Allowed root accepted by API",
+      blockedReason: "Required gate failed; merge-ready conclusion is blocked.",
+      branchLabel: "mawo/workflow-123/task-1",
+      cleanStateLabel: "Apply clean check required",
+      executionModeLabel: "Isolated worktree",
+      headLabel: "HEAD SHA not reported",
+      mergePolicyLabel: "Manual git apply only",
+      recoveryAction: "Retry failed gate",
+      repositoryLabel: "C:/work/shop"
+    });
+  });
+
+  it("marks missing repository safety as blocked setup work", () => {
+    const summary = mapWorkflowToRequirementSummary({
+      ...baseWorkflow,
+      repositoryPath: undefined
+    });
+
+    expect(summary.repositorySafety).toMatchObject({
+      allowedRootLabel: "Allowed root not checked",
+      blockedReason: "Repository path required before execution.",
+      cleanStateLabel: "No repository selected",
+      recoveryAction: "Register or select a repository",
+      repositoryLabel: "No repository selected"
     });
   });
 
