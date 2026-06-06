@@ -118,6 +118,16 @@ describe("PostgresWorkflowWorker", () => {
         }
       },
       {
+        type: "worker.heartbeat",
+        actor: "worker",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "running"
+        }
+      },
+      {
         type: "job.completed",
         actor: "worker",
         workflowId: "workflow-1",
@@ -125,16 +135,31 @@ describe("PostgresWorkflowWorker", () => {
         metadata: {
           workerId: "worker-a"
         }
+      },
+      {
+        type: "worker.heartbeat",
+        actor: "worker",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "idle",
+          lastJobStatus: "completed"
+        }
       }
     ]);
   });
 
   it("returns idle when there is no queued job to claim", async () => {
     const { runner, saved, store } = createHarness();
+    const events: PostgresWorkflowWorkerEvent[] = [];
     const worker = new PostgresWorkflowWorker({
       jobStore: store,
       runner,
-      workerId: "worker-a"
+      workerId: "worker-a",
+      eventSink: (event) => {
+        events.push(event);
+      }
     });
 
     await expect(worker.runOnce()).resolves.toEqual({
@@ -142,6 +167,16 @@ describe("PostgresWorkflowWorker", () => {
     });
     expect(runner.runWorkflow).not.toHaveBeenCalled();
     expect(saved).toEqual([]);
+    expect(events).toEqual([
+      {
+        type: "worker.heartbeat",
+        actor: "worker",
+        metadata: {
+          workerId: "worker-a",
+          status: "idle"
+        }
+      }
+    ]);
   });
 
   it("marks the claimed job failed when workflow execution throws", async () => {
@@ -150,11 +185,15 @@ describe("PostgresWorkflowWorker", () => {
     vi.mocked(runner.runWorkflow).mockRejectedValueOnce(
       new Error("workflow exploded")
     );
+    const events: PostgresWorkflowWorkerEvent[] = [];
     const worker = new PostgresWorkflowWorker({
       jobStore: store,
       runner,
       workerId: "worker-a",
-      now: () => new Date("2026-06-05T00:03:00.000Z")
+      now: () => new Date("2026-06-05T00:03:00.000Z"),
+      eventSink: (event) => {
+        events.push(event);
+      }
     });
 
     const result = await worker.runOnce();
@@ -182,6 +221,37 @@ describe("PostgresWorkflowWorker", () => {
       }),
       workerId: "worker-a"
     });
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "job.claimed",
+        workflowId: "workflow-1",
+        jobId: "job-1"
+      }),
+      expect.objectContaining({
+        type: "worker.heartbeat",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "running"
+        }
+      }),
+      expect.objectContaining({
+        type: "job.failed",
+        workflowId: "workflow-1",
+        jobId: "job-1"
+      }),
+      expect.objectContaining({
+        type: "worker.heartbeat",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "idle",
+          lastJobStatus: "failed"
+        }
+      })
+    ]);
   });
 
   it("returns the canceled job when completion loses its worker claim", async () => {
@@ -326,11 +396,30 @@ describe("PostgresWorkflowWorker", () => {
         }
       }),
       expect.objectContaining({
+        type: "worker.heartbeat",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "running"
+        }
+      }),
+      expect.objectContaining({
         type: "job.lease_lost",
         workflowId: "workflow-1",
         jobId: "job-1",
         metadata: {
           workerId: "worker-a"
+        }
+      }),
+      expect.objectContaining({
+        type: "worker.heartbeat",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "idle",
+          lastJobStatus: "canceled"
         }
       })
     ]);

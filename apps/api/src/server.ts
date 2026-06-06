@@ -5,7 +5,8 @@ import {
   repositoryRegistrationRequestSchema,
   workflowJobStatusSchema,
   workflowStatusSchema,
-  workflowReviewRequestSchema
+  workflowReviewRequestSchema,
+  type AuditEvent
 } from "@mawo/shared";
 import Fastify from "fastify";
 import { spawnSync } from "node:child_process";
@@ -163,6 +164,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const maxConcurrentJobs = parseMaxConcurrentJobs(
     env.MAWO_MAX_CONCURRENT_JOBS
   );
+  const workerStaleAfterMs = parseWorkerStaleAfterMs(env.MAWO_WORKER_STALE_MS);
   const requestedStateBackend = parseRuntimeBackend(
     env.MAWO_STATE_BACKEND,
     "file"
@@ -197,6 +199,11 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
   const appendAuditEvent = (event: AuditEventInput) =>
     Promise.resolve(auditStore.append(event));
+  const getWorkerHealth = async () =>
+    createWorkerHealth(
+      await auditStore.list({ type: "worker.heartbeat" }),
+      workerStaleAfterMs
+    );
   const appendAuditEventInBackground = (event: AuditEventInput) => {
     void appendAuditEvent(event).catch((error: unknown) => {
       app.log.error({ error }, "failed to append audit event");
@@ -342,6 +349,11 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       stateBackend: activeStateBackend,
       queueBackend: activeQueueBackend
     });
+    const workerHealth = await getWorkerHealth();
+    const workerHealthCheck = createWorkerHealthCheck({
+      queueBackend: activeQueueBackend,
+      workerHealth
+    });
     const runtimeBackendCheck = createRuntimeBackendCheck({
       requestedStateBackend,
       requestedQueueBackend,
@@ -357,6 +369,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       agentsCheck,
       productionConfigCheck,
       runtimeBackendCheck,
+      workerHealthCheck,
       deploymentTopologyCheck
     ];
 
@@ -378,6 +391,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.get("/agents/health", async () => {
     return createAgentHealthChecks(cliAgents);
+  });
+
+  app.get("/workers/health", async () => {
+    return getWorkerHealth();
   });
 
   app.get<{
@@ -1354,6 +1371,117 @@ function createRuntimeBackendCheck(input: {
   };
 }
 
+type WorkerHealth = {
+  workerId: string;
+  healthy: boolean;
+  status: string;
+  lastSeenAt: string;
+  ageMs: number;
+  workflowId?: string;
+  jobId?: string;
+  lastJobStatus?: string;
+};
+
+type WorkerHealthResponse = {
+  ok: boolean;
+  checkedAt: string;
+  staleAfterMs: number;
+  summary: {
+    totalWorkers: number;
+    healthyWorkers: number;
+    staleWorkers: number;
+  };
+  workers: WorkerHealth[];
+};
+
+function createWorkerHealth(
+  events: AuditEvent[],
+  staleAfterMs: number,
+  checkedAt: Date = new Date()
+): WorkerHealthResponse {
+  const latestByWorker = new Map<string, AuditEvent>();
+
+  for (const event of events) {
+    const workerId = event.metadata?.workerId;
+
+    if (!workerId) {
+      continue;
+    }
+
+    const existing = latestByWorker.get(workerId);
+
+    if (
+      !existing ||
+      Date.parse(existing.createdAt) <= Date.parse(event.createdAt)
+    ) {
+      latestByWorker.set(workerId, event);
+    }
+  }
+
+  const checkedAtMs = checkedAt.getTime();
+  const workers = [...latestByWorker.entries()]
+    .map(([workerId, event]) => {
+      const seenAtMs = Date.parse(event.createdAt);
+      const ageMs = Number.isFinite(seenAtMs)
+        ? Math.max(0, checkedAtMs - seenAtMs)
+        : Number.MAX_SAFE_INTEGER;
+      const healthy = ageMs <= staleAfterMs;
+
+      return {
+        workerId,
+        healthy,
+        status: event.metadata?.status ?? "unknown",
+        lastSeenAt: event.createdAt,
+        ageMs,
+        ...(event.workflowId ? { workflowId: event.workflowId } : {}),
+        ...(event.jobId ? { jobId: event.jobId } : {}),
+        ...(event.metadata?.lastJobStatus
+          ? { lastJobStatus: event.metadata.lastJobStatus }
+          : {})
+      };
+    })
+    .sort((left, right) => left.workerId.localeCompare(right.workerId));
+  const healthyWorkers = workers.filter((worker) => worker.healthy).length;
+  const staleWorkers = workers.length - healthyWorkers;
+
+  return {
+    ok: healthyWorkers > 0,
+    checkedAt: checkedAt.toISOString(),
+    staleAfterMs,
+    summary: {
+      totalWorkers: workers.length,
+      healthyWorkers,
+      staleWorkers
+    },
+    workers
+  };
+}
+
+function createWorkerHealthCheck(input: {
+  queueBackend: ActiveQueueBackend;
+  workerHealth: WorkerHealthResponse;
+}) {
+  const required = input.queueBackend === "postgres";
+  const ok = !required || input.workerHealth.summary.healthyWorkers > 0;
+
+  return {
+    id: "workers",
+    label: "Worker health",
+    ok,
+    status: ok ? "ready" : "blocked",
+    required,
+    staleAfterMs: input.workerHealth.staleAfterMs,
+    healthyWorkers: input.workerHealth.summary.healthyWorkers,
+    staleWorkers: input.workerHealth.summary.staleWorkers,
+    totalWorkers: input.workerHealth.summary.totalWorkers,
+    message: ok
+      ? required
+        ? "At least one Postgres workflow worker is reporting a fresh heartbeat."
+        : "External workers are optional for the active queue backend."
+      : "Postgres queue backend requires at least one fresh workflow worker heartbeat."
+  };
+}
+
 function isProductionApiToken(apiToken?: string): boolean {
   if (!apiToken) {
     return false;
@@ -1386,6 +1514,20 @@ function parseMaxConcurrentJobs(value?: string): number {
   }
 
   return Math.max(1, Math.floor(parsed));
+}
+
+function parseWorkerStaleAfterMs(value?: string): number {
+  if (!value?.trim()) {
+    return 60_000;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return 60_000;
+  }
+
+  return Math.max(1_000, Math.floor(parsed));
 }
 
 function parseRuntimeBackend(

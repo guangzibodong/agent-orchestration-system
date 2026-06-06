@@ -91,8 +91,8 @@ export async function main(env: Record<string, string | undefined> = process.env
         .append({
           type: event.type,
           actor: event.actor,
-          workflowId: event.workflowId,
-          jobId: event.jobId,
+          ...(event.workflowId ? { workflowId: event.workflowId } : {}),
+          ...(event.jobId ? { jobId: event.jobId } : {}),
           metadata: event.metadata
         })
         .catch((error: unknown) => {

@@ -127,6 +127,8 @@ describe("deployment manifests", () => {
     expect(smoke).toContain("eventSink: (event)");
     expect(smoke).toContain("job.claimed");
     expect(smoke).toContain("job.completed");
+    expect(smoke).toContain("/workers/health");
+    expect(smoke).toContain("healthyWorkers");
     expect(helper).toContain("activeStateBackend=postgres");
     expect(helper).toContain("activeQueueBackend=postgres");
     expect(smoke).toContain("prisma.workflowRun.findUnique");

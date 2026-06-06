@@ -342,6 +342,92 @@ describe("runner API", () => {
     expect(JSON.stringify(health)).not.toContain("{promptFile}");
   });
 
+  it("exposes worker health from heartbeat audit events", async () => {
+    const freshSeenAt = new Date(Date.now() - 5_000).toISOString();
+    const staleSeenAt = new Date(Date.now() - 120_000).toISOString();
+    const auditEvents: AuditEvent[] = [
+      {
+        id: "audit-worker-a-old",
+        type: "worker.heartbeat" as AuditEvent["type"],
+        createdAt: staleSeenAt,
+        actor: "worker",
+        metadata: {
+          workerId: "worker-a",
+          status: "idle"
+        }
+      },
+      {
+        id: "audit-worker-a-new",
+        type: "worker.heartbeat" as AuditEvent["type"],
+        createdAt: freshSeenAt,
+        actor: "worker",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "running"
+        }
+      },
+      {
+        id: "audit-worker-b-stale",
+        type: "worker.heartbeat" as AuditEvent["type"],
+        createdAt: staleSeenAt,
+        actor: "worker",
+        metadata: {
+          workerId: "worker-b",
+          status: "idle"
+        }
+      }
+    ];
+    const auditStore: AuditStore = {
+      list: vi.fn(async (filter) =>
+        auditEvents.filter((event) =>
+          filter?.type ? event.type === filter.type : true
+        )
+      ),
+      append: vi.fn()
+    };
+    const app = buildApp(undefined, {
+      auditStore,
+      env: {
+        MAWO_WORKER_STALE_MS: "60000"
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/workers/health"
+    });
+    const health = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(health).toMatchObject({
+      ok: true,
+      staleAfterMs: 60_000,
+      summary: {
+        totalWorkers: 2,
+        healthyWorkers: 1,
+        staleWorkers: 1
+      },
+      workers: [
+        {
+          workerId: "worker-a",
+          healthy: true,
+          status: "running",
+          lastSeenAt: freshSeenAt,
+          workflowId: "workflow-1",
+          jobId: "job-1"
+        },
+        {
+          workerId: "worker-b",
+          healthy: false,
+          status: "idle",
+          lastSeenAt: staleSeenAt
+        }
+      ]
+    });
+  });
+
   it("reports deployment readiness without exposing agent command templates", async () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-readiness-test-"));
     tempRoots.push(demoRoot);
@@ -405,6 +491,51 @@ describe("runner API", () => {
       ])
     );
     expect(JSON.stringify(readiness)).not.toContain("{promptFile}");
+  });
+
+  it("blocks production readiness when postgres queue has no fresh worker heartbeat", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-postgres-worker-blocked-test-"));
+    tempRoots.push(demoRoot);
+    const token = "production-token-1234567890";
+    const { prismaClient } = createMutablePrismaStateClient();
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        NODE_ENV: "production",
+        MAWO_API_TOKEN: token,
+        MAWO_ALLOWED_REPOSITORY_ROOTS: demoRoot,
+        MAWO_STATE_BACKEND: "postgres",
+        MAWO_QUEUE_BACKEND: "postgres",
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
+        MAWO_WORKER_STALE_MS: "60000"
+      },
+      prismaClient
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/readiness",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    const readiness = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(readiness).toMatchObject({
+      ok: false,
+      deploymentMode: "production"
+    });
+    expect(readiness.checks).toContainEqual(
+      expect.objectContaining({
+        id: "workers",
+        ok: false,
+        status: "blocked",
+        required: true,
+        healthyWorkers: 0,
+        totalWorkers: 0
+      })
+    );
   });
 
   it("blocks production readiness when security deployment settings are placeholders", async () => {
@@ -539,7 +670,19 @@ describe("runner API", () => {
     const demoRoot = await mkdtemp(join(tmpdir(), "mawo-postgres-queue-ready-test-"));
     tempRoots.push(demoRoot);
     const token = "production-token-1234567890";
-    const { prismaClient } = createMutablePrismaStateClient();
+    const { auditEvents, prismaClient } = createMutablePrismaStateClient();
+    auditEvents.push({
+      id: "audit-worker-ready",
+      type: "worker.heartbeat",
+      actor: "worker",
+      workflowRunId: null,
+      jobId: null,
+      metadata: {
+        workerId: "worker-a",
+        status: "idle"
+      },
+      createdAt: new Date()
+    });
     const app = buildApp(undefined, {
       demoRoot,
       env: {
@@ -568,6 +711,9 @@ describe("runner API", () => {
     const deploymentTopology = readiness.checks.find(
       (check: { id: string }) => check.id === "deployment_topology"
     );
+    const workerHealth = readiness.checks.find(
+      (check: { id: string }) => check.id === "workers"
+    );
 
     expect(response.statusCode).toBe(200);
     expect(readiness).toMatchObject({
@@ -589,6 +735,13 @@ describe("runner API", () => {
       apiReplicaCount: 2,
       stateBackend: "postgres",
       queueBackend: "postgres"
+    });
+    expect(workerHealth).toMatchObject({
+      ok: true,
+      status: "ready",
+      required: true,
+      healthyWorkers: 1,
+      totalWorkers: 1
     });
     expect(deploymentTopology.maxSupportedApiReplicas).toBeGreaterThanOrEqual(2);
   });

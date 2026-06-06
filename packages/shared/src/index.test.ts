@@ -437,6 +437,24 @@ describe("workflowRunSchema", () => {
     expect(event.metadata?.workerId).toBe("worker-a");
   });
 
+  it("accepts worker heartbeat audit events", () => {
+    const event = auditEventSchema.parse({
+      id: "audit_worker_heartbeat_1",
+      type: "worker.heartbeat",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      actor: "worker",
+      metadata: {
+        workerId: "worker-a",
+        status: "idle",
+        lastJobStatus: "completed"
+      }
+    });
+
+    expect(event.type).toBe("worker.heartbeat");
+    expect(event.metadata?.workerId).toBe("worker-a");
+    expect(event.metadata?.status).toBe("idle");
+  });
+
   it("accepts repository update audit events", () => {
     const event = auditEventSchema.parse({
       id: "audit_2",

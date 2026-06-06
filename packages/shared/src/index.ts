@@ -301,6 +301,7 @@ export const auditEventTypeSchema = z.enum([
   "workflow.task_completed",
   "workflow.gate_started",
   "workflow.gate_completed",
+  "worker.heartbeat",
   "job.recovered",
   "job.claimed",
   "job.completed",

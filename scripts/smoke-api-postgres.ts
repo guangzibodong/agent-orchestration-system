@@ -182,8 +182,8 @@ function createPostgresSmokeWorker(root: string): PostgresWorkflowWorker {
         .append({
           type: event.type,
           actor: event.actor,
-          workflowId: event.workflowId,
-          jobId: event.jobId,
+          ...(event.workflowId ? { workflowId: event.workflowId } : {}),
+          ...(event.jobId ? { jobId: event.jobId } : {}),
           metadata: event.metadata
         })
         .catch((error: unknown) => {
@@ -344,6 +344,15 @@ export async function main() {
       "Postgres worker did not record job.completed audit event."
     );
     log("worker lifecycle audit events persisted through Postgres");
+
+    const workerHealth = await request(baseUrl, "GET", "/workers/health");
+    const workerHealthSummary = workerHealth.body.summary as JsonObject | undefined;
+    assert(
+      workerHealth.status === 200 &&
+        Number(workerHealthSummary?.healthyWorkers ?? 0) > 0,
+      "Postgres worker heartbeat was not visible through /workers/health."
+    );
+    log("worker heartbeat is visible through the API health endpoint");
 
     const restoredWorkflow = await request(
       baseUrl,

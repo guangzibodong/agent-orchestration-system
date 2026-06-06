@@ -29,13 +29,16 @@ export type PostgresWorkflowWorkerRunner = Pick<
 };
 
 export type PostgresWorkflowWorkerEvent = {
-  type: "job.claimed" | "job.completed" | "job.failed" | "job.lease_lost";
+  type:
+    | "job.claimed"
+    | "job.completed"
+    | "job.failed"
+    | "job.lease_lost"
+    | "worker.heartbeat";
   actor: "worker";
-  workflowId: string;
-  jobId: string;
-  metadata: {
-    workerId: string;
-  };
+  workflowId?: string;
+  jobId?: string;
+  metadata: Record<string, string>;
 };
 
 export type PostgresWorkflowWorkerOptions = {
@@ -88,12 +91,15 @@ export class PostgresWorkflowWorker {
     });
 
     if (!claimed) {
+      await this.emitHeartbeat({ status: "idle" });
+
       return {
         status: "idle"
       };
     }
 
     await this.emitEvent("job.claimed", claimed);
+    await this.emitHeartbeat({ status: "running", job: claimed });
 
     const controller = new AbortController();
     const stopRenewal = this.startLeaseRenewal(claimed, controller);
@@ -106,13 +112,25 @@ export class PostgresWorkflowWorker {
       const completed = this.finishJob(claimed, {
         status: "completed"
       });
-      return await this.finishClaimedJob(completed);
+      const result = await this.finishClaimedJob(completed);
+      await this.emitHeartbeat({
+        status: "idle",
+        job: result.job,
+        lastJobStatus: result.status
+      });
+      return result;
     } catch (error) {
       const failed = this.finishJob(claimed, {
         status: "failed",
         error: error instanceof Error ? error.message : String(error)
       });
-      return await this.finishClaimedJob(failed);
+      const result = await this.finishClaimedJob(failed);
+      await this.emitHeartbeat({
+        status: "idle",
+        job: result.job,
+        lastJobStatus: result.status
+      });
+      return result;
     } finally {
       stopRenewal();
     }
@@ -195,6 +213,31 @@ export class PostgresWorkflowWorker {
       jobId: job.id,
       metadata: {
         workerId: this.workerId
+      }
+    });
+  }
+
+  private async emitHeartbeat(input: {
+    status: "idle" | "running";
+    job?: WorkflowJob;
+    lastJobStatus?: Exclude<
+      PostgresWorkflowWorkerRunOnceResult["status"],
+      "idle"
+    >;
+  }): Promise<void> {
+    await this.eventSink?.({
+      type: "worker.heartbeat",
+      actor: "worker",
+      ...(input.job
+        ? {
+            workflowId: input.job.workflowId,
+            jobId: input.job.id
+          }
+        : {}),
+      metadata: {
+        workerId: this.workerId,
+        status: input.status,
+        ...(input.lastJobStatus ? { lastJobStatus: input.lastJobStatus } : {})
       }
     });
   }
