@@ -244,6 +244,13 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(safety).toContainText(
       "Commit, stash, or discard local changes before running mutating workflows.",
     );
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Run dirty repo safely" });
+    await expect(queueItem).toContainText("Repository safety blocks execution");
+    await expect(
+      queueItem.getByRole("button", { name: "Enqueue" }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /apply candidate|apply patch/i }),
     ).toHaveCount(0);

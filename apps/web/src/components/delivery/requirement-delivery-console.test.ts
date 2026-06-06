@@ -226,8 +226,14 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain(
       "Commit, stash, or discard local changes before running mutating workflows.",
     );
+    expect(html).toContain("Repository safety blocks execution");
     expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
     expect(html).not.toContain("Apply Candidate");
+    const enqueueButtons = html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
+    expect(enqueueButtons.length).toBeGreaterThan(0);
+    expect(enqueueButtons.every((button) => button.includes('disabled=""'))).toBe(
+      true,
+    );
   });
 
   it("renders review evidence artifacts inside the requirement detail shell", () => {

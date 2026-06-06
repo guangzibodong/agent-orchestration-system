@@ -17,6 +17,7 @@ export type RequirementQueueRow = {
   nodeLabel: string;
   updatedAt: string;
   availableActions: RequirementLifecycleAction[];
+  actionBlockReason?: string;
   currentJobStatusLabel?: string;
   workflowRunHref?: string;
   workflowRunId?: string;
@@ -77,6 +78,9 @@ export function buildRequirementQueueRows(
     nodeLabel: requirement.nodeLabel,
     updatedAt: requirement.updatedAt,
     availableActions: requirement.availableActions,
+    ...(requirement.actionBlockReason
+      ? { actionBlockReason: requirement.actionBlockReason }
+      : {}),
     currentJobStatusLabel: requirement.currentJobStatus
       ? jobStatusLabels[requirement.currentJobStatus]
       : undefined,

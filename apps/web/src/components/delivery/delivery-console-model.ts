@@ -22,6 +22,7 @@ export type RequirementRiskLevel = "low" | "medium" | "high";
 export type RepositorySafetySummary = {
   repositoryLabel: string;
   executionModeLabel: string;
+  blocksExecution?: boolean;
   statusLabel?: string;
   statusTone?: "danger" | "muted" | "success" | "warning";
   branchLabel: string;
@@ -98,6 +99,7 @@ export type RequirementSummary = {
   artifactLinks?: RequirementArtifactLink[];
   qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
+  actionBlockReason?: string;
   availableActions: RequirementLifecycleAction[];
 };
 
@@ -316,6 +318,7 @@ function buildTicketRepositorySafety(
         : "Allowed root pending preflight"
       : "Allowed root not checked",
     mergePolicyLabel: noAutoMergePolicyLabel,
+    blocksExecution: !hasRepository,
     blockedReason: buildTicketBlockedReason(
       requirement,
       hasRepository,
@@ -338,6 +341,7 @@ function buildRepositorySafetyFromInspection(
   return {
     repositoryLabel,
     executionModeLabel: "Isolated worktree",
+    blocksExecution: Boolean(safety.blockedReason),
     statusLabel: safety.blockedReason ? "Safety blocked" : "Safety accepted",
     statusTone: safety.blockedReason ? "danger" : "success",
     branchLabel:
@@ -468,6 +472,7 @@ function buildRepositorySafety(workflow: WorkflowRun): RepositorySafetySummary {
         : "Allowed root pending preflight"
       : "Allowed root not checked",
     mergePolicyLabel: noAutoMergePolicyLabel,
+    blocksExecution: !hasRepository,
     blockedReason,
     recoveryAction: buildRepositoryRecoveryAction(workflow, hasRepository)
   };
@@ -593,6 +598,24 @@ export function mapRequirementTicketToSummary(
     requirement,
     workflowStatus
   );
+  const repositorySafety = buildTicketRepositorySafety(
+    requirement,
+    executionStatus,
+    workflow,
+    requirement.repositoryId
+      ? context.repositorySafetyByRepositoryId?.[requirement.repositoryId]
+      : undefined
+  );
+  const baseAvailableActions = buildRequirementAvailableActions(requirement);
+  const availableActions = filterRepositoryBlockedLifecycleActions(
+    baseAvailableActions,
+    repositorySafety
+  );
+  const actionBlockReason = buildRepositorySafetyActionBlockReason(
+    baseAvailableActions,
+    availableActions,
+    repositorySafety
+  );
 
   return {
     id: requirement.id,
@@ -602,18 +625,14 @@ export function mapRequirementTicketToSummary(
       requirement.repositoryPath ??
       requirement.repositoryId ??
       "No repository selected",
-    repositorySafety: buildTicketRepositorySafety(
-      requirement,
-      executionStatus,
-      workflow,
-      requirement.repositoryId
-        ? context.repositorySafetyByRepositoryId?.[requirement.repositoryId]
-        : undefined
-    ),
+    repositorySafety,
     requirementStage: requirement.status,
     executionStatus,
     riskLevel: mapRequirementRiskLevel(requirement, workflowStatus),
-    nextAction: mapRequirementNextAction(requirement, workflowStatus),
+    nextAction:
+      actionBlockReason && !availableActions.length
+        ? repositorySafety.recoveryAction
+        : mapRequirementNextAction(requirement, workflowStatus),
     nodeLabel: buildRequirementNodeLabel(requirement),
     updatedAt: requirement.updatedAt,
     currentJobStatus: context.jobStatusByRequirementId?.[requirement.id],
@@ -632,8 +651,39 @@ export function mapRequirementTicketToSummary(
     ...(workflow?.review?.decision
       ? { reviewDecision: workflow.review.decision }
       : {}),
-    availableActions: buildRequirementAvailableActions(requirement)
+    ...(actionBlockReason ? { actionBlockReason } : {}),
+    availableActions
   };
+}
+
+function filterRepositoryBlockedLifecycleActions(
+  actions: RequirementLifecycleAction[],
+  repositorySafety: RepositorySafetySummary
+): RequirementLifecycleAction[] {
+  if (!repositorySafety.blocksExecution) {
+    return actions;
+  }
+
+  return actions.filter((action) => action === "confirm-plan");
+}
+
+function buildRepositorySafetyActionBlockReason(
+  baseActions: RequirementLifecycleAction[],
+  availableActions: RequirementLifecycleAction[],
+  repositorySafety: RepositorySafetySummary
+): string | undefined {
+  const blockedActions = baseActions.filter(
+    (action) => !availableActions.includes(action)
+  );
+  const blockedMutatingAction = blockedActions.some(
+    (action) => action === "enqueue" || action === "retry"
+  );
+
+  if (!repositorySafety.blocksExecution || !blockedMutatingAction) {
+    return undefined;
+  }
+
+  return `Repository safety blocks execution: ${repositorySafety.recoveryAction}`;
 }
 
 function buildWorkflowAvailableActions(
@@ -703,6 +753,18 @@ function buildRequirementDecisionQueue(
   requirements: RequirementSummary[]
 ): DeliveryDecisionItem[] {
   return requirements.flatMap((requirement): DeliveryDecisionItem[] => {
+    if (requirement.actionBlockReason) {
+      return [
+        {
+          id: `${requirement.id}:repository-safety`,
+          requirementId: requirement.id,
+          title: requirement.title,
+          actionLabel: requirement.repositorySafety.recoveryAction,
+          severity: "danger"
+        }
+      ];
+    }
+
     if (requirement.requirementStage === "plan_review") {
       return [
         {

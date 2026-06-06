@@ -39,6 +39,7 @@ describe("delivery console model", () => {
       repositorySafety: {
         allowedRootLabel: "Allowed root pending preflight",
         blockedReason: undefined,
+        blocksExecution: false,
         branchLabel: "Branch pending preflight",
         cleanStateLabel: "Clean state pending preflight",
         executionModeLabel: "Direct repository",
@@ -287,6 +288,7 @@ describe("delivery console model", () => {
       allowedRootLabel: "Allowed root accepted by API",
       blockedReason:
         "Required gate failed; merge approval is blocked while evidence remains inspectable.",
+      blocksExecution: false,
       branchLabel: "mawo/workflow-123/task-1",
       cleanStateLabel: "Apply clean check required",
       executionModeLabel: "Isolated worktree",
@@ -346,35 +348,34 @@ describe("delivery console model", () => {
       updatedAt: "2026-06-06T11:05:00.000Z"
     };
 
-    const summary = mapRequirementTicketToSummary(
-      requirement,
-      new Map(),
-      {
-        repositorySafetyByRepositoryId: {
-          "repo-dirty": {
-            repositoryId: "repo-dirty",
-            path: "C:/work/shop",
-            defaultBranch: "main",
-            currentBranch: "feature/checkout",
-            headShortSha: "abc1234",
-            clean: false,
-            dirty: true,
-            allowedRoot: true,
-            blockedReason: "repository_dirty",
-            recoveryAction:
-              "Commit, stash, or discard local changes before running mutating workflows.",
-            noAutoMerge: true,
-            manualApplyPolicy:
-              "Manual review is required; MAWO never automatically merges repository changes."
-          }
-        }
+    const dirtySafety = {
+      repositoryId: "repo-dirty",
+      path: "C:/work/shop",
+      defaultBranch: "main",
+      currentBranch: "feature/checkout",
+      headShortSha: "abc1234",
+      clean: false,
+      dirty: true,
+      allowedRoot: true,
+      blockedReason: "repository_dirty",
+      recoveryAction:
+        "Commit, stash, or discard local changes before running mutating workflows.",
+      noAutoMerge: true,
+      manualApplyPolicy:
+        "Manual review is required; MAWO never automatically merges repository changes."
+    } as const;
+    const context = {
+      repositorySafetyByRepositoryId: {
+        "repo-dirty": dirtySafety
       }
-    );
+    };
+    const summary = mapRequirementTicketToSummary(requirement, new Map(), context);
 
     expect(summary.repositorySafety).toEqual({
       allowedRootLabel: "Allowed root accepted by API",
       blockedReason:
         "Repository has uncommitted changes; mutating requirement runs are blocked.",
+      blocksExecution: true,
       branchLabel: "feature/checkout",
       cleanStateLabel: "Dirty - mutating runs blocked",
       executionModeLabel: "Isolated worktree",
@@ -386,6 +387,29 @@ describe("delivery console model", () => {
       statusLabel: "Safety blocked",
       statusTone: "danger"
     });
+    expect(summary).toMatchObject({
+      availableActions: [],
+      nextAction:
+        "Commit, stash, or discard local changes before running mutating workflows."
+    });
+
+    expect(
+      buildDeliveryConsoleModel(
+        [],
+        new Date("2026-06-06T11:10:00.000Z"),
+        [requirement],
+        context
+      ).decisionQueue
+    ).toEqual([
+      {
+        actionLabel:
+          "Commit, stash, or discard local changes before running mutating workflows.",
+        id: "requirement-dirty:repository-safety",
+        requirementId: "requirement-dirty",
+        severity: "danger",
+        title: "Run dirty repo safely"
+      }
+    ]);
   });
 
   it("maps disallowed repository roots into blocked safety evidence", () => {
@@ -449,6 +473,69 @@ describe("delivery console model", () => {
         "Move the repository under MAWO_ALLOWED_REPOSITORY_ROOTS or update MAWO_ALLOWED_REPOSITORY_ROOTS.",
       statusLabel: "Safety blocked",
       statusTone: "danger"
+    });
+    expect(summary).toMatchObject({
+      availableActions: [],
+      nextAction:
+        "Move the repository under MAWO_ALLOWED_REPOSITORY_ROOTS or update MAWO_ALLOWED_REPOSITORY_ROOTS."
+    });
+  });
+
+  it("keeps plan confirmation available when repository safety blocks execution", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-plan-dirty",
+      title: "Confirm dirty repo plan",
+      repositoryId: "repo-dirty",
+      repositoryPath: "C:/work/shop",
+      goal: "Confirm the plan before cleaning the repo",
+      acceptanceCriteria: ["Plan confirmation stays available"],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "medium",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          agent: "shell",
+          instructions: "Patch checkout"
+        }
+      ],
+      qualityGates: [],
+      status: "plan_review",
+      runLinks: [],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:05:00.000Z"
+    };
+
+    const summary = mapRequirementTicketToSummary(
+      requirement,
+      new Map(),
+      {
+        repositorySafetyByRepositoryId: {
+          "repo-dirty": {
+            repositoryId: "repo-dirty",
+            path: "C:/work/shop",
+            defaultBranch: "main",
+            currentBranch: "feature/checkout",
+            headShortSha: "abc1234",
+            clean: false,
+            dirty: true,
+            allowedRoot: true,
+            blockedReason: "repository_dirty",
+            recoveryAction:
+              "Commit, stash, or discard local changes before running mutating workflows.",
+            noAutoMerge: true,
+            manualApplyPolicy:
+              "Manual review is required; MAWO never automatically merges repository changes."
+          }
+        }
+      }
+    );
+
+    expect(summary).toMatchObject({
+      availableActions: ["confirm-plan"],
+      nextAction: "Confirm plan"
     });
   });
 
