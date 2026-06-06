@@ -1,10 +1,12 @@
 import {
+  agentHealthSchema,
   mergeCandidateSchema,
   requirementDeliveryTicketSchema,
   repositorySafetySchema,
   runReportSchema
 } from "@mawo/shared";
 import type {
+  AgentHealth,
   MergeCandidate,
   RepositorySafety,
   RequirementDeliveryTicket,
@@ -33,15 +35,19 @@ export async function loadRequirementDeliveryModel(
   options: WorkflowListOptions = {},
   context: DeliveryConsoleModelContext = {}
 ): Promise<DeliveryConsoleModel> {
-  const [workflowResult, requirementResult] = await Promise.allSettled([
-    loadWorkflowRuns(api, options),
-    loadRequirementTickets(api, options)
-  ]);
+  const [workflowResult, requirementResult, agentHealthResult] =
+    await Promise.allSettled([
+      loadWorkflowRuns(api, options),
+      loadRequirementTickets(api, options),
+      loadAgentHealth(api)
+    ]);
 
   const workflows =
     workflowResult.status === "fulfilled" ? workflowResult.value : [];
   const requirements =
     requirementResult.status === "fulfilled" ? requirementResult.value : [];
+  const agentHealth =
+    agentHealthResult.status === "fulfilled" ? agentHealthResult.value : [];
   const repositorySafetyByRepositoryId =
     requirementResult.status === "fulfilled"
       ? await loadRepositorySafetyForRequirements(api, requirements)
@@ -60,6 +66,7 @@ export async function loadRequirementDeliveryModel(
     requirements,
     {
       ...context,
+      agentHealth: context.agentHealth ?? agentHealth,
       repositorySafetyByRepositoryId: {
         ...repositorySafetyByRepositoryId,
         ...context.repositorySafetyByRepositoryId
@@ -68,6 +75,11 @@ export async function loadRequirementDeliveryModel(
   );
 
   return loadRequirementArtifactEvidence(api, model);
+}
+
+async function loadAgentHealth(api: ApiClient): Promise<AgentHealth[]> {
+  const value = await api("/agents/health");
+  return agentHealthSchema.array().parse(value);
 }
 
 async function loadRequirementTickets(

@@ -70,6 +70,7 @@ import {
   createAgentHealthChecks,
   createAgentSummaries,
   createConfiguredAgentConfigs,
+  type AgentHealth,
 } from "./runner/agent-config.js";
 import {
   createDemoWorkflowDefinition,
@@ -181,6 +182,55 @@ function mapWorkflowToRequirementStatus(
     case "ready":
       return currentStatus;
   }
+}
+
+type UnavailableRequirementAgent = {
+  id: string;
+  label: string;
+  status: AgentHealth["status"];
+  message: string;
+  taskIds: string[];
+};
+
+function findUnavailableRequirementAgents(
+  requirement: RequirementDeliveryTicket,
+  agentHealth: AgentHealth[],
+): UnavailableRequirementAgent[] {
+  const healthById = new Map(agentHealth.map((agent) => [agent.id, agent]));
+  const taskIdsByAgent = new Map<string, string[]>();
+
+  requirement.tasks.forEach((task, index) => {
+    const agentId = task.agent?.trim() || "shell";
+
+    if (agentId === "shell") {
+      return;
+    }
+
+    taskIdsByAgent.set(agentId, [
+      ...(taskIdsByAgent.get(agentId) ?? []),
+      task.id ?? `task-${index + 1}`,
+    ]);
+  });
+
+  return [...taskIdsByAgent.entries()].flatMap(([agentId, taskIds]) => {
+    const health = healthById.get(agentId);
+
+    if (health?.healthy) {
+      return [];
+    }
+
+    return [
+      {
+        id: agentId,
+        label: health?.label ?? agentId,
+        status: health?.status ?? "missing_command",
+        message:
+          health?.message ??
+          `${agentId} agent is not configured. Configure the agent before enqueue.`,
+        taskIds,
+      },
+    ];
+  });
 }
 
 function createStateStores(input: {
@@ -656,7 +706,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
 
   app.get("/agents/health", async () => {
-    return createAgentHealthChecks(cliAgents);
+    return createAgentHealthChecks(cliAgents, undefined, undefined, {
+      includeUnconfigured: true,
+    });
   });
 
   app.get("/workers/health", async () => {
@@ -1125,6 +1177,22 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           });
         }
 
+        const unavailableAgents = findUnavailableRequirementAgents(
+          requirement,
+          await createAgentHealthChecks(cliAgents, undefined, undefined, {
+            includeUnconfigured: true,
+          }),
+        );
+
+        if (unavailableAgents.length > 0) {
+          return reply.code(422).send({
+            error: "requirement_agent_unavailable",
+            message: "Configure missing agent before enqueueing this requirement.",
+            requirementId: requirement.id,
+            unavailableAgents,
+          });
+        }
+
         const definition = await createRepositoryWorkflowDefinition(
           {
             goal: requirement.goal,
@@ -1172,6 +1240,24 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           workflowRunId: workflow.id,
           workflowStatus: workflow.status,
         });
+      }
+
+      if (requirement.currentWorkflowRunId) {
+        const unavailableAgents = findUnavailableRequirementAgents(
+          requirement,
+          await createAgentHealthChecks(cliAgents, undefined, undefined, {
+            includeUnconfigured: true,
+          }),
+        );
+
+        if (unavailableAgents.length > 0) {
+          return reply.code(422).send({
+            error: "requirement_agent_unavailable",
+            message: "Configure missing agent before enqueueing this requirement.",
+            requirementId: requirement.id,
+            unavailableAgents,
+          });
+        }
       }
 
       const nextRequirement = requirement.currentWorkflowRunId
@@ -1254,6 +1340,22 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
+      const unavailableAgents = findUnavailableRequirementAgents(
+        requirement,
+        await createAgentHealthChecks(cliAgents, undefined, undefined, {
+          includeUnconfigured: true,
+        }),
+      );
+
+      if (unavailableAgents.length > 0) {
+        return reply.code(422).send({
+          error: "requirement_agent_unavailable",
+          message: "Configure missing agent before retrying this requirement.",
+          requirementId: requirement.id,
+          unavailableAgents,
+        });
+      }
+
       const retry = await activeRunner.retryWorkflowWithResult(
         requirement.currentWorkflowRunId,
       );

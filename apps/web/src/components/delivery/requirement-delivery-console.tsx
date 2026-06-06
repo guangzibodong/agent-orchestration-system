@@ -634,7 +634,7 @@ function RequirementQueueActions({
       <div className="requirementQueueActions" aria-label="Requirement actions">
         <button className="secondaryButton" disabled type="button">
           {row.actionBlockReason
-            ? "Repository safety blocked"
+            ? "Preflight blocked"
             : "No action available"}
         </button>
         {row.actionBlockReason ? (

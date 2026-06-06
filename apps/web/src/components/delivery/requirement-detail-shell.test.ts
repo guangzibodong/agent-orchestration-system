@@ -444,7 +444,7 @@ describe("RequirementDetailShell", () => {
       })
     );
 
-    expect(html).toContain("Repository safety blocked");
+    expect(html).toContain("Preflight blocked");
     expect(html).toContain(
       "Repository safety blocks execution: Commit, stash, or discard local changes before running mutating workflows."
     );

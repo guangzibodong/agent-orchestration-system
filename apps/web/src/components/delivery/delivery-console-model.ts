@@ -1,4 +1,5 @@
 import type {
+  AgentHealth,
   RequirementDeliveryTicket,
   RepositorySafety,
   WorkflowJobStatus,
@@ -33,6 +34,19 @@ export type RepositorySafetySummary = {
   mergePolicyLabel: string;
   blockedReason?: string;
   recoveryAction: string;
+};
+
+export type RequirementAgentAvailabilitySummary = {
+  blocksExecution: boolean;
+  recoveryAction: string;
+  blockedReason?: string;
+  unavailableAgents: Array<{
+    id: string;
+    label: string;
+    status: AgentHealth["status"];
+    message: string;
+    taskIds: string[];
+  }>;
 };
 
 export type RequirementLifecycleAction = "confirm-plan" | "enqueue" | "retry";
@@ -135,6 +149,9 @@ export type RequirementSummary = {
   qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
   workspaceCleanup?: RequirementWorkspaceCleanupSummary;
+  agentAvailability?: RequirementAgentAvailabilitySummary;
+  actionBlockKind?: "repository-safety" | "agent-availability";
+  actionBlockActionLabel?: string;
   actionBlockReason?: string;
   availableActions: RequirementLifecycleAction[];
 };
@@ -165,6 +182,7 @@ export type DeliveryConsoleModel = {
 };
 
 export type DeliveryConsoleModelContext = {
+  agentHealth?: AgentHealth[];
   jobStatusByRequirementId?: Record<string, WorkflowJobStatus | undefined>;
   repositorySafetyByRepositoryId?: Record<string, RepositorySafety | undefined>;
   workflowOverrides?: WorkflowRun[];
@@ -656,15 +674,38 @@ export function mapRequirementTicketToSummary(
       : undefined
   );
   const baseAvailableActions = buildRequirementAvailableActions(requirement);
-  const availableActions = filterRepositoryBlockedLifecycleActions(
+  const repositoryAvailableActions = filterRepositoryBlockedLifecycleActions(
     baseAvailableActions,
     repositorySafety
   );
-  const actionBlockReason = buildRepositorySafetyActionBlockReason(
+  const agentAvailability = buildRequirementAgentAvailability(
+    requirement,
+    context.agentHealth
+  );
+  const availableActions = filterAgentBlockedLifecycleActions(
+    repositoryAvailableActions,
+    agentAvailability
+  );
+  const repositoryActionBlockReason = buildRepositorySafetyActionBlockReason(
     baseAvailableActions,
+    repositoryAvailableActions,
+    repositorySafety
+  );
+  const agentActionBlockReason = buildAgentAvailabilityActionBlockReason(
+    repositoryAvailableActions,
     availableActions,
-    repositorySafety
+    agentAvailability
   );
+  const actionBlockReason =
+    repositoryActionBlockReason ?? agentActionBlockReason;
+  const actionBlockKind = repositoryActionBlockReason
+    ? "repository-safety"
+    : agentActionBlockReason
+      ? "agent-availability"
+      : undefined;
+  const actionBlockActionLabel = agentActionBlockReason
+    ? agentAvailability?.recoveryAction
+    : undefined;
   const workspaceCleanup = buildWorkspaceCleanupSummary(workflow);
 
   return {
@@ -681,7 +722,7 @@ export function mapRequirementTicketToSummary(
     riskLevel: mapRequirementRiskLevel(requirement, workflowStatus),
     nextAction:
       actionBlockReason && !availableActions.length
-        ? repositorySafety.recoveryAction
+        ? actionBlockActionLabel ?? repositorySafety.recoveryAction
         : mapRequirementNextAction(requirement, workflowStatus),
     nodeLabel: buildRequirementNodeLabel(requirement),
     updatedAt: requirement.updatedAt,
@@ -716,9 +757,12 @@ export function mapRequirementTicketToSummary(
       ...(gate.timeoutMs ? { timeoutMs: gate.timeoutMs } : {})
     })),
     ...(workspaceCleanup ? { workspaceCleanup } : {}),
+    ...(agentAvailability ? { agentAvailability } : {}),
     ...(workflow?.review?.decision
       ? { reviewDecision: workflow.review.decision }
       : {}),
+    ...(actionBlockKind ? { actionBlockKind } : {}),
+    ...(actionBlockActionLabel ? { actionBlockActionLabel } : {}),
     ...(actionBlockReason ? { actionBlockReason } : {}),
     availableActions
   };
@@ -839,6 +883,100 @@ function buildRepositorySafetyActionBlockReason(
   return `Repository safety blocks execution: ${repositorySafety.recoveryAction}`;
 }
 
+function buildRequirementAgentAvailability(
+  requirement: RequirementDeliveryTicket,
+  agentHealth: AgentHealth[] | undefined
+): RequirementAgentAvailabilitySummary | undefined {
+  if (!agentHealth?.length) {
+    return undefined;
+  }
+
+  const healthById = new Map(agentHealth.map((agent) => [agent.id, agent]));
+  const taskIdsByAgent = new Map<string, string[]>();
+
+  requirement.tasks.forEach((task, index) => {
+    const agentId = task.agent?.trim() || "shell";
+
+    if (agentId === "shell") {
+      return;
+    }
+
+    taskIdsByAgent.set(agentId, [
+      ...(taskIdsByAgent.get(agentId) ?? []),
+      task.id ?? `task-${index + 1}`
+    ]);
+  });
+
+  if (!taskIdsByAgent.size) {
+    return undefined;
+  }
+
+  const unavailableAgents = [...taskIdsByAgent.entries()].flatMap(
+    ([agentId, taskIds]) => {
+      const health = healthById.get(agentId);
+
+      if (health?.healthy) {
+        return [];
+      }
+
+      return [
+        {
+          id: agentId,
+          label: health?.label ?? agentId,
+          status: health?.status ?? "missing_command",
+          message:
+            health?.message ??
+            `${agentId} agent is not configured. Configure the agent before enqueue.`,
+          taskIds
+        }
+      ];
+    }
+  );
+
+  if (!unavailableAgents.length) {
+    return undefined;
+  }
+
+  return {
+    blocksExecution: true,
+    recoveryAction: "Configure missing agent",
+    blockedReason: `Agent preflight blocks execution: ${unavailableAgents
+      .map((agent) => agent.message)
+      .join("; ")}`,
+    unavailableAgents
+  };
+}
+
+function filterAgentBlockedLifecycleActions(
+  actions: RequirementLifecycleAction[],
+  agentAvailability: RequirementAgentAvailabilitySummary | undefined
+): RequirementLifecycleAction[] {
+  if (!agentAvailability?.blocksExecution) {
+    return actions;
+  }
+
+  return actions.filter((action) => action === "confirm-plan");
+}
+
+function buildAgentAvailabilityActionBlockReason(
+  baseActions: RequirementLifecycleAction[],
+  availableActions: RequirementLifecycleAction[],
+  agentAvailability: RequirementAgentAvailabilitySummary | undefined
+): string | undefined {
+  const blockedActions = baseActions.filter(
+    (action) => !availableActions.includes(action)
+  );
+  const blockedMutatingAction = blockedActions.some(
+    (action) => action === "enqueue" || action === "retry"
+  );
+
+  if (!agentAvailability?.blocksExecution || !blockedMutatingAction) {
+    return undefined;
+  }
+
+  return agentAvailability.blockedReason;
+}
+
 function buildWorkflowAvailableActions(
   workflow: WorkflowRun
 ): RequirementLifecycleAction[] {
@@ -907,12 +1045,16 @@ function buildRequirementDecisionQueue(
 ): DeliveryDecisionItem[] {
   return requirements.flatMap((requirement): DeliveryDecisionItem[] => {
     if (requirement.actionBlockReason) {
+      const actionBlockKind = requirement.actionBlockKind ?? "repository-safety";
+
       return [
         {
-          id: `${requirement.id}:repository-safety`,
+          id: `${requirement.id}:${actionBlockKind}`,
           requirementId: requirement.id,
           title: requirement.title,
-          actionLabel: requirement.repositorySafety.recoveryAction,
+          actionLabel:
+            requirement.actionBlockActionLabel ??
+            requirement.repositorySafety.recoveryAction,
           severity: "danger"
         }
       ];

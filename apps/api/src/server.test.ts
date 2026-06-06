@@ -1067,6 +1067,95 @@ describe("runner API", () => {
     expect(createdWorkflows).toHaveLength(1);
   });
 
+  it("blocks requirement enqueue when a selected CLI agent is unavailable", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-agent-preflight-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {},
+      repositorySafetyInspector: async () => ({
+        repositoryId: "requirement-agent-preflight",
+        path: repoPath,
+        clean: true,
+        dirty: false,
+        allowedRoot: true,
+        noAutoMerge: true,
+        manualApplyPolicy: "Manual git apply only",
+      }),
+    });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Block unavailable Codex",
+        repositoryPath: repoPath,
+        goal: "Stop before creating a workflow when Codex is not configured",
+        acceptanceCriteria: ["Unavailable agents are reported before enqueue"],
+        tasks: [
+          {
+            id: "patch",
+            title: "Patch with Codex",
+            agent: "codex",
+            instructions: "Patch README with Codex",
+          },
+        ],
+        qualityGates: [
+          {
+            id: "gate",
+            title: "Passing gate",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    const workflowsResponse = await app.inject({
+      method: "GET",
+      url: "/workflows",
+    });
+    const requirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+
+    expect(enqueueResponse.statusCode).toBe(422);
+    expect(enqueueResponse.json()).toEqual({
+      error: "requirement_agent_unavailable",
+      message: "Configure missing agent before enqueueing this requirement.",
+      requirementId: requirement.id,
+      unavailableAgents: [
+        {
+          id: "codex",
+          label: "Codex CLI",
+          status: "missing_command",
+          message:
+            "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue.",
+          taskIds: ["patch"],
+        },
+      ],
+    });
+    expect(workflowsResponse.json()).toEqual([]);
+    const restoredRequirement = requirementResponse.json();
+    expect(restoredRequirement).toMatchObject({
+      id: requirement.id,
+      status: "ready_to_run",
+    });
+    expect(restoredRequirement.currentWorkflowRunId).toBeUndefined();
+  });
+
   it("syncs linked requirements to needs_review with report and merge candidate evidence", async () => {
     const demoRoot = await mkdtemp(
       join(tmpdir(), "mawo-requirement-sync-review-test-"),
@@ -1557,20 +1646,46 @@ describe("runner API", () => {
     const health = response.json();
 
     expect(response.statusCode).toBe(200);
-    expect(health).toEqual([
-      expect.objectContaining({
-        id: "fake-agent",
-        healthy: true,
-        status: "healthy",
-      }),
-      expect.objectContaining({
-        id: "codex",
-        healthy: false,
-        status: "missing_command",
-        command: "missing-codex-binary",
-      }),
-    ]);
+    expect(health).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "fake-agent",
+          healthy: true,
+          status: "healthy",
+        }),
+        expect.objectContaining({
+          id: "codex",
+          healthy: false,
+          status: "missing_command",
+          command: "missing-codex-binary",
+        }),
+      ]),
+    );
     expect(JSON.stringify(health)).not.toContain("{promptFile}");
+  });
+
+  it("exposes unconfigured CLI agents as preflight failures", async () => {
+    const app = buildApp(undefined, { env: {} });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/agents/health",
+    });
+    const health = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(health).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "codex",
+          configured: false,
+          healthy: false,
+          status: "missing_command",
+          message:
+            "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue.",
+        }),
+      ]),
+    );
   });
 
   it("exposes worker health from heartbeat audit events", async () => {

@@ -21,6 +21,9 @@ export type AgentHealth = AgentSummary & {
 
 export type CommandAvailabilityCheck = (command: string) => Promise<boolean> | boolean;
 export type AuthProbeCheck = (command: string) => Promise<boolean> | boolean;
+export type AgentHealthCheckOptions = {
+  includeUnconfigured?: boolean;
+};
 
 const configuredAgents = [
   {
@@ -78,10 +81,12 @@ export function createAgentSummaries(
 export async function createAgentHealthChecks(
   configs: CliAgentConfig[],
   commandExists: CommandAvailabilityCheck = defaultCommandExists,
-  authProbePasses: AuthProbeCheck = defaultAuthProbePasses
+  authProbePasses: AuthProbeCheck = defaultAuthProbePasses,
+  options: AgentHealthCheckOptions = {}
 ): Promise<AgentHealth[]> {
   const checkedAt = new Date().toISOString();
   const checks: AgentHealth[] = [];
+  const configuredIds = new Set(configs.map((config) => config.id));
 
   for (const config of configs) {
     if (config.id === "fake-agent") {
@@ -124,6 +129,24 @@ export async function createAgentHealthChecks(
       authProbeConfigured,
       checkedAt
     });
+  }
+
+  if (options.includeUnconfigured) {
+    for (const agent of configuredAgents) {
+      if (configuredIds.has(agent.id)) {
+        continue;
+      }
+
+      checks.push({
+        id: agent.id,
+        label: agent.label,
+        configured: false,
+        healthy: false,
+        status: "missing_command",
+        message: `${agent.label} command is not configured. Set ${agent.envKey} before enqueue.`,
+        checkedAt
+      });
+    }
   }
 
   return checks;

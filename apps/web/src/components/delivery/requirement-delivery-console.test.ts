@@ -292,6 +292,73 @@ describe("RequirementDeliveryConsole", () => {
     );
   });
 
+  it("renders unavailable CLI agent preflight as a blocking decision", () => {
+    const model = buildDeliveryConsoleModel(
+      [],
+      new Date("2026-06-06T11:10:00.000Z"),
+      [
+        {
+          id: "requirement-codex",
+          title: "Run Codex safely",
+          repositoryPath: "C:/work/shop",
+          goal: "Show missing Codex before enqueue",
+          acceptanceCriteria: ["Missing agent is visible before enqueue"],
+          constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+          nonGoals: ["Automatic PR creation"],
+          riskLevel: "high",
+          contextPaths: [],
+          tasks: [
+            {
+              id: "patch",
+              title: "Patch with Codex",
+              agent: "codex",
+              instructions: "Patch checkout",
+            },
+          ],
+          qualityGates: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              command: "npm test",
+              required: true,
+            },
+          ],
+          status: "ready_to_run",
+          runLinks: [],
+          createdAt: "2026-06-06T11:00:00.000Z",
+          updatedAt: "2026-06-06T11:05:00.000Z",
+        },
+      ],
+      {
+        agentHealth: [
+          {
+            id: "codex",
+            label: "Codex CLI",
+            configured: false,
+            healthy: false,
+            status: "missing_command",
+            message:
+              "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue.",
+            checkedAt: "2026-06-06T11:00:00.000Z",
+          },
+        ],
+      },
+    );
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, { model }),
+    );
+
+    expect(html).toContain("Configure missing agent");
+    expect(html).toContain("Preflight blocked");
+    expect(html).toContain("Agent preflight blocks execution");
+    expect(html).toContain("Codex CLI command is not configured");
+    const enqueueButtons = html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
+    expect(enqueueButtons.length).toBeGreaterThan(0);
+    expect(enqueueButtons.every((button) => button.includes('disabled=""'))).toBe(
+      true,
+    );
+  });
+
   it("renders review evidence artifacts inside the requirement detail shell", () => {
     const html = renderConsoleFor([workflow]);
 

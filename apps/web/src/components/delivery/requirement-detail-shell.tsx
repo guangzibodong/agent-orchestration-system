@@ -432,7 +432,7 @@ function RequirementDetailLifecycleActions({
     <div className="requirementDetailActions" aria-label="Requirement lifecycle actions">
       {requirement?.actionBlockReason ? (
         <p className="requirementDetailActionBlock errorText">
-          <strong>Repository safety blocked</strong>
+          <strong>Preflight blocked</strong>
           <span>{requirement.actionBlockReason}</span>
         </p>
       ) : null}

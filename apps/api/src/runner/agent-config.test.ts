@@ -53,6 +53,29 @@ describe("agent config", () => {
     ]);
   });
 
+  it("can include unconfigured CLI agents as preflight failures", async () => {
+    const health = await createAgentHealthChecks(
+      createConfiguredAgentConfigs({}),
+      async () => true,
+      async () => true,
+      { includeUnconfigured: true }
+    );
+
+    expect(health).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "codex",
+          label: "Codex CLI",
+          configured: false,
+          healthy: false,
+          status: "missing_command",
+          message:
+            "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue."
+        })
+      ])
+    );
+  });
+
   it("checks configured CLI command availability without exposing templates", async () => {
     const health = await createAgentHealthChecks(
       createConfiguredAgentConfigs({

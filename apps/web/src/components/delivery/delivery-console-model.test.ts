@@ -724,6 +724,98 @@ describe("delivery console model", () => {
     });
   });
 
+  it("blocks enqueue and retry when selected CLI agents are unavailable", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-codex",
+      title: "Run Codex safely",
+      repositoryPath: "C:/work/shop",
+      goal: "Do not enqueue when Codex is missing",
+      acceptanceCriteria: ["Codex preflight is visible before enqueue"],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "high",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "patch",
+          title: "Patch with Codex",
+          agent: "codex",
+          instructions: "Patch checkout"
+        }
+      ],
+      qualityGates: [
+        {
+          id: "gate-1",
+          title: "Unit tests",
+          command: "npm test",
+          required: true
+        }
+      ],
+      status: "ready_to_run",
+      runLinks: [],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:05:00.000Z"
+    };
+    const context = {
+      agentHealth: [
+        {
+          id: "codex",
+          label: "Codex CLI",
+          configured: false,
+          healthy: false,
+          status: "missing_command" as const,
+          message:
+            "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue.",
+          checkedAt: "2026-06-06T11:00:00.000Z"
+        }
+      ]
+    };
+
+    const summary = mapRequirementTicketToSummary(
+      requirement,
+      new Map(),
+      context
+    );
+    const model = buildDeliveryConsoleModel(
+      [],
+      new Date("2026-06-06T11:10:00.000Z"),
+      [requirement],
+      context
+    );
+
+    expect(summary).toMatchObject({
+      availableActions: [],
+      nextAction: "Configure missing agent",
+      actionBlockKind: "agent-availability",
+      actionBlockActionLabel: "Configure missing agent",
+      actionBlockReason:
+        "Agent preflight blocks execution: Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue."
+    });
+    expect(model.decisionQueue).toEqual([
+      {
+        actionLabel: "Configure missing agent",
+        id: "requirement-codex:agent-availability",
+        requirementId: "requirement-codex",
+        severity: "danger",
+        title: "Run Codex safely"
+      }
+    ]);
+
+    const planReviewSummary = mapRequirementTicketToSummary(
+      {
+        ...requirement,
+        status: "plan_review"
+      },
+      new Map(),
+      context
+    );
+
+    expect(planReviewSummary).toMatchObject({
+      availableActions: ["confirm-plan"],
+      nextAction: "Confirm plan"
+    });
+  });
+
   it("builds KPI and decision queues around user action, not job internals", () => {
     const model = buildDeliveryConsoleModel([
       baseWorkflow,

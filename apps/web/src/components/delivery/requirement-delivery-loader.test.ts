@@ -29,6 +29,7 @@ describe("requirement delivery loader", () => {
     expect(requests).toEqual([
       "/workflows",
       "/requirements",
+      "/agents/health",
       "/workflows/workflow-review/report",
       "/workflows/workflow-review/merge-candidate"
     ]);
@@ -43,6 +44,85 @@ describe("requirement delivery loader", () => {
       requirementId: "workflow-review",
       actionLabel: "Review merge candidate"
     });
+  });
+
+  it("loads agent health so unavailable CLI tasks block enqueue preflight", async () => {
+    const requests: string[] = [];
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [];
+      }
+
+      if (path === "/agents/health") {
+        return [
+          {
+            id: "codex",
+            label: "Codex CLI",
+            configured: false,
+            healthy: false,
+            status: "missing_command",
+            message:
+              "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue.",
+            checkedAt: "2026-06-06T11:00:00.000Z"
+          }
+        ];
+      }
+
+      return [
+        {
+          id: "requirement-codex",
+          title: "Run Codex ticket",
+          repositoryPath: "C:/work/shop",
+          goal: "Run checkout evidence through Codex",
+          acceptanceCriteria: ["Unavailable agents are visible before enqueue"],
+          constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+          nonGoals: ["Automatic PR creation"],
+          riskLevel: "medium",
+          contextPaths: [],
+          tasks: [
+            {
+              id: "patch",
+              title: "Patch with Codex",
+              agent: "codex",
+              instructions: "Patch checkout"
+            }
+          ],
+          qualityGates: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              command: "npm test",
+              required: true
+            }
+          ],
+          status: "ready_to_run",
+          runLinks: [],
+          createdAt: "2026-06-06T11:00:00.000Z",
+          updatedAt: "2026-06-06T11:05:00.000Z"
+        }
+      ];
+    });
+
+    expect(requests).toContain("/agents/health");
+    expect(model.requirements[0]).toMatchObject({
+      id: "requirement-codex",
+      availableActions: [],
+      nextAction: "Configure missing agent",
+      actionBlockReason:
+        "Agent preflight blocks execution: Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue."
+    });
+    expect(model.decisionQueue).toEqual([
+      {
+        actionLabel: "Configure missing agent",
+        id: "requirement-codex:agent-availability",
+        requirementId: "requirement-codex",
+        severity: "danger",
+        title: "Run Codex ticket"
+      }
+    ]);
   });
 
   it("uses requirement tickets as the primary console objects when available", async () => {
