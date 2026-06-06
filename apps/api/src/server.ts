@@ -40,6 +40,7 @@ import {
   PrismaJobStore,
   type PrismaJobStoreClient
 } from "./runner/prisma-job-store.js";
+import { PostgresWorkflowJobQueue } from "./runner/postgres-workflow-job-queue.js";
 import {
   PrismaRepositoryStore,
   type PrismaRepositoryStoreClient
@@ -89,6 +90,8 @@ type PrismaStateStoreClient = PrismaAuditStoreClient &
   PrismaRepositoryStoreClient &
   PrismaRunStoreClient;
 
+type ActiveQueueBackend = "in_process" | "postgres";
+
 function createStateStores(input: {
   requestedStateBackend: string;
   stateRoot: string;
@@ -125,6 +128,20 @@ function createStateStores(input: {
       stateFile: join(input.stateRoot, "workflows.json")
     })
   };
+}
+
+function selectActiveQueueBackend(input: {
+  requestedQueueBackend: string;
+  activeStateBackend: "file" | "postgres";
+}): ActiveQueueBackend {
+  if (
+    input.requestedQueueBackend === "postgres" &&
+    input.activeStateBackend === "postgres"
+  ) {
+    return "postgres";
+  }
+
+  return "in_process";
 }
 
 const JOB_TIMELINE_WORKFLOW_EVENT_TYPES = new Set([
@@ -165,10 +182,16 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       options.prismaClient ?? (prisma as unknown as PrismaStateStoreClient)
   });
   const activeStateBackend = stateStores.activeStateBackend;
-  const activeQueueBackend = "in_process";
+  const activeQueueBackend = selectActiveQueueBackend({
+    requestedQueueBackend,
+    activeStateBackend
+  });
   const auditStore =
     options.auditStore ??
     stateStores.auditStore;
+  const jobStore =
+    options.jobStore ??
+    stateStores.jobStore;
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test"
   });
@@ -208,34 +231,37 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         });
       }
     });
-  const queue = new WorkflowJobQueue({
-    runner: activeRunner,
-    maxConcurrentJobs,
-    jobStore:
-      options.jobStore ??
-      stateStores.jobStore,
-    onJobRecovered: ({ original, recovered }) => {
-      const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
-        recovered.workflowId
-      );
-      appendAuditEventInBackground({
-        type: "job.recovered",
-        actor: "system",
-        workflowId: recovered.workflowId,
-        jobId: recovered.id,
-        metadata: {
-          previousStatus: original.status,
-          recoveredStatus: recovered.status,
-          error: recovered.error ?? "",
-          workflowRecovered: String(workflowRecovery.recovered),
-          previousWorkflowStatus: workflowRecovery.previousStatus ?? "",
-          recoveredWorkflowStatus: workflowRecovery.status ?? "",
-          recoveredTaskIds: workflowRecovery.recoveredTasks.join(","),
-          recoveredGateIds: workflowRecovery.recoveredGates.join(",")
-        }
-      });
-    }
-  });
+  const queue =
+    activeQueueBackend === "postgres"
+      ? new PostgresWorkflowJobQueue({
+          jobStore
+        })
+      : new WorkflowJobQueue({
+          runner: activeRunner,
+          maxConcurrentJobs,
+          jobStore,
+          onJobRecovered: ({ original, recovered }) => {
+            const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
+              recovered.workflowId
+            );
+            appendAuditEventInBackground({
+              type: "job.recovered",
+              actor: "system",
+              workflowId: recovered.workflowId,
+              jobId: recovered.id,
+              metadata: {
+                previousStatus: original.status,
+                recoveredStatus: recovered.status,
+                error: recovered.error ?? "",
+                workflowRecovered: String(workflowRecovery.recovered),
+                previousWorkflowStatus: workflowRecovery.previousStatus ?? "",
+                recoveredWorkflowStatus: workflowRecovery.status ?? "",
+                recoveredTaskIds: workflowRecovery.recoveredTasks.join(","),
+                recoveredGateIds: workflowRecovery.recoveredGates.join(",")
+              }
+            });
+          }
+        });
   app.addHook("onReady", async () => {
     await activeRunner.ready();
     await queue.ready();
@@ -302,8 +328,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           command: agent.command
         }))
     };
-    const activeJobs = queue
-      .listJobs()
+    const activeJobs = (await queue.listJobs())
       .filter((job) => job.status === "queued" || job.status === "running")
       .length;
     const productionConfigCheck = createProductionConfigCheck({
@@ -815,7 +840,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
-      const job = queue.enqueue(request.params.id);
+      const job = await queue.enqueue(request.params.id);
       await queue.flush();
 
       await appendAuditEvent({
@@ -863,7 +888,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       });
     }
 
-    const jobs = queue.listJobs().filter((job) => {
+    const jobs = (await queue.listJobs()).filter((job) => {
       if (jobStatus?.data && job.status !== jobStatus.data) {
         return false;
       }
@@ -888,7 +913,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.post<{
     Params: { id: string };
   }>("/jobs/:id/cancel", async (request, reply) => {
-    const job = queue.cancelJob(request.params.id);
+    const job = await queue.cancelJob(request.params.id);
 
     if (!job) {
       return reply.code(404).send({ error: "job_not_found" });
@@ -914,7 +939,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.get<{
     Params: { id: string };
   }>("/jobs/:id/timeline", async (request, reply) => {
-    const job = queue.getJob(request.params.id);
+    const job = await queue.getJob(request.params.id);
 
     if (!job) {
       return reply.code(404).send({ error: "job_not_found" });
@@ -972,7 +997,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   app.get<{
     Params: { id: string };
   }>("/jobs/:id", async (request, reply) => {
-    const job = queue.getJob(request.params.id);
+    const job = await queue.getJob(request.params.id);
 
     if (!job) {
       return reply.code(404).send({ error: "job_not_found" });
@@ -1249,9 +1274,12 @@ function createDeploymentTopologyCheck(input: {
   deploymentMode: "development" | "production";
   apiReplicaCount: number;
   stateBackend: "file" | "postgres";
-  queueBackend: "in_process";
+  queueBackend: ActiveQueueBackend;
 }) {
-  const maxSupportedApiReplicas = 1;
+  const maxSupportedApiReplicas =
+    input.stateBackend === "postgres" && input.queueBackend === "postgres"
+      ? Number.MAX_SAFE_INTEGER
+      : 1;
 
   if (!Number.isInteger(input.apiReplicaCount) || input.apiReplicaCount < 1) {
     return {
@@ -1268,22 +1296,22 @@ function createDeploymentTopologyCheck(input: {
     };
   }
 
-  const scaledPastFileRuntimeLimit =
+  const scaledPastRuntimeLimit =
     input.deploymentMode === "production" &&
     input.apiReplicaCount > maxSupportedApiReplicas;
 
   return {
     id: "deployment_topology",
     label: "Deployment topology",
-    ok: !scaledPastFileRuntimeLimit,
-    status: scaledPastFileRuntimeLimit ? "blocked" : "ready",
+    ok: !scaledPastRuntimeLimit,
+    status: scaledPastRuntimeLimit ? "blocked" : "ready",
     deploymentMode: input.deploymentMode,
     apiReplicaCount: input.apiReplicaCount,
     maxSupportedApiReplicas,
     stateBackend: input.stateBackend,
     queueBackend: input.queueBackend,
-    message: scaledPastFileRuntimeLimit
-      ? "The in-process queue supports one API replica. Set MAWO_API_REPLICA_COUNT=1 or migrate the queue backend before scaling."
+    message: scaledPastRuntimeLimit
+      ? "The active queue backend supports one API replica. Set MAWO_API_REPLICA_COUNT=1 or migrate the state and queue backends before scaling."
       : "Runtime topology is compatible with the configured API replica count."
   };
 }
@@ -1292,7 +1320,7 @@ function createRuntimeBackendCheck(input: {
   requestedStateBackend: string;
   requestedQueueBackend: string;
   activeStateBackend: "file" | "postgres";
-  activeQueueBackend: "in_process";
+  activeQueueBackend: ActiveQueueBackend;
   maxConcurrentJobs: number;
   databaseUrlConfigured: boolean;
   redisUrlConfigured: boolean;

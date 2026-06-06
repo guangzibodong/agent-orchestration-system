@@ -65,6 +65,36 @@ services:
       api:
         condition: service_healthy
 
+  worker:
+    profiles:
+      - postgres-worker
+    build:
+      context: .
+      target: api
+    container_name: mawo-worker-postgres
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://mawo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before production}@postgres:5432/mawo?schema=public"
+      MAWO_WORKER_ROOT: /app
+      MAWO_WORKER_ID: ${MAWO_WORKER_ID:-worker-1}
+      MAWO_WORKER_POLL_MS: ${MAWO_WORKER_POLL_MS:-1000}
+      MAWO_WORKER_LEASE_MS: ${MAWO_WORKER_LEASE_MS:-300000}
+      MAWO_WORKER_RENEW_INTERVAL_MS: ${MAWO_WORKER_RENEW_INTERVAL_MS:-60000}
+      MAWO_CODEX_COMMAND_TEMPLATE: ${MAWO_CODEX_COMMAND_TEMPLATE:-}
+      MAWO_CODEX_AUTH_PROBE_COMMAND: ${MAWO_CODEX_AUTH_PROBE_COMMAND:-}
+      MAWO_CLAUDE_COMMAND_TEMPLATE: ${MAWO_CLAUDE_COMMAND_TEMPLATE:-}
+      MAWO_CLAUDE_AUTH_PROBE_COMMAND: ${MAWO_CLAUDE_AUTH_PROBE_COMMAND:-}
+      MAWO_CURSOR_COMMAND_TEMPLATE: ${MAWO_CURSOR_COMMAND_TEMPLATE:-}
+      MAWO_CURSOR_AUTH_PROBE_COMMAND: ${MAWO_CURSOR_AUTH_PROBE_COMMAND:-}
+    command: ["sh", "-c", "npm run worker:postgres"]
+    volumes:
+      - mawo_state:/app/.mawo
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:17
     container_name: mawo-postgres

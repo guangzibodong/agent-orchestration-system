@@ -149,6 +149,21 @@ $env:MAWO_WORKER_ONCE = "1"
 .\.tools\node\npm.cmd run worker:postgres
 ```
 
+Postgres queue mode is now available for the external worker topology:
+
+```powershell
+$env:MAWO_STATE_BACKEND = "postgres"
+$env:MAWO_QUEUE_BACKEND = "postgres"
+$env:MAWO_API_REPLICA_COUNT = "2"
+```
+
+In this mode the API writes queued jobs to Postgres and does not execute them
+inside the API process. Run one or more `npm run worker:postgres` processes to
+claim leased jobs, execute workflows, and write final job state back to
+Postgres. `/readiness` reports `activeQueueBackend: "postgres"` and allows
+multiple API replicas only when both state and queue backends are Postgres.
+`MAWO_QUEUE_BACKEND=redis` remains reserved and is still blocked by readiness.
+
 长期运行时去掉 `MAWO_WORKER_ONCE`，用 `MAWO_WORKER_ID` 标识 worker；`MAWO_WORKER_LEASE_MS`、`MAWO_WORKER_RENEW_INTERVAL_MS` 和 `MAWO_WORKER_POLL_MS` 控制 claim 租约、续租心跳和空闲轮询间隔。
 
 停止服务：
@@ -334,10 +349,10 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - 目前是 local-first 系统，有 API token 保护，但没有用户账号、角色权限、租户隔离。
 - API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
 - `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
-- 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；如果生产环境声明多 API 副本，`GET /readiness` 会通过 `deployment_topology` 阻塞上线。
-- workflow、job history、仓库注册表和审计事件默认是文件持久化；`MAWO_STATE_BACKEND=postgres` 可切到 Postgres state store。Postgres job schema 和 `worker:postgres` 已能 claim/续租/执行 queued job，但 API 默认队列执行仍在进程内，因此正式多 API 副本拓扑还要等 queue backend 切换完成。
-- job queue 运行器仍在单 API 进程内；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力，API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
-- Docker Compose 里有 Postgres/Redis；Postgres state backend 已可通过 `MAWO_STATE_BACKEND=postgres` 启用，Redis queue 尚未实现。如果把 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
+- 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；Postgres state + Postgres queue + `worker:postgres` 可支持多 API 副本，`GET /readiness` 会通过 `deployment_topology` 校验拓扑是否匹配。
+- workflow、job history、仓库注册表和审计事件默认是文件持久化；`MAWO_STATE_BACKEND=postgres` 可切到 Postgres state store，`MAWO_QUEUE_BACKEND=postgres` 会让 API 只写入/查询/取消 Postgres queued job，实际执行交给 `worker:postgres` claim/续租/回写。
+- job queue 运行器仍保留在单 API 进程内用于本地和单副本模式；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力。切到 Postgres queue 后，并发执行能力由 worker 进程数量和 worker 配置决定。
+- Docker Compose 里有 Postgres/Redis；Postgres state backend 已可通过 `MAWO_STATE_BACKEND=postgres` 启用，Postgres worker 服务可通过 `postgres-worker` profile 启动。Redis queue 尚未实现，如果把 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
 - 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
 
 ## 路线图

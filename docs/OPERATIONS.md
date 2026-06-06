@@ -4,8 +4,10 @@ This runbook is for the fastest safe launch of the MAWO multi-agent workflow
 orchestrator. It covers the current verified runtime: Node.js API + Next.js web
 app, with workflow artifacts persisted on local disk under `.mawo`. Workflow
 state can run on the default `.mawo` file store or on Postgres with
-`MAWO_STATE_BACKEND=postgres`. Redis is available through Docker Compose, but
-the workflow queue is still in-process.
+`MAWO_STATE_BACKEND=postgres`. The default queue is in-process; the Postgres
+queue backend can be enabled with `MAWO_QUEUE_BACKEND=postgres` and one or more
+`npm run worker:postgres` processes. Redis is available through Docker Compose,
+but is reserved for future queue/runtime work.
 
 ## 1. Runtime Summary
 
@@ -16,19 +18,20 @@ the workflow queue is still in-process.
 - Workflow state: `.mawo/state/workflows.json` by default, or Postgres when
   `MAWO_STATE_BACKEND=postgres`
 - Job history: `.mawo/state/jobs.json` by default, or Postgres with the same
-  state backend setting. The Postgres job table includes worker lease and
-  attempt fields, and `npm run worker:postgres` can claim and execute queued
-  jobs for the external worker path.
+  state backend setting. With `MAWO_QUEUE_BACKEND=postgres`, the API writes
+  queued jobs to Postgres and external `npm run worker:postgres` processes
+  claim, lease, execute, and complete them.
 - Repository registry: `.mawo/state/repositories.json` by default, or Postgres
 - Audit events: `.mawo/state/audit-events.json` by default, or Postgres
 - Workflow artifacts: `.mawo/artifacts/<workflowId>/`
 - Local logs, if redirected by operator scripts: `.logs/`
 - Optional infrastructure: Postgres `localhost:5432`, Redis `localhost:6379`
 
-Current launch limitation: the queue is still in the API process, so
-`MAWO_API_REPLICA_COUNT=1` remains the production-safe topology until the Redis
-worker queue is implemented. If you use the file state backend, treat `.mawo`
-as production data and back it up before deploys or rollback operations.
+Current launch limitation: file state plus the in-process queue supports one API
+replica. Postgres state plus the Postgres queue backend supports multiple API
+replicas when at least one Postgres worker process is running. If you use the
+file state backend, treat `.mawo` as production data and back it up before
+deploys or rollback operations.
 
 ## 2. Environment Variables
 
@@ -73,8 +76,9 @@ Reserved or optional:
 
 - `MAWO_STATE_BACKEND`: active workflow state backend. Use `file` for local
   file-backed state, or `postgres` after running Prisma migrations.
-- `MAWO_QUEUE_BACKEND`: active workflow queue backend. Keep `in_process` until
-  the Redis/worker queue is implemented.
+- `MAWO_QUEUE_BACKEND`: active workflow queue backend. Use `in_process` for
+  local single-API execution, or `postgres` with `MAWO_STATE_BACKEND=postgres`
+  after migrations and with `npm run worker:postgres` running.
 - `DATABASE_URL`: required when `MAWO_STATE_BACKEND=postgres`.
 - `REDIS_URL`: reserved for future queue/runtime work.
 - `MAWO_WORKER_ID`: optional stable ID for `npm run worker:postgres`.
@@ -203,6 +207,20 @@ The default container ports are:
 - Postgres: `localhost:5432`
 - Redis: `localhost:6379`
 
+When enabling the Postgres queue backend, set both runtime backends and start
+the worker profile:
+
+```powershell
+$env:MAWO_STATE_BACKEND = "postgres"
+$env:MAWO_QUEUE_BACKEND = "postgres"
+$env:MAWO_API_REPLICA_COUNT = "2"
+docker compose --profile postgres-worker up -d
+```
+
+The worker service is profile-gated on purpose. Do not run it while the API is
+still using `MAWO_QUEUE_BACKEND=in_process`, because the in-process queue also
+persists job history and would compete with an external worker.
+
 Database migration baseline:
 
 ```powershell
@@ -223,8 +241,9 @@ The baseline migration lives in `apps/api/prisma/migrations` and creates tables
 for workflow runs, task runs, quality gate runs, workflow jobs, registered
 repositories, audit events, artifacts, and merge candidates. After migration,
 set `MAWO_STATE_BACKEND=postgres`; `/readiness` should report
-`activeStateBackend: "postgres"`. Queue execution remains in-process until the
-Redis/worker queue is implemented.
+`activeStateBackend: "postgres"`. Set `MAWO_QUEUE_BACKEND=postgres` to make API
+replicas persist queued jobs without executing them in-process; run the
+Postgres worker command below to claim and execute those jobs.
 
 The underlying package scripts are `npm run db:generate` and
 `npm run db:migrate` for local development, plus `npm run db:validate` and
@@ -234,12 +253,14 @@ After migrations, run the Postgres-backed API smoke before switching traffic:
 
 ```powershell
 $env:MAWO_STATE_BACKEND = "postgres"
+$env:MAWO_QUEUE_BACKEND = "postgres"
 .\.tools\node\npm.cmd run smoke:api:postgres
 ```
 
-The smoke verifies `/readiness` reports `activeStateBackend: "postgres"`, then
-creates a repository workflow, enqueues it, and checks the workflow/job rows
-through Prisma.
+The smoke verifies `/readiness` reports Postgres as the active state backend,
+then creates a repository workflow, enqueues it, and checks the workflow/job
+rows through Prisma. Keep a Postgres worker running for end-to-end execution
+after enqueue.
 
 Postgres worker process:
 
@@ -511,19 +532,18 @@ back the web process first while keeping the API and `.mawo` untouched.
 - API token auth exists, but there are no user accounts, roles, or tenant
   isolation.
 - CORS currently allows all origins.
-- Workflow state is file-based under `.mawo`, so concurrent multi-host API
-  replicas are not supported. Set `MAWO_API_REPLICA_COUNT=1`; `/readiness`
-  blocks production if the configured count is higher while the runtime remains
-  file-backed and in-process.
-- The background worker is still in the API process. `MAWO_MAX_CONCURRENT_JOBS`
-  controls how many workflows may run at once in that process. Job history is
-  persisted, queued jobs found after API restart are resumed, and running jobs
-  are marked failed. Matching running workflows are recovered to `aborted` with
-  interrupted task/gate metadata, then require operator retry.
+- File-backed workflow state plus the in-process queue does not support
+  concurrent multi-host API replicas. Set `MAWO_API_REPLICA_COUNT=1` for that
+  runtime; `/readiness` blocks production if the configured count is higher.
+- The in-process background worker still exists for local/single-API use.
+  `MAWO_MAX_CONCURRENT_JOBS` controls how many workflows may run at once in
+  that process. Queued jobs found after API restart are resumed, and running
+  jobs are marked failed with matching workflows recovered to `aborted`.
 - Postgres is available as the active workflow state backend with
-  `MAWO_STATE_BACKEND=postgres`, and `npm run worker:postgres` can claim queued
-  jobs with worker lease metadata for the external worker queue path. Redis is
-  present in Compose but is not yet the active queue backend. `/readiness`
+  `MAWO_STATE_BACKEND=postgres`. With `MAWO_QUEUE_BACKEND=postgres`, API
+  enqueue/list/cancel operations use the Postgres job table and
+  `npm run worker:postgres` claims queued jobs with lease metadata. Redis is
+  present in Compose but is not yet an active queue backend. `/readiness`
   reports the active `runtime_backend` and blocks if `MAWO_QUEUE_BACKEND`
   requests an unimplemented backend.
 - API and web are containerized, but production public exposure still requires

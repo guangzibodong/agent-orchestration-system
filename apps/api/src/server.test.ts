@@ -7,6 +7,8 @@ import { buildApp } from "./server.js";
 import type { AuditEventInput, AuditStore } from "./runner/file-audit-store.js";
 import type { JobStore } from "./runner/file-job-store.js";
 import type { RunStore } from "./runner/file-run-store.js";
+import type { PrismaAuditEventRow } from "./runner/prisma-audit-store.js";
+import type { PrismaWorkflowJobRow } from "./runner/prisma-job-store.js";
 import type {
   RepositoryStore,
   RepositoryUpsertResult
@@ -67,6 +69,121 @@ function createEmptyPrismaStateClient() {
       findMany: vi.fn(async () => []),
       create: vi.fn()
     }
+  };
+}
+
+function createMutablePrismaStateClient(input: {
+  workflowJobs?: PrismaWorkflowJobRow[];
+} = {}) {
+  const workflowJobs = [...(input.workflowJobs ?? [])];
+  const auditEvents: PrismaAuditEventRow[] = [];
+  const prismaClient = {
+    ...createEmptyPrismaStateClient(),
+    workflowJob: {
+      findMany: vi.fn(async () =>
+        [...workflowJobs].sort(
+          (left, right) =>
+            new Date(left.updatedAt).getTime() -
+            new Date(right.updatedAt).getTime()
+        )
+      ),
+      findFirst: vi.fn(async (args: { where: { status: string } }) =>
+        [...workflowJobs]
+          .filter((job) => job.status === args.where.status)
+          .sort(
+            (left, right) =>
+              new Date(left.createdAt).getTime() -
+              new Date(right.createdAt).getTime()
+          )[0] ?? null
+      ),
+      findUnique: vi.fn(async (args: { where: { id: string } }) =>
+        workflowJobs.find((job) => job.id === args.where.id) ?? null
+      ),
+      updateMany: vi.fn(
+        async (args: {
+          where: { id: string; status: string; lockedBy?: string };
+          data: Partial<Omit<PrismaWorkflowJobRow, "id" | "attempts">> & {
+            attempts?: { increment: number };
+          };
+        }) => {
+          const index = workflowJobs.findIndex(
+            (job) =>
+              job.id === args.where.id &&
+              job.status === args.where.status &&
+              (args.where.lockedBy === undefined ||
+                job.lockedBy === args.where.lockedBy)
+          );
+
+          if (index < 0) {
+            return { count: 0 };
+          }
+
+          const existing = workflowJobs[index]!;
+          workflowJobs[index] = {
+            ...existing,
+            ...args.data,
+            attempts: existing.attempts + (args.data.attempts?.increment ?? 0)
+          };
+
+          return { count: 1 };
+        }
+      ),
+      upsert: vi.fn(
+        async (args: {
+          where: { id: string };
+          create: PrismaWorkflowJobRow;
+          update: Omit<PrismaWorkflowJobRow, "id" | "attempts">;
+        }) => {
+          const index = workflowJobs.findIndex((job) => job.id === args.where.id);
+
+          if (index < 0) {
+            workflowJobs.push(args.create);
+            return args.create;
+          }
+
+          workflowJobs[index] = {
+            ...workflowJobs[index]!,
+            ...args.update
+          };
+
+          return workflowJobs[index]!;
+        }
+      )
+    },
+    auditEvent: {
+      findMany: vi.fn(async () => auditEvents),
+      create: vi.fn(
+        async (args: {
+          data: {
+            id?: string;
+            type: string;
+            actor: string | null;
+            workflowRunId: string | null;
+            jobId: string | null;
+            metadata: unknown;
+            createdAt?: Date;
+          };
+        }) => {
+          const row = {
+            id: args.data.id ?? `audit-${auditEvents.length + 1}`,
+            type: args.data.type,
+            actor: args.data.actor,
+            workflowRunId: args.data.workflowRunId,
+            jobId: args.data.jobId,
+            metadata: args.data.metadata,
+            createdAt: args.data.createdAt ?? new Date()
+          };
+          auditEvents.push(row);
+          return row;
+        }
+      )
+    }
+  };
+
+  return {
+    auditEvents,
+    prismaClient,
+    workflowJobs
   };
 }
 
@@ -365,6 +482,64 @@ describe("runner API", () => {
         redisUrlConfigured: true
       })
     );
+  });
+
+  it("allows production readiness to scale when postgres state and queue backends are active", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-postgres-queue-ready-test-"));
+    tempRoots.push(demoRoot);
+    const token = "production-token-1234567890";
+    const { prismaClient } = createMutablePrismaStateClient();
+    const app = buildApp(undefined, {
+      demoRoot,
+      env: {
+        NODE_ENV: "production",
+        MAWO_API_TOKEN: token,
+        MAWO_ALLOWED_REPOSITORY_ROOTS: demoRoot,
+        MAWO_STATE_BACKEND: "postgres",
+        MAWO_QUEUE_BACKEND: "postgres",
+        MAWO_API_REPLICA_COUNT: "2",
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo"
+      },
+      prismaClient
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/readiness",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    const readiness = response.json();
+    const runtimeBackend = readiness.checks.find(
+      (check: { id: string }) => check.id === "runtime_backend"
+    );
+    const deploymentTopology = readiness.checks.find(
+      (check: { id: string }) => check.id === "deployment_topology"
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(readiness).toMatchObject({
+      ok: true,
+      deploymentMode: "production"
+    });
+    expect(runtimeBackend).toMatchObject({
+      ok: true,
+      status: "ready",
+      requestedStateBackend: "postgres",
+      activeStateBackend: "postgres",
+      requestedQueueBackend: "postgres",
+      activeQueueBackend: "postgres",
+      databaseUrlConfigured: true
+    });
+    expect(deploymentTopology).toMatchObject({
+      ok: true,
+      status: "ready",
+      apiReplicaCount: 2,
+      stateBackend: "postgres",
+      queueBackend: "postgres"
+    });
+    expect(deploymentTopology.maxSupportedApiReplicas).toBeGreaterThanOrEqual(2);
   });
 
   it("creates, runs, and reports a demo workflow", async () => {
@@ -2137,6 +2312,93 @@ describe("runner API", () => {
         workflowId: workflow.id
       })
     ]);
+  });
+
+  it("uses postgres queue storage for API enqueue, listing, and cancel without running in the API", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-postgres-queue-test-"));
+    tempRoots.push(demoRoot);
+    const { prismaClient, workflowJobs } = createMutablePrismaStateClient();
+    const runner = new LocalRunner();
+    const runWorkflow = vi
+      .spyOn(runner, "runWorkflow")
+      .mockImplementation(async (workflowId) => runner.getWorkflow(workflowId)!);
+    const app = buildApp(runner, {
+      demoRoot,
+      env: {
+        MAWO_STATE_BACKEND: "postgres",
+        MAWO_QUEUE_BACKEND: "postgres",
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo"
+      },
+      prismaClient
+    });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/demo"
+    });
+    const created = createResponse.json();
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/enqueue`
+    });
+    const queued = enqueueResponse.json();
+    await delay(20);
+    const queuedJobsResponse = await app.inject({
+      method: "GET",
+      url: `/jobs?status=queued&workflowId=${created.id}`
+    });
+    const jobResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${queued.id}`
+    });
+    const cancelResponse = await app.inject({
+      method: "POST",
+      url: `/jobs/${queued.id}/cancel`
+    });
+    const canceled = cancelResponse.json();
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${created.id}`
+    });
+
+    expect(enqueueResponse.statusCode).toBe(202);
+    expect(queued).toMatchObject({
+      id: expect.any(String),
+      workflowId: created.id,
+      status: "queued"
+    });
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(workflowJobs).toHaveLength(1);
+    expect(workflowJobs[0]).toMatchObject({
+      id: queued.id,
+      workflowRunId: created.id,
+      status: "canceled"
+    });
+    expect(queuedJobsResponse.statusCode).toBe(200);
+    expect(queuedJobsResponse.json()).toEqual([
+      expect.objectContaining({
+        id: queued.id,
+        workflowId: created.id,
+        status: "queued"
+      })
+    ]);
+    expect(jobResponse.statusCode).toBe(200);
+    expect(jobResponse.json()).toMatchObject({
+      id: queued.id,
+      workflowId: created.id,
+      status: "queued"
+    });
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(canceled).toMatchObject({
+      id: queued.id,
+      workflowId: created.id,
+      status: "canceled",
+      finishedAt: expect.any(String)
+    });
+    expect(workflowResponse.json()).toMatchObject({
+      id: created.id,
+      status: "ready"
+    });
   });
 
   it("updates existing repository registrations for the same normalized path", async () => {
