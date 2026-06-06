@@ -9,7 +9,7 @@ import {
   type WorkflowRun,
   type WorkflowJobStatus
 } from "@mawo/shared";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   buildApiHeaders,
   formatApiErrorMessage,
@@ -30,6 +30,8 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
 const apiTokenRoleStorageKey = "mawo-api-token-role";
 const activeJobPollIntervalMs = 1500;
+const retryResetMessage =
+  "Retry reset to ready. Enqueue to run fresh evidence.";
 
 type LoadState = "loading" | "ready" | "error";
 type TrackedRequirementJob = {
@@ -54,6 +56,7 @@ export function RequirementDeliveryConsoleClient() {
   const [workflowOverridesById, setWorkflowOverridesById] = useState<
     Record<string, WorkflowRun | undefined>
   >({});
+  const hasReportedInitialLoadRef = useRef(false);
 
   async function api(path: string, init?: RequestInit): Promise<unknown> {
     const token =
@@ -308,7 +311,12 @@ export function RequirementDeliveryConsoleClient() {
 
         setModel(nextModel);
         setLoadState("ready");
-        setMessage(`${nextModel.requirements.length} requirement tickets loaded`);
+        if (!hasReportedInitialLoadRef.current) {
+          setMessage(
+            `${nextModel.requirements.length} requirement tickets loaded`
+          );
+          hasReportedInitialLoadRef.current = true;
+        }
       } catch (error: unknown) {
         if (canceled) {
           return;
@@ -406,7 +414,7 @@ function buildLifecycleMessage(
     case "enqueue":
       return `Requirement enqueued: ${title}`;
     case "retry":
-      return `Retry reset to ready: ${title}`;
+      return `${retryResetMessage} ${title}`;
   }
 }
 

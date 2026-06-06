@@ -75,11 +75,16 @@ const loadingActionLabels: Record<RequirementLifecycleAction, string> = {
   retry: "Retrying",
 };
 
-const successActionMessages: Record<RequirementLifecycleAction, string> = {
+const successActionMessages: Record<
+  Exclude<RequirementLifecycleAction, "retry">,
+  string
+> = {
   "confirm-plan": "Plan confirmed",
   enqueue: "Requirement enqueued",
-  retry: "Retry reset to ready",
 };
+
+const retryResetMessage =
+  "Retry reset to ready. Enqueue to run fresh evidence.";
 
 const reviewLoadingActionLabels: Record<RequirementReviewAction, string> = {
   approve: "Approving review",
@@ -161,7 +166,10 @@ export function RequirementDeliveryConsole({
       await onRequirementLifecycleAction?.(requirementId, action);
       setRequirementActionState({
         action,
-        message: `${successActionMessages[action]} for ${requirementTitle}`,
+        message: buildRequirementLifecycleSuccessMessage(
+          action,
+          requirementTitle,
+        ),
         requirementId,
         status: "success",
       });
@@ -546,6 +554,17 @@ export function RequirementDeliveryConsole({
       </section>
     </main>
   );
+}
+
+function buildRequirementLifecycleSuccessMessage(
+  action: RequirementLifecycleAction,
+  requirementTitle: string,
+): string {
+  if (action === "retry") {
+    return `${retryResetMessage} ${requirementTitle}`;
+  }
+
+  return `${successActionMessages[action]} for ${requirementTitle}`;
 }
 
 function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {

@@ -881,6 +881,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     await retryItem
       .getByRole("button", { exact: true, name: "Retry" })
       .click();
+    await expect(page.getByLabel("Workflow sync")).toContainText(
+      "Retry reset to ready. Enqueue to run fresh evidence.",
+    );
+    await expect(retryItem).toContainText(
+      "Retry reset to ready. Enqueue to run fresh evidence.",
+    );
     await expect(retryItem).toContainText("Ready to run");
     await expect(retryItem).toContainText("Ready");
     await expect(retryItem).toContainText("Enqueue");
