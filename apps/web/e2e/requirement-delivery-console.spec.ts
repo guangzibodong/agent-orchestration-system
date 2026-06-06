@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type {
+  LaunchGateEvidence,
   RepositorySafety,
   RequirementDeliveryTicket,
   WorkflowJob,
@@ -89,6 +90,53 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       focusPanel.getByRole("heading", { name: "Update billing copy" }),
     ).toBeVisible();
+  });
+
+  test("surfaces stale launch gate evidence in delivery health", async ({
+    page,
+  }) => {
+    await mockApi(page, [], {
+      launchGateEvidence: {
+        generatedAt: "2026-06-06T17:23:13.647Z",
+        root: "C:/work/mawo",
+        branch: "main",
+        commit: "847c137",
+        dirtyFiles: [],
+        checks: [],
+        docs: ["docs/product/REQUIREMENTS_FREEZE.md"],
+        localDecision: "passed",
+        productionDecision: "blocked",
+        failureSummaries: [],
+        externalBlockers: [],
+        currentBranch: "main",
+        currentCommit: "next-head",
+        currentDirtyFiles: [],
+        fresh: false,
+        staleReasons: [
+          "Evidence commit 847c137 does not match HEAD next-head.",
+        ],
+      },
+    });
+
+    await page.goto("/");
+
+    const deliveryHealth = page
+      .locator("main.deliveryShell")
+      .getByLabel("Delivery health");
+    await expect(deliveryHealth).toContainText("Launch Evidence stale");
+    await expect(deliveryHealth).toContainText(
+      "Queue 0",
+    );
+    await expect(
+      deliveryHealth.getByLabel(
+        "Launch Evidence stale: Evidence commit 847c137 does not match HEAD next-head.",
+      ),
+    ).toBeVisible();
+    await expect(
+      deliveryHealth.locator(".deliveryHealthIndicator.danger"),
+    ).toContainText(
+      "Evidence stale",
+    );
   });
 
   test("keeps viewer mode read-only while evidence stays readable", async ({
@@ -1165,6 +1213,7 @@ async function mockApi(
       pathname: string;
     }) => void;
     onJobRequest?: (request: { id: string }) => WorkflowJob | unknown;
+    launchGateEvidence?: LaunchGateEvidence;
     mergeCandidates?: Record<string, unknown>;
     reports?: Record<string, unknown>;
     repositorySafetyByRepositoryId?: Record<string, RepositorySafety>;
@@ -1192,6 +1241,18 @@ async function mockApi(
 
     if (request.method() === "GET" && url.pathname === "/requirements") {
       await route.fulfill({ json: options.requirements ?? [] });
+      return;
+    }
+
+    if (
+      request.method() === "GET" &&
+      url.pathname === "/launch/evidence/latest"
+    ) {
+      await route.fulfill(
+        options.launchGateEvidence
+          ? { json: options.launchGateEvidence }
+          : { status: 404, json: { error: "launch_gate_evidence_not_found" } },
+      );
       return;
     }
 
