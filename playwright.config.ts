@@ -15,7 +15,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: ".tools\\node\\npm.cmd run dev:web",
+    command: "npm run dev:web",
     url: "http://localhost:3000",
     reuseExistingServer: true,
   },

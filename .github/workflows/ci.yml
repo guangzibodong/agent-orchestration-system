@@ -80,6 +80,9 @@ jobs:
       - name: API smoke with Postgres queue worker
         run: npm run smoke:api:postgres
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: UI smoke
         run: npm run smoke:ui
 
