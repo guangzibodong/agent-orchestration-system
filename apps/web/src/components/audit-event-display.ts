@@ -25,6 +25,10 @@ const eventLabels: Record<AuditEventType, string> = {
   "workflow.gate_started": "Gate Started",
   "workflow.gate_completed": "Gate Completed",
   "job.recovered": "Job Recovered",
+  "job.claimed": "Job Claimed",
+  "job.completed": "Job Completed",
+  "job.failed": "Job Failed",
+  "job.lease_lost": "Job Lease Lost",
   "job.canceled": "Job Canceled"
 };
 

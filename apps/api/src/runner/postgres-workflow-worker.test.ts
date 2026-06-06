@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PostgresWorkflowWorker,
+  type PostgresWorkflowWorkerEvent,
   type PostgresWorkflowWorkerJobStore,
   type PostgresWorkflowWorkerRunner
 } from "./postgres-workflow-worker.js";
@@ -59,12 +60,16 @@ describe("PostgresWorkflowWorker", () => {
   it("claims one queued job, runs the workflow, and persists completion", async () => {
     const job = createJob();
     const { runner, saved, store } = createHarness(job);
+    const events: PostgresWorkflowWorkerEvent[] = [];
     const worker = new PostgresWorkflowWorker({
       jobStore: store,
       runner,
       workerId: "worker-a",
       leaseMs: 300_000,
-      now: () => new Date("2026-06-05T00:02:00.000Z")
+      now: () => new Date("2026-06-05T00:02:00.000Z"),
+      eventSink: (event) => {
+        events.push(event);
+      }
     });
 
     const result = await worker.runOnce();
@@ -102,6 +107,26 @@ describe("PostgresWorkflowWorker", () => {
       }),
       workerId: "worker-a"
     });
+    expect(events).toEqual([
+      {
+        type: "job.claimed",
+        actor: "worker",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a"
+        }
+      },
+      {
+        type: "job.completed",
+        actor: "worker",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a"
+        }
+      }
+    ]);
   });
 
   it("returns idle when there is no queued job to claim", async () => {
@@ -246,6 +271,7 @@ describe("PostgresWorkflowWorker", () => {
       getJob: vi.fn(async () => canceled),
       renewJobLease: vi.fn(async () => false)
     };
+    const events: PostgresWorkflowWorkerEvent[] = [];
     let workflowSignal: AbortSignal | undefined;
     let finishWorkflow: (() => void) | undefined;
     const runner: PostgresWorkflowWorkerRunner = {
@@ -267,7 +293,10 @@ describe("PostgresWorkflowWorker", () => {
       workerId: "worker-a",
       leaseMs: 10_000,
       renewIntervalMs: 1_000,
-      now: () => new Date("2026-06-05T00:06:00.000Z")
+      now: () => new Date("2026-06-05T00:06:00.000Z"),
+      eventSink: (event) => {
+        events.push(event);
+      }
     });
 
     const running = worker.runOnce();
@@ -287,5 +316,23 @@ describe("PostgresWorkflowWorker", () => {
       now: new Date("2026-06-05T00:06:00.000Z"),
       leaseExpiresAt: new Date("2026-06-05T00:06:10.000Z")
     });
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "job.claimed",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a"
+        }
+      }),
+      expect.objectContaining({
+        type: "job.lease_lost",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a"
+        }
+      })
+    ]);
   });
 });

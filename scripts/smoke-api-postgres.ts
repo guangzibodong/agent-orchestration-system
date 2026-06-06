@@ -177,6 +177,20 @@ function createPostgresSmokeWorker(root: string): PostgresWorkflowWorker {
   return new PostgresWorkflowWorker({
     runner,
     jobStore: new PrismaJobStore(prisma),
+    eventSink: (event) => {
+      void auditStore
+        .append({
+          type: event.type,
+          actor: event.actor,
+          workflowId: event.workflowId,
+          jobId: event.jobId,
+          metadata: event.metadata
+        })
+        .catch((error: unknown) => {
+          console.error("[smoke:api:postgres] failed to append worker audit event");
+          console.error(error);
+        });
+    },
     workerId: "postgres-smoke-worker",
     leaseMs: 5 * 60 * 1000,
     renewIntervalMs: 60 * 1000
@@ -308,6 +322,28 @@ export async function main() {
       }
     });
     assert(jobRow?.status === "completed", "Completed job was not persisted to Postgres.");
+
+    const claimedAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=job.claimed&jobId=${jobId}`
+    );
+    const completedAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=job.completed&jobId=${jobId}`
+    );
+    const claimedAuditEvents = claimedAudit.body as unknown as unknown[];
+    const completedAuditEvents = completedAudit.body as unknown as unknown[];
+    assert(
+      claimedAudit.status === 200 && claimedAuditEvents.length > 0,
+      "Postgres worker did not record job.claimed audit event."
+    );
+    assert(
+      completedAudit.status === 200 && completedAuditEvents.length > 0,
+      "Postgres worker did not record job.completed audit event."
+    );
+    log("worker lifecycle audit events persisted through Postgres");
 
     const restoredWorkflow = await request(
       baseUrl,

@@ -419,6 +419,24 @@ describe("workflowRunSchema", () => {
     expect(event.metadata?.cleanedCount).toBe("1");
   });
 
+  it("accepts worker job lifecycle audit events", () => {
+    const event = auditEventSchema.parse({
+      id: "audit_worker_1",
+      type: "job.claimed",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      workflowId: "run_1",
+      jobId: "job_1",
+      actor: "worker",
+      metadata: {
+        workerId: "worker-a"
+      }
+    });
+
+    expect(event.type).toBe("job.claimed");
+    expect(event.jobId).toBe("job_1");
+    expect(event.metadata?.workerId).toBe("worker-a");
+  });
+
   it("accepts repository update audit events", () => {
     const event = auditEventSchema.parse({
       id: "audit_2",

@@ -28,9 +28,20 @@ export type PostgresWorkflowWorkerRunner = Pick<
   ): Promise<unknown>;
 };
 
+export type PostgresWorkflowWorkerEvent = {
+  type: "job.claimed" | "job.completed" | "job.failed" | "job.lease_lost";
+  actor: "worker";
+  workflowId: string;
+  jobId: string;
+  metadata: {
+    workerId: string;
+  };
+};
+
 export type PostgresWorkflowWorkerOptions = {
   jobStore: PostgresWorkflowWorkerJobStore;
   runner: PostgresWorkflowWorkerRunner;
+  eventSink?: (event: PostgresWorkflowWorkerEvent) => void | Promise<void>;
   workerId?: string;
   leaseMs?: number;
   renewIntervalMs?: number;
@@ -50,6 +61,7 @@ export class PostgresWorkflowWorker {
   private readonly jobStore: PostgresWorkflowWorkerJobStore;
   private readonly runner: PostgresWorkflowWorkerRunner;
   private readonly workerId: string;
+  private readonly eventSink?: PostgresWorkflowWorkerOptions["eventSink"];
   private readonly leaseMs: number;
   private readonly renewIntervalMs: number;
   private readonly now: () => Date;
@@ -57,6 +69,7 @@ export class PostgresWorkflowWorker {
   constructor(options: PostgresWorkflowWorkerOptions) {
     this.jobStore = options.jobStore;
     this.runner = options.runner;
+    this.eventSink = options.eventSink;
     this.workerId = options.workerId ?? `worker-${randomUUID()}`;
     this.leaseMs = normalizePositiveInteger(options.leaseMs, 5 * 60 * 1000);
     this.renewIntervalMs = normalizePositiveInteger(
@@ -80,8 +93,10 @@ export class PostgresWorkflowWorker {
       };
     }
 
+    await this.emitEvent("job.claimed", claimed);
+
     const controller = new AbortController();
-    const stopRenewal = this.startLeaseRenewal(claimed.id, controller);
+    const stopRenewal = this.startLeaseRenewal(claimed, controller);
 
     try {
       await this.runner.runWorkflow(claimed.workflowId, {
@@ -112,6 +127,8 @@ export class PostgresWorkflowWorker {
     });
 
     if (finalized?.status === "completed" || finalized?.status === "failed") {
+      await this.emitEvent(`job.${finalized.status}`, finalized);
+
       return {
         status: finalized.status,
         job: finalized
@@ -142,19 +159,20 @@ export class PostgresWorkflowWorker {
   }
 
   private startLeaseRenewal(
-    jobId: string,
+    job: WorkflowJob,
     controller: AbortController
   ): () => void {
     const interval = setInterval(() => {
       void (async () => {
         const renewed = await this.jobStore.renewJobLease({
-          jobId,
+          jobId: job.id,
           workerId: this.workerId,
           now: this.now(),
           leaseExpiresAt: this.leaseExpiresAt()
         });
 
         if (!renewed) {
+          await this.emitEvent("job.lease_lost", job);
           controller.abort();
           clearInterval(interval);
         }
@@ -164,6 +182,21 @@ export class PostgresWorkflowWorker {
     return () => {
       clearInterval(interval);
     };
+  }
+
+  private async emitEvent(
+    type: PostgresWorkflowWorkerEvent["type"],
+    job: WorkflowJob
+  ): Promise<void> {
+    await this.eventSink?.({
+      type,
+      actor: "worker",
+      workflowId: job.workflowId,
+      jobId: job.id,
+      metadata: {
+        workerId: this.workerId
+      }
+    });
   }
 
   private finishJob(

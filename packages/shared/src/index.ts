@@ -302,6 +302,10 @@ export const auditEventTypeSchema = z.enum([
   "workflow.gate_started",
   "workflow.gate_completed",
   "job.recovered",
+  "job.claimed",
+  "job.completed",
+  "job.failed",
+  "job.lease_lost",
   "job.canceled"
 ]);
 

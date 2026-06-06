@@ -124,6 +124,9 @@ describe("deployment manifests", () => {
     expect(smoke).toContain("PostgresWorkflowWorker");
     expect(smoke).toContain("assertPostgresRuntimeReady");
     expect(smoke).toContain("worker.runOnce");
+    expect(smoke).toContain("eventSink: (event)");
+    expect(smoke).toContain("job.claimed");
+    expect(smoke).toContain("job.completed");
     expect(helper).toContain("activeStateBackend=postgres");
     expect(helper).toContain("activeQueueBackend=postgres");
     expect(smoke).toContain("prisma.workflowRun.findUnique");
@@ -138,6 +141,7 @@ describe("deployment manifests", () => {
     expect(packageJson).toContain("\"worker:postgres\"");
     expect(wrapper).toContain("scripts/worker-postgres.ts");
     expect(worker).toContain("PostgresWorkflowWorker");
+    expect(worker).toContain("eventSink: (event)");
     expect(worker).toContain("MAWO_WORKER_ONCE");
     expect(worker).toContain("PrismaJobStore");
     expect(worker).toContain("PrismaRunStore");

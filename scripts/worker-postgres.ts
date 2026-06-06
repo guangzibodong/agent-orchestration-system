@@ -86,6 +86,20 @@ export async function main(env: Record<string, string | undefined> = process.env
   const worker = new PostgresWorkflowWorker({
     runner,
     jobStore: new PrismaJobStore(prisma),
+    eventSink: (event) => {
+      void auditStore
+        .append({
+          type: event.type,
+          actor: event.actor,
+          workflowId: event.workflowId,
+          jobId: event.jobId,
+          metadata: event.metadata
+        })
+        .catch((error: unknown) => {
+          console.error("[worker:postgres] failed to append worker audit event");
+          console.error(error);
+        });
+    },
     workerId: env.MAWO_WORKER_ID,
     leaseMs: parsePositiveInteger(env.MAWO_WORKER_LEASE_MS, 5 * 60 * 1000),
     renewIntervalMs: parsePositiveInteger(
