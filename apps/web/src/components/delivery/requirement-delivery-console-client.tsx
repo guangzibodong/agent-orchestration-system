@@ -10,6 +10,7 @@ import {
   buildDeliveryConsoleModel,
   type DeliveryConsoleModel
 } from "./delivery-console-model";
+import type { NewRequirementPayload } from "./new-requirement-payload";
 import { RequirementDeliveryConsole } from "./requirement-delivery-console";
 import { loadRequirementDeliveryModel } from "./requirement-delivery-loader";
 
@@ -27,24 +28,39 @@ export function RequirementDeliveryConsoleClient() {
   const [message, setMessage] = useState("Loading workflow runs");
   const [viewerMode, setViewerMode] = useState(false);
 
+  async function api(path: string, init?: RequestInit): Promise<unknown> {
+    const token =
+      typeof window === "undefined"
+        ? undefined
+        : (window.localStorage.getItem(apiTokenStorageKey) ?? undefined);
+    const response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: buildApiHeaders(token, init?.headers)
+    });
+    const text = await response.text();
+    const body = text ? (JSON.parse(text) as unknown) : undefined;
+
+    if (!response.ok) {
+      throw new ApiResponseError(response.status, path, body);
+    }
+
+    return body;
+  }
+
+  async function handleNewRequirementSubmit(payload: NewRequirementPayload) {
+    await api("/requirements", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    const nextModel = await loadRequirementDeliveryModel(api);
+    setModel(nextModel);
+    setLoadState("ready");
+    setMessage(`Requirement draft saved: ${payload.title}`);
+  }
+
   useEffect(() => {
     let canceled = false;
-
-    async function api(path: string, init?: RequestInit): Promise<unknown> {
-      const token = window.localStorage.getItem(apiTokenStorageKey) ?? undefined;
-      const response = await fetch(`${apiUrl}${path}`, {
-        ...init,
-        headers: buildApiHeaders(token, init?.headers)
-      });
-      const text = await response.text();
-      const body = text ? (JSON.parse(text) as unknown) : undefined;
-
-      if (!response.ok) {
-        throw new ApiResponseError(response.status, path, body);
-      }
-
-      return body;
-    }
 
     async function loadDeliveryModel() {
       const role = normalizeApiTokenRole(
@@ -89,6 +105,7 @@ export function RequirementDeliveryConsoleClient() {
       syncMessage={message}
       syncTone={loadState === "error" ? "danger" : "muted"}
       viewerMode={viewerMode}
+      onNewRequirementSubmit={handleNewRequirementSubmit}
     />
   );
 }

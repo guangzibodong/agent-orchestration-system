@@ -1,9 +1,15 @@
+"use client";
+
 import { Plus, Search, Settings, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import type { DeliveryConsoleModel } from "./delivery-console-model";
 import {
   buildDecisionQueueDisplay,
   buildRequirementQueueRows,
 } from "./requirement-queue-display";
+import { NewRequirementPanel } from "./new-requirement-panel";
+import type { NewRequirementPayload } from "./new-requirement-payload";
+import { RequirementDetailShell } from "./requirement-detail-shell";
 import { RequirementEvidencePanel } from "./requirement-evidence-panel";
 import { buildRequirementStageStepper } from "./requirement-stage-stepper";
 
@@ -12,6 +18,8 @@ type RequirementDeliveryConsoleProps = {
   syncMessage?: string;
   syncTone?: "muted" | "danger";
   viewerMode?: boolean;
+  initialNewRequirementPanelOpen?: boolean;
+  onNewRequirementSubmit?: (payload: NewRequirementPayload) => Promise<void> | void;
 };
 
 export function RequirementDeliveryConsole({
@@ -19,13 +27,34 @@ export function RequirementDeliveryConsole({
   syncMessage,
   syncTone = "muted",
   viewerMode = false,
+  initialNewRequirementPanelOpen = false,
+  onNewRequirementSubmit,
 }: RequirementDeliveryConsoleProps) {
+  const [isNewRequirementPanelOpen, setIsNewRequirementPanelOpen] = useState(
+    initialNewRequirementPanelOpen,
+  );
+  const [newRequirementMessage, setNewRequirementMessage] = useState<string>();
   const queueRows = buildRequirementQueueRows(model.requirements);
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
   const selectedRequirement = model.requirements[0];
   const stageSteps = buildRequirementStageStepper(
     selectedRequirement?.requirementStage ?? "draft",
   );
+
+  async function handleNewRequirementSubmit(payload: NewRequirementPayload) {
+    setNewRequirementMessage(`Creating requirement draft for ${payload.title}`);
+
+    try {
+      await onNewRequirementSubmit?.(payload);
+      setNewRequirementMessage(`Requirement draft submitted for ${payload.title}`);
+    } catch (error: unknown) {
+      setNewRequirementMessage(
+        error instanceof Error
+          ? error.message
+          : "Requirement draft submission failed",
+      );
+    }
+  }
 
   return (
     <main className="deliveryShell" aria-labelledby="delivery-title">
@@ -39,7 +68,14 @@ export function RequirementDeliveryConsole({
             <Search size={16} aria-hidden="true" />
             <span>Search requirements, repos, reports</span>
           </label>
-          <button className="primaryButton" type="button" disabled={viewerMode}>
+          <button
+            className="primaryButton"
+            type="button"
+            disabled={viewerMode}
+            aria-controls="new-requirement-panel"
+            aria-expanded={isNewRequirementPanelOpen}
+            onClick={() => setIsNewRequirementPanelOpen(true)}
+          >
             <Plus size={16} aria-hidden="true" />
             New Requirement
           </button>
@@ -59,6 +95,12 @@ export function RequirementDeliveryConsole({
         </section>
       ) : null}
 
+      {newRequirementMessage ? (
+        <section className="deliverySyncBanner" aria-label="New requirement">
+          {newRequirementMessage}
+        </section>
+      ) : null}
+
       {syncMessage ? (
         <section
           className={`deliverySyncBanner ${syncTone}`}
@@ -66,6 +108,14 @@ export function RequirementDeliveryConsole({
         >
           {syncMessage}
         </section>
+      ) : null}
+
+      {isNewRequirementPanelOpen ? (
+        <NewRequirementPanel
+          viewerMode={viewerMode}
+          onCancel={() => setIsNewRequirementPanelOpen(false)}
+          onSubmit={handleNewRequirementSubmit}
+        />
       ) : null}
 
       <section
@@ -201,6 +251,15 @@ export function RequirementDeliveryConsole({
           </section>
 
           <RequirementEvidencePanel requirement={selectedRequirement} />
+
+          <details className="requirementDetailDisclosure">
+            <summary>Requirement detail</summary>
+            <RequirementDetailShell
+              requirement={selectedRequirement}
+              showViewerBanner={false}
+              viewerMode={viewerMode}
+            />
+          </details>
         </section>
 
         <aside className="deliveryPanel decisionQueuePanel">

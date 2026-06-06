@@ -112,6 +112,94 @@ export const qualityGateInputSchema = z.object({
   cwd: z.string().min(1).optional(),
 });
 
+export const requirementStatusSchema = z.enum([
+  "draft",
+  "needs_clarification",
+  "plan_review",
+  "ready_to_run",
+  "running",
+  "needs_review",
+  "delivered",
+  "needs_rework",
+  "archived",
+]);
+
+export const requirementRiskLevelSchema = z.enum(["low", "medium", "high"]);
+
+export const requirementRunLinkSchema = z.object({
+  workflowRunId: z.string().min(1),
+  status: workflowStatusSchema.optional(),
+  linkedAt: z.string(),
+});
+
+export const requirementQualityGateInputSchema = qualityGateInputSchema.extend({
+  required: z.boolean().default(true),
+});
+
+const requirementStringListSchema = z.array(z.string().min(1));
+
+export const createRequirementDeliveryTicketRequestSchema = z.object({
+  title: z.string().min(1),
+  repositoryId: z.string().min(1).optional(),
+  repositoryPath: z.string().min(1).optional(),
+  goal: z.string().min(1).optional(),
+  acceptanceCriteria: requirementStringListSchema.default([]),
+  constraints: requirementStringListSchema.default([]),
+  nonGoals: requirementStringListSchema.default([]),
+  riskLevel: requirementRiskLevelSchema.default("medium"),
+  contextPaths: requirementStringListSchema.default([]),
+  tasks: z.array(workflowTaskInputSchema).max(5).default([]),
+  qualityGates: z.array(requirementQualityGateInputSchema).default([]),
+});
+
+export const updateRequirementDeliveryTicketRequestSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    repositoryId: z.string().min(1).optional(),
+    repositoryPath: z.string().min(1).optional(),
+    goal: z.string().min(1).optional(),
+    acceptanceCriteria: requirementStringListSchema.optional(),
+    constraints: requirementStringListSchema.optional(),
+    nonGoals: requirementStringListSchema.optional(),
+    riskLevel: requirementRiskLevelSchema.optional(),
+    contextPaths: requirementStringListSchema.optional(),
+    tasks: z.array(workflowTaskInputSchema).max(5).optional(),
+    qualityGates: z.array(requirementQualityGateInputSchema).optional(),
+    currentWorkflowRunId: z.string().min(1).optional(),
+    runLinks: z.array(requirementRunLinkSchema).optional(),
+  })
+  .refine((request) => Object.keys(request).length > 0, {
+    message: "Requirement update requires at least one field",
+  });
+
+export const requirementDeliveryTicketSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  repositoryId: z.string().optional(),
+  repositoryPath: z.string().optional(),
+  goal: z.string(),
+  acceptanceCriteria: requirementStringListSchema.default([]),
+  constraints: requirementStringListSchema.default([]),
+  nonGoals: requirementStringListSchema.default([]),
+  riskLevel: requirementRiskLevelSchema,
+  contextPaths: requirementStringListSchema.default([]),
+  tasks: z.array(workflowTaskInputSchema).max(5).default([]),
+  qualityGates: z.array(requirementQualityGateInputSchema).default([]),
+  status: requirementStatusSchema,
+  currentWorkflowRunId: z.string().optional(),
+  runLinks: z.array(requirementRunLinkSchema).default([]),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const decisionQueueItemSchema = z.object({
+  id: z.string().min(1),
+  requirementId: z.string().min(1),
+  title: z.string().min(1),
+  actionLabel: z.string().min(1),
+  severity: z.enum(["info", "warning", "danger"]),
+});
+
 export const repositoryRegistrationRequestSchema = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
@@ -414,6 +502,22 @@ export type WorkflowJob = z.infer<typeof workflowJobSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type WorkflowTaskInput = z.infer<typeof workflowTaskInputSchema>;
 export type QualityGateInput = z.infer<typeof qualityGateInputSchema>;
+export type RequirementStatus = z.infer<typeof requirementStatusSchema>;
+export type RequirementRiskLevel = z.infer<typeof requirementRiskLevelSchema>;
+export type RequirementRunLink = z.infer<typeof requirementRunLinkSchema>;
+export type RequirementQualityGateInput = z.infer<
+  typeof requirementQualityGateInputSchema
+>;
+export type CreateRequirementDeliveryTicketRequest = z.input<
+  typeof createRequirementDeliveryTicketRequestSchema
+>;
+export type UpdateRequirementDeliveryTicketRequest = z.input<
+  typeof updateRequirementDeliveryTicketRequestSchema
+>;
+export type RequirementDeliveryTicket = z.infer<
+  typeof requirementDeliveryTicketSchema
+>;
+export type DecisionQueueItem = z.infer<typeof decisionQueueItemSchema>;
 export type RepositoryRegistrationRequest = z.infer<
   typeof repositoryRegistrationRequestSchema
 >;

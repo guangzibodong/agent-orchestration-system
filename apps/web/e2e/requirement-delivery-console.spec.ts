@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { WorkflowRun } from "@mawo/shared";
 
 const API_ORIGIN = "http://127.0.0.1:4000";
@@ -107,6 +107,171 @@ test.describe("Requirement Delivery Console smoke", () => {
         (header) => header === "Bearer viewer-token",
       ),
     ).toBe(true);
+
+    const viewerBoundary = await page.evaluate(async (origin) => {
+      const headers = {
+        Authorization: "Bearer viewer-token",
+        "Content-Type": "application/json",
+      };
+      const readResponse = await fetch(`${origin}/requirements`, { headers });
+      const writeResponse = await fetch(`${origin}/requirements`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ title: "Viewer write attempt" }),
+      });
+
+      return {
+        readStatus: readResponse.status,
+        readBody: await readResponse.json(),
+        writeStatus: writeResponse.status,
+        writeBody: await writeResponse.json(),
+      };
+    }, API_ORIGIN);
+
+    expect(viewerBoundary.readStatus).toBe(200);
+    expect(viewerBoundary.readBody).toEqual(requirementTickets);
+    expect(viewerBoundary.writeStatus).toBe(403);
+    expect(viewerBoundary.writeBody).toMatchObject({
+      error: "forbidden",
+      role: "viewer",
+    });
+  });
+
+  test("keeps gate failed and review evidence visible", async ({ page }) => {
+    await mockApi(page, mixedWorkflows);
+
+    await page.goto("/");
+
+    const evidence = page.getByLabel("Gate Result / Review Evidence");
+    await expect(evidence).toContainText("Required gate failed");
+    await expect(evidence).toContainText("Merge-ready blocked");
+    await expect(evidence).toContainText("Retry failed gate");
+    await expect(evidence).toContainText(
+      "Required gate failed; merge-ready conclusion is blocked.",
+    );
+
+    await mockApi(page, [
+      mixedWorkflows[1] as WorkflowRun,
+      mixedWorkflows[0] as WorkflowRun,
+    ]);
+    await page.reload();
+
+    const reviewEvidence = page.getByLabel("Gate Result / Review Evidence");
+    await expect(reviewEvidence).toContainText(
+      "Review merge candidate evidence",
+    );
+    await expect(reviewEvidence).toContainText("Manual review required");
+    await expect(reviewEvidence).toContainText("Quality gates passed");
+    await expect(reviewEvidence).toContainText("Manual git apply only");
+  });
+
+  test("keeps key requirement labels inside the mobile viewport", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await mockApi(page, mobileStressWorkflows);
+
+    await page.goto("/");
+
+    await expectNoHorizontalDocumentOverflow(page);
+    await expectLabelsInsideViewport(page, [
+      "Requirement Delivery Console",
+      "New Requirement",
+      "Legacy Run Console",
+      "Repository Safety",
+      "Requirement Queue",
+      "Decision Queue",
+      "Gate Result / Review Evidence",
+      "Needs Clarification",
+      "Failed Gates",
+      "Waiting Review",
+      "Retry failed gate",
+      "Review merge candidate",
+    ]);
+  });
+
+  test("New Requirement flow creates a structured requirement request when available", async ({
+    page,
+  }) => {
+    const createdRequests: unknown[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, [], {
+      onRequirementCreate: (payload) => {
+        createdRequests.push(payload);
+      },
+    });
+
+    await page.goto("/");
+
+    const newRequirementButton = page.getByRole("button", {
+      name: "New Requirement",
+    });
+    await expect(newRequirementButton).toBeEnabled();
+    await newRequirementButton.click();
+
+    const flow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await expect(flow).toBeVisible();
+
+    await fillField(flow, /title|requirement title/i, "Smoke gated checkout");
+    await fillField(flow, /repository path|repository/i, "C:/work/shop");
+    await fillField(
+      flow,
+      /goal/i,
+      "Produce an isolated checkout patch with review evidence.",
+    );
+    await fillField(
+      flow,
+      /acceptance criteria/i,
+      "Patch is isolated; required gates pass; merge candidate stays manual.",
+    );
+    await fillField(flow, /constraints/i, "No automatic merge.");
+    await fillField(flow, /non-?goals/i, "No PR creation.");
+    await fillField(flow, /task/i, "Create the checkout copy patch.");
+    await fillField(flow, /quality gate|gate/i, "npm test");
+    await chooseRisk(flow, "medium");
+
+    await flow
+      .getByRole("button", {
+        name: /create requirement|save requirement|create/i,
+      })
+      .click();
+
+    await expect
+      .poll(() => createdRequests.length, {
+        message: "wait for structured requirement create request",
+      })
+      .toBe(1);
+    expect(createdRequests[0]).toMatchObject({
+      title: "Smoke gated checkout",
+      repositoryPath: "C:/work/shop",
+      goal: "Produce an isolated checkout patch with review evidence.",
+      riskLevel: "medium",
+    });
+    expect(createdRequests[0]).toMatchObject({
+      acceptanceCriteria: expect.any(Array),
+      constraints: expect.any(Array),
+      nonGoals: expect.any(Array),
+      tasks: expect.arrayContaining([
+        expect.objectContaining({
+          title: expect.stringMatching(/checkout copy patch/i),
+        }),
+      ]),
+      qualityGates: expect.arrayContaining([
+        expect.objectContaining({
+          command: "npm test",
+          required: true,
+        }),
+      ]),
+    });
   });
 });
 
@@ -124,8 +289,11 @@ async function mockApi(
   workflows: WorkflowRun[],
   options: {
     onWorkflowRequest?: (authorization: string | undefined) => void;
+    onRequirementCreate?: (payload: unknown) => void;
   } = {},
 ) {
+  await page.unroute(`${API_ORIGIN}/**`).catch(() => undefined);
+
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -133,6 +301,40 @@ async function mockApi(
     if (request.method() === "GET" && url.pathname === "/workflows") {
       options.onWorkflowRequest?.(request.headers().authorization);
       await route.fulfill({ json: workflows });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/requirements") {
+      await route.fulfill({ json: requirementTickets });
+      return;
+    }
+
+    if (request.method() === "POST" && url.pathname === "/requirements") {
+      if (request.headers().authorization === "Bearer viewer-token") {
+        await route.fulfill({
+          status: 403,
+          json: {
+            error: "forbidden",
+            message: "This endpoint requires an operator token.",
+            requiredRole: "operator",
+            role: "viewer",
+          },
+        });
+        return;
+      }
+
+      const payload = request.postDataJSON();
+      options.onRequirementCreate?.(payload);
+      await route.fulfill({
+        status: 201,
+        json: {
+          id: "requirement-smoke-created",
+          status: "plan_review",
+          createdAt: "2026-06-06T10:30:00.000Z",
+          updatedAt: "2026-06-06T10:30:00.000Z",
+          ...(typeof payload === "object" && payload ? payload : {}),
+        },
+      });
       return;
     }
 
@@ -173,6 +375,59 @@ async function mockApi(
       json: fallbackBody(url.pathname),
     });
   });
+}
+
+async function fillField(scope: Locator, label: RegExp, value: string) {
+  const field = scope.getByLabel(label).first();
+  await expect(field).toBeVisible();
+  await field.fill(value);
+}
+
+async function chooseRisk(scope: Locator, value: string) {
+  const risk = scope.getByLabel(/risk/i).first();
+  if ((await risk.count()) === 0) {
+    return;
+  }
+
+  await expect(risk).toBeVisible();
+  await risk.selectOption(value).catch(async () => {
+    await risk.fill(value);
+  });
+}
+
+async function expectNoHorizontalDocumentOverflow(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    bodyScrollWidth: document.body.scrollWidth,
+    documentClientWidth: document.documentElement.clientWidth,
+    documentScrollWidth: document.documentElement.scrollWidth,
+  }));
+
+  expect(dimensions.documentScrollWidth).toBeLessThanOrEqual(
+    dimensions.documentClientWidth + 1,
+  );
+  expect(dimensions.bodyScrollWidth).toBeLessThanOrEqual(
+    dimensions.documentClientWidth + 1,
+  );
+}
+
+async function expectLabelsInsideViewport(page: Page, labels: string[]) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+
+  for (const label of labels) {
+    const locator = page.getByText(label, { exact: true }).first();
+    await expect(locator).toBeVisible();
+    const box = await locator.boundingBox();
+
+    expect(box, `${label} should have a measurable box`).not.toBeNull();
+    expect(box!.x, `${label} should not overflow left`).toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(
+      box!.x + box!.width,
+      `${label} should not overflow right`,
+    ).toBeLessThanOrEqual(viewport!.width + 1);
+  }
 }
 
 function fallbackStatus(request: { method(): string }) {
@@ -249,6 +504,71 @@ const mixedWorkflows: WorkflowRun[] = [
     status: "needs_review",
     repositoryPath: "C:/work/auth-service",
     updatedAt: "2026-06-06T10:10:00.000Z",
+  },
+];
+
+const mobileStressWorkflows: WorkflowRun[] = [
+  {
+    ...baseWorkflow,
+    id: "workflow-mobile-gate-failed",
+    goal: "Very long checkout acceptance requirement with no horizontal overflow",
+    status: "gate_failed",
+    repositoryPath:
+      "C:/work/safety-console/checkout-with-a-very-long-repository-label",
+    updatedAt: "2026-06-06T10:40:00.000Z",
+    qualityGates: [
+      {
+        id: "gate-mobile-1",
+        title: "Required smoke gate with long visible label",
+        status: "failed",
+      },
+    ],
+  },
+  {
+    ...baseWorkflow,
+    id: "workflow-mobile-needs-review",
+    goal: "Review evidence for a manually applied merge candidate",
+    status: "needs_review",
+    repositoryPath:
+      "C:/work/safety-console/review-with-a-very-long-repository-label",
+    updatedAt: "2026-06-06T10:45:00.000Z",
+  },
+];
+
+const requirementTickets = [
+  {
+    id: "requirement-viewer-readable",
+    title: "Viewer readable requirement",
+    repositoryPath: "C:/work/shop",
+    goal: "Review requirement evidence without mutating state.",
+    acceptanceCriteria: [
+      "Viewer can read the requirement list.",
+      "Viewer cannot create or modify requirements.",
+    ],
+    constraints: ["Manual git apply only"],
+    nonGoals: ["Automatic PR creation"],
+    riskLevel: "medium",
+    contextPaths: ["apps/web/src/app/page.tsx"],
+    tasks: [
+      {
+        id: "task-view",
+        title: "Inspect evidence",
+        agent: "shell",
+        instructions: "Review evidence without making changes.",
+      },
+    ],
+    qualityGates: [
+      {
+        id: "gate-view",
+        title: "Evidence visible",
+        command: "npm test",
+        required: true,
+      },
+    ],
+    status: "needs_review",
+    currentWorkflowRunId: "workflow-needs-review",
+    createdAt: "2026-06-06T10:20:00.000Z",
+    updatedAt: "2026-06-06T10:25:00.000Z",
   },
 ];
 

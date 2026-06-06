@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck -w @mawo/shared && npm run typecheck -w @mawo/api && npm run typecheck -w @mawo/web",
     "test": "node node_modules/vitest/vitest.mjs run",
     "smoke:api": "node scripts/smoke-api-repository.mjs",
+    "smoke:api:requirements": "node scripts/smoke-api-requirements.mjs",
     "smoke:api:postgres": "node scripts/smoke-api-postgres.mjs",
     "worker:postgres": "node scripts/worker-postgres.mjs",
     "test:watch": "node node_modules/vitest/vitest.mjs",

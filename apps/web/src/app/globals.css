@@ -110,6 +110,84 @@ button {
   color: var(--danger);
 }
 
+.newRequirementPanel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.newRequirementPanelHeader,
+.newRequirementActions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.newRequirementPanelHeader {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.newRequirementPanelHeader > div {
+  min-width: 0;
+}
+
+.newRequirementForm,
+.newRequirementFieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.newRequirementFormGrid,
+.newRequirementTasks {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.newRequirementFormGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.newRequirementTasks {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.newRequirementFieldset {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.newRequirementFieldset legend {
+  margin: 0;
+  padding: 0;
+  font-weight: 750;
+}
+
+.newRequirementHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.newRequirementErrors ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.newRequirementActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .deliveryKpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
@@ -326,6 +404,249 @@ button {
   overflow-wrap: anywhere;
 }
 
+.requirementDetailDisclosure {
+  min-width: 0;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 12px;
+}
+
+.requirementDetailDisclosure > summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.requirementDetailDisclosure .requirementDetailShell {
+  min-height: 0;
+  padding: 14px 0 0;
+}
+
+.requirementDetailShell {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 100vh;
+  min-width: 0;
+  padding: 24px;
+}
+
+.requirementDetailHeader,
+.requirementDetailSummary,
+.requirementDetailTabs,
+.requirementDetailSectionHeader,
+.artifactDrawerSummary,
+.artifactDrawerSummary span,
+.requirementDetailActions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.requirementDetailHeader {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.requirementDetailHeader > div:first-child {
+  min-width: 0;
+}
+
+.requirementDetailSummary {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.requirementDetailSummary span,
+.requirementDetailSummary strong {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 10px;
+  overflow-wrap: anywhere;
+}
+
+.requirementDetailSummary strong {
+  color: var(--text);
+}
+
+.requirementDetailTabs {
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 10px;
+}
+
+.requirementDetailTabs a {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 10px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.requirementDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.requirementDetailSection {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px;
+}
+
+.requirementDetailSectionHeader {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.requirementDetailSectionHeader h2 {
+  font-size: 18px;
+}
+
+.requirementDetailSectionHeader svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.requirementDetailMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr));
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.requirementDetailMetaItem {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.requirementDetailMetaItem dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.requirementDetailMetaItem dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.requirementDetailActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 10px;
+}
+
+.requirementDetailActions .secondaryButton {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.artifactDrawer {
+  min-width: 0;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 10px;
+}
+
+.artifactDrawerSummary {
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.artifactDrawerSummary::-webkit-details-marker {
+  display: none;
+}
+
+.artifactDrawerSummary span {
+  gap: 8px;
+}
+
+.artifactDrawerSummary strong,
+.artifactDrawerSummary em {
+  overflow-wrap: anywhere;
+}
+
+.artifactDrawerSummary em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.artifactDrawerGroups {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.artifactDrawerGroup {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.artifactDrawerGroup h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.artifactDrawerList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.artifactDrawerItem {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.artifactDrawerLink {
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.artifactDrawerMeta,
+.artifactDrawerEmpty {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .repositorySafetyList {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
@@ -451,6 +772,10 @@ button {
 
   .deliveryTopbarActions > * {
     width: 100%;
+  }
+
+  .newRequirementFormGrid {
+    grid-template-columns: 1fr;
   }
 
   .legacyConsolePanel {

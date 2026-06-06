@@ -3,6 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { WorkflowRun } from "@mawo/shared";
 import { buildDeliveryConsoleModel } from "./delivery-console-model";
+import {
+  buildNewRequirementPayload,
+  submitNewRequirementDraft,
+  type NewRequirementDraft,
+} from "./new-requirement-payload";
 import { RequirementDeliveryConsole } from "./requirement-delivery-console";
 
 const workflow: WorkflowRun = {
@@ -34,6 +39,30 @@ function renderConsoleFor(workflows: WorkflowRun[]): string {
     }),
   );
 }
+
+function expectDisabledNamedControl(html: string, name: string) {
+  expect(html).toMatch(
+    new RegExp(
+      `(?:name="${name}"[^>]*disabled=""|disabled=""[^>]*name="${name}")`,
+    ),
+  );
+}
+
+const validNewRequirementDraft: NewRequirementDraft = {
+  title: "Ship review evidence panel",
+  repositoryPath: "C:/work/mawo",
+  repositoryId: "",
+  goal: "Create a reviewable delivery ticket without binding to the API",
+  acceptanceCriteria:
+    "- captures structured payload\n- keeps viewer mode read only",
+  constraints: "frontend components only",
+  nonGoals: "server API changes",
+  contextPaths:
+    "apps/web/src/components/delivery\napps/web/src/app/globals.css",
+  riskLevel: "high",
+  tasks: ["Build form", "Wire submit callback", "", "", ""],
+  qualityGates: "delivery vitest\nweb typecheck",
+};
 
 describe("RequirementDeliveryConsole", () => {
   it("renders the requirement-first console without making legacy runs primary", () => {
@@ -128,5 +157,134 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Viewer mode");
     expect(html).toContain("Write actions are disabled");
     expect(html).toContain("disabled");
+  });
+
+  it("renders a New Requirement panel with the frozen ticket fields", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([workflow]),
+        initialNewRequirementPanelOpen: true,
+      }),
+    );
+
+    expect(html).toContain("New Requirement panel");
+    expect(html).toContain("Title");
+    expect(html).toContain("Repository path");
+    expect(html).toContain("Repository ID");
+    expect(html).toContain("Repository path or registered ID");
+    expect(html).toContain("Goal");
+    expect(html).toContain("Acceptance criteria");
+    expect(html).toContain("Constraints");
+    expect(html).toContain("Non-goals");
+    expect(html).toContain("Context paths");
+    expect(html).toContain("Risk level");
+    expect(html).toContain("Task 1");
+    expect(html).toContain("Task 5");
+    expect(html).toContain("Quality gates");
+    expect(html).toContain("Create requirement draft");
+    expect(html).not.toContain("raw JSON");
+  });
+
+  it("builds a structured New Requirement payload for submit callbacks", () => {
+    const result = buildNewRequirementPayload(validNewRequirementDraft);
+
+    expect(result).toEqual({
+      ok: true,
+      payload: {
+        title: "Ship review evidence panel",
+        repositoryPath: "C:/work/mawo",
+        goal: "Create a reviewable delivery ticket without binding to the API",
+        acceptanceCriteria: [
+          "captures structured payload",
+          "keeps viewer mode read only",
+        ],
+        constraints: ["frontend components only"],
+        nonGoals: ["server API changes"],
+        contextPaths: [
+          "apps/web/src/components/delivery",
+          "apps/web/src/app/globals.css",
+        ],
+        riskLevel: "high",
+        tasks: [
+          {
+            title: "Build form",
+            agent: "shell",
+            instructions: "Build form",
+          },
+          {
+            title: "Wire submit callback",
+            agent: "shell",
+            instructions: "Wire submit callback",
+          },
+        ],
+        qualityGates: [
+          {
+            title: "delivery vitest",
+            command: "delivery vitest",
+            required: true,
+          },
+          {
+            title: "web typecheck",
+            command: "web typecheck",
+            required: true,
+          },
+        ],
+      },
+    });
+  });
+
+  it("submits the structured payload through a callback", () => {
+    const submitted = new Array<unknown>();
+    const result = submitNewRequirementDraft(validNewRequirementDraft, (payload) =>
+      submitted.push(payload),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(submitted).toEqual([
+      expect.objectContaining({
+        title: "Ship review evidence panel",
+        repositoryPath: "C:/work/mawo",
+        tasks: [
+          {
+            title: "Build form",
+            agent: "shell",
+            instructions: "Build form",
+          },
+          {
+            title: "Wire submit callback",
+            agent: "shell",
+            instructions: "Wire submit callback",
+          },
+        ],
+      }),
+    ]);
+  });
+
+  it("rejects New Requirement payloads without 1-5 tasks or quality gates", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      tasks: ["", "", "", "", ""],
+      qualityGates: "",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Add 1-5 tasks.", "Add at least one required quality gate."],
+    });
+  });
+
+  it("keeps the New Requirement form read-only in viewer mode", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([workflow]),
+        initialNewRequirementPanelOpen: true,
+        viewerMode: true,
+      }),
+    );
+
+    expect(html).toContain("Viewer mode");
+    expectDisabledNamedControl(html, "title");
+    expectDisabledNamedControl(html, "goal");
+    expect(html).toContain('type="submit" disabled=""');
   });
 });

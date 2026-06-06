@@ -320,6 +320,13 @@ describe("runner API", () => {
       { method: "GET", url: "/operations/snapshot" },
       { method: "GET", url: "/repositories" },
       { method: "GET", url: "/repositories/missing-repository/safety" },
+      { method: "GET", url: "/requirements" },
+      { method: "GET", url: "/requirements/missing-requirement" },
+      { method: "GET", url: "/requirements/missing-requirement/report" },
+      {
+        method: "GET",
+        url: "/requirements/missing-requirement/merge-candidate",
+      },
       { method: "GET", url: "/workflows" },
       { method: "GET", url: "/workflows/missing-workflow" },
       { method: "GET", url: "/workflows/missing-workflow/report" },
@@ -345,8 +352,8 @@ describe("runner API", () => {
     );
 
     expect(responses.map((response) => response.statusCode)).toEqual([
-      200, 200, 200, 200, 200, 200, 404, 200, 404, 404, 404, 404, 404, 200, 404,
-      404, 200,
+      200, 200, 200, 200, 200, 200, 404, 200, 404, 404, 404, 200, 404, 404,
+      404, 404, 404, 200, 404, 404, 200,
     ]);
   });
 
@@ -363,6 +370,13 @@ describe("runner API", () => {
     const requests = [
       { method: "POST", url: "/repositories", payload: {} },
       { method: "DELETE", url: "/repositories/missing-repository" },
+      { method: "POST", url: "/requirements", payload: {} },
+      {
+        method: "PATCH",
+        url: "/requirements/missing-requirement",
+        payload: {},
+      },
+      { method: "POST", url: "/requirements/missing-requirement/confirm-plan" },
       { method: "POST", url: "/workflows/demo" },
       { method: "POST", url: "/workflows/worktree-demo" },
       { method: "POST", url: "/workflows/agent-demo" },
@@ -460,6 +474,134 @@ describe("runner API", () => {
       requiredRole: "operator",
       role: "viewer",
     });
+  });
+
+  it("creates, updates, lists, gets, and confirms requirement delivery tickets", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirements-api-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Deliver safe README change",
+      },
+    });
+    const draft = createResponse.json();
+    const blockedConfirmResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${draft.id}/confirm-plan`,
+    });
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/requirements/${draft.id}`,
+      payload: {
+        repositoryPath: "C:/repo",
+        goal: "Produce an isolated, reviewable patch",
+        acceptanceCriteria: ["README explains the manual apply path"],
+        constraints: ["Do not auto-merge"],
+        nonGoals: ["Do not create a PR"],
+        riskLevel: "medium",
+        contextPaths: ["README.md"],
+        tasks: [
+          {
+            id: "edit-readme",
+            title: "Edit README",
+            agent: "shell",
+            command: "node scripts/edit-readme.js",
+          },
+        ],
+        qualityGates: [
+          {
+            id: "tests",
+            title: "Unit tests",
+            command: "npm test",
+          },
+        ],
+      },
+    });
+    const planned = patchResponse.json();
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/requirements",
+    });
+    const getResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${draft.id}`,
+    });
+    const confirmResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${draft.id}/confirm-plan`,
+    });
+    const confirmed = confirmResponse.json();
+    const restoredApp = buildApp(undefined, { demoRoot });
+    const restoredResponse = await restoredApp.inject({
+      method: "GET",
+      url: `/requirements/${draft.id}`,
+    });
+    const reportResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${draft.id}/report`,
+    });
+    const mergeCandidateResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${draft.id}/merge-candidate`,
+    });
+    const workflowsResponse = await app.inject({
+      method: "GET",
+      url: "/workflows",
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(draft).toMatchObject({
+      title: "Deliver safe README change",
+      status: "needs_clarification",
+      acceptanceCriteria: [],
+      tasks: [],
+      qualityGates: [],
+    });
+    expect(blockedConfirmResponse.statusCode).toBe(409);
+    expect(blockedConfirmResponse.json()).toMatchObject({
+      error: "requirement_plan_not_ready",
+    });
+    expect(patchResponse.statusCode).toBe(200);
+    expect(planned).toMatchObject({
+      id: draft.id,
+      status: "plan_review",
+      repositoryPath: "C:/repo",
+      goal: "Produce an isolated, reviewable patch",
+    });
+    expect(planned.qualityGates[0]).toMatchObject({
+      id: "tests",
+      required: true,
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([planned]);
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.json()).toEqual(planned);
+    expect(confirmResponse.statusCode).toBe(200);
+    expect(confirmed).toMatchObject({
+      id: draft.id,
+      status: "ready_to_run",
+    });
+    expect(restoredResponse.statusCode).toBe(200);
+    expect(restoredResponse.json()).toEqual(confirmed);
+    expect(reportResponse.statusCode).toBe(409);
+    expect(reportResponse.json()).toMatchObject({
+      error: "requirement_report_not_ready",
+      status: "ready_to_run",
+    });
+    expect(mergeCandidateResponse.statusCode).toBe(409);
+    expect(mergeCandidateResponse.json()).toMatchObject({
+      error: "requirement_merge_candidate_not_ready",
+      status: "ready_to_run",
+    });
+    expect(workflowsResponse.statusCode).toBe(200);
+    expect(workflowsResponse.json()).toEqual([]);
   });
 
   it("lists configured agents without exposing command templates", async () => {

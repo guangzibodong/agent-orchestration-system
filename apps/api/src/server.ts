@@ -1,8 +1,11 @@
 import cors from "@fastify/cors";
 import {
   auditEventTypeSchema,
+  createRequirementDeliveryTicketRequestSchema,
   createRepositoryWorkflowRequestSchema,
+  requirementStatusSchema,
   repositoryRegistrationRequestSchema,
+  updateRequirementDeliveryTicketRequestSchema,
   workflowJobStatusSchema,
   workflowStatusSchema,
   workflowReviewRequestSchema,
@@ -29,6 +32,12 @@ import {
   type AuditStore,
 } from "./runner/file-audit-store.js";
 import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
+import {
+  FileRequirementStore,
+  RequirementPlanConfirmationBlockedError,
+  RequirementPlanNotReadyError,
+  type RequirementStore,
+} from "./runner/file-requirement-store.js";
 import {
   FileRepositoryStore,
   type RepositoryStore,
@@ -90,6 +99,7 @@ export type BuildAppOptions = {
   prismaClient?: PrismaStateStoreClient;
   runStore?: RunStore;
   repositoryStore?: RepositoryStore;
+  requirementStore?: RequirementStore;
   repositorySafetyInspector?: RepositorySafetyInspector;
 };
 
@@ -110,6 +120,10 @@ const VIEWER_READ_ENDPOINTS: Array<string | RegExp> = [
   "/operations/snapshot",
   "/repositories",
   /^\/repositories\/[^/]+\/safety$/,
+  "/requirements",
+  /^\/requirements\/[^/]+\/merge-candidate$/,
+  /^\/requirements\/[^/]+\/report$/,
+  /^\/requirements\/[^/]+$/,
   "/workflows",
   /^\/workflows\/[^/]+$/,
   /^\/workflows\/[^/]+\/report$/,
@@ -145,6 +159,7 @@ function createStateStores(input: {
   activeStateBackend: "file" | "postgres";
   auditStore: AuditStore;
   jobStore: JobStore;
+  requirementStore: RequirementStore;
   repositoryStore: RepositoryStore;
   runStore: RunStore;
 } {
@@ -153,6 +168,9 @@ function createStateStores(input: {
       activeStateBackend: "postgres",
       auditStore: new PrismaAuditStore(input.prismaClient),
       jobStore: new PrismaJobStore(input.prismaClient),
+      requirementStore: new FileRequirementStore({
+        stateFile: join(input.stateRoot, "requirements.json"),
+      }),
       repositoryStore: new PrismaRepositoryStore(input.prismaClient),
       runStore: new PrismaRunStore(input.prismaClient),
     };
@@ -165,6 +183,9 @@ function createStateStores(input: {
     }),
     jobStore: new FileJobStore({
       stateFile: join(input.stateRoot, "jobs.json"),
+    }),
+    requirementStore: new FileRequirementStore({
+      stateFile: join(input.stateRoot, "requirements.json"),
     }),
     repositoryStore: new FileRepositoryStore({
       stateFile: join(input.stateRoot, "repositories.json"),
@@ -317,6 +338,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
   const repositoryStore =
     options.repositoryStore ?? stateStores.repositoryStore;
+  const requirementStore =
+    options.requirementStore ?? stateStores.requirementStore;
   const repositorySafetyInspector =
     options.repositorySafetyInspector ?? inspectRepositorySafety;
 
@@ -755,6 +778,221 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     });
 
     return repository;
+  });
+
+  app.post("/requirements", async (request, reply) => {
+    const parsed = createRequirementDeliveryTicketRequestSchema.safeParse(
+      request.body,
+    );
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "invalid_requirement_delivery_ticket_request",
+        issues: parsed.error.issues,
+      });
+    }
+
+    const requirement = await requirementStore.create(parsed.data);
+
+    return reply.code(201).send(requirement);
+  });
+
+  app.get<{
+    Querystring: {
+      limit?: string;
+      repositoryId?: string;
+      repositoryPath?: string;
+      status?: string;
+    };
+  }>("/requirements", async (request, reply) => {
+    const requirementStatus = request.query.status
+      ? requirementStatusSchema.safeParse(request.query.status)
+      : undefined;
+
+    if (requirementStatus && !requirementStatus.success) {
+      return reply.code(400).send({
+        error: "invalid_requirement_status",
+        allowedStatuses: requirementStatusSchema.options,
+      });
+    }
+
+    const repositoryPath = request.query.repositoryPath
+      ? resolve(request.query.repositoryPath)
+      : undefined;
+    const requirements = (await requirementStore.list()).filter(
+      (requirement) => {
+        if (
+          requirementStatus?.data &&
+          requirement.status !== requirementStatus.data
+        ) {
+          return false;
+        }
+
+        if (
+          request.query.repositoryId &&
+          requirement.repositoryId !== request.query.repositoryId
+        ) {
+          return false;
+        }
+
+        if (
+          repositoryPath &&
+          (!requirement.repositoryPath ||
+            resolve(requirement.repositoryPath) !== repositoryPath)
+        ) {
+          return false;
+        }
+
+        return true;
+      },
+    );
+
+    return limitToRecent(requirements, request.query.limit);
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/requirements/:id", async (request, reply) => {
+    const requirement = await requirementStore.get(request.params.id);
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    return requirement;
+  });
+
+  app.patch<{
+    Params: { id: string };
+  }>("/requirements/:id", async (request, reply) => {
+    const parsed = updateRequirementDeliveryTicketRequestSchema.safeParse(
+      request.body,
+    );
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "invalid_requirement_delivery_ticket_update",
+        issues: parsed.error.issues,
+      });
+    }
+
+    const requirement = await requirementStore.update(
+      request.params.id,
+      parsed.data,
+    );
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    return requirement;
+  });
+
+  app.post<{
+    Params: { id: string };
+  }>("/requirements/:id/confirm-plan", async (request, reply) => {
+    try {
+      const requirement = await requirementStore.confirmPlan(request.params.id);
+
+      if (!requirement) {
+        return reply.code(404).send({ error: "requirement_not_found" });
+      }
+
+      return requirement;
+    } catch (error) {
+      if (error instanceof RequirementPlanNotReadyError) {
+        return reply.code(409).send({
+          error: "requirement_plan_not_ready",
+          message: error.message,
+          missingFields: error.missingFields,
+        });
+      }
+
+      if (error instanceof RequirementPlanConfirmationBlockedError) {
+        return reply.code(409).send({
+          error: "requirement_plan_confirmation_blocked",
+          message: error.message,
+          status: error.status,
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/requirements/:id/report", async (request, reply) => {
+    const requirement = await requirementStore.get(request.params.id);
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    if (!requirement.currentWorkflowRunId) {
+      return reply.code(409).send({
+        error: "requirement_report_not_ready",
+        message:
+          "Requirement has no linked workflow run with report evidence yet.",
+        status: requirement.status,
+      });
+    }
+
+    await activeRunner.refreshFromStore();
+
+    try {
+      return activeRunner.getReport(requirement.currentWorkflowRunId);
+    } catch {
+      return reply.code(409).send({
+        error: "requirement_report_not_ready",
+        message:
+          "Linked workflow report evidence is not available for this requirement.",
+        workflowRunId: requirement.currentWorkflowRunId,
+        status: requirement.status,
+      });
+    }
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/requirements/:id/merge-candidate", async (request, reply) => {
+    const requirement = await requirementStore.get(request.params.id);
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    if (!requirement.currentWorkflowRunId) {
+      return reply.code(409).send({
+        error: "requirement_merge_candidate_not_ready",
+        message:
+          "Requirement has no linked workflow run with merge candidate evidence yet.",
+        status: requirement.status,
+      });
+    }
+
+    await activeRunner.refreshFromStore();
+
+    try {
+      return activeRunner.getMergeCandidate(requirement.currentWorkflowRunId);
+    } catch (error) {
+      if (error instanceof WorkflowMergeCandidateNotReadyError) {
+        return reply.code(409).send({
+          error: "requirement_merge_candidate_not_ready",
+          message: error.message,
+          workflowRunId: requirement.currentWorkflowRunId,
+          status: error.status,
+        });
+      }
+
+      return reply.code(409).send({
+        error: "requirement_merge_candidate_not_ready",
+        message:
+          "Linked workflow merge candidate evidence is not available for this requirement.",
+        workflowRunId: requirement.currentWorkflowRunId,
+        status: requirement.status,
+      });
+    }
   });
 
   app.post("/workflows/demo", async (_request, reply) => {
