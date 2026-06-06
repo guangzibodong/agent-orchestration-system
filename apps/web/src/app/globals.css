@@ -284,9 +284,16 @@ button {
   gap: 8px;
 }
 
+.requirementQueueItem.selected,
+.decisionItem.selected {
+  border-color: #7bb3c7;
+  box-shadow: 0 0 0 2px rgba(71, 139, 163, 0.16);
+}
+
 .requirementQueueItem div,
 .requirementQueueItem p,
 .requirementQueueItem small,
+.requirementQueueSelect,
 .decisionItem strong,
 .decisionItem p,
 .deliveryEmptyState span,
@@ -295,13 +302,22 @@ button {
   overflow-wrap: anywhere;
 }
 
-.requirementQueueItem div:first-child {
+.requirementQueueSelect {
   display: grid;
   gap: 3px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
 }
 
 .requirementQueueItem span,
 .requirementQueueItem small,
+.requirementQueueSelect span,
 .decisionItem span,
 .deliveryEmptyState span,
 .repositorySafetyCard p,
@@ -802,6 +818,16 @@ button {
 .decisionItem {
   display: grid;
   gap: 8px;
+  width: 100%;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.requirementQueueSelect:hover strong,
+.decisionItem:hover strong {
+  color: var(--accent-strong);
 }
 
 .decisionItem.danger span {

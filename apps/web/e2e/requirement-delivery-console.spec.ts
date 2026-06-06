@@ -61,6 +61,24 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(decisionQueue).toContainText("Needs review");
     await expect(decisionQueue).toContainText("Retry failed gate");
     await expect(decisionQueue).toContainText("Review merge candidate");
+
+    const focusPanel = page.locator(".deliveryFocusPanel");
+    await expect(
+      focusPanel.getByRole("heading", { name: "Update billing copy" }),
+    ).toBeVisible();
+    await decisionQueue.getByText("Review merge candidate").click();
+    await expect(
+      focusPanel.getByRole("heading", { name: "Harden auth checks" }),
+    ).toBeVisible();
+    await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
+      "C:/work/auth-service",
+    );
+    await requirementQueue
+      .getByRole("button", { name: "Select requirement Update billing copy" })
+      .click();
+    await expect(
+      focusPanel.getByRole("heading", { name: "Update billing copy" }),
+    ).toBeVisible();
   });
 
   test("keeps viewer mode read-only while evidence stays readable", async ({
@@ -547,7 +565,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       .filter({ hasText: "Confirm checkout plan" });
     await expect(planItem).toContainText("Plan review");
 
-    await planItem.getByRole("button", { name: "Confirm plan" }).click();
+    await planItem
+      .getByRole("button", { exact: true, name: "Confirm plan" })
+      .click();
     await expect(
       planItem.getByRole("button", { name: "Confirming plan" }),
     ).toBeDisabled();
@@ -560,7 +580,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       })
       .toContain("confirm-plan:requirement-plan");
 
-    await planItem.getByRole("button", { name: "Enqueue" }).click();
+    await planItem
+      .getByRole("button", { exact: true, name: "Enqueue" })
+      .click();
     await expect(planItem).toContainText("Running");
     await expect(
       planItem.getByRole("link", { name: /workflow-lifecycle/i }),
@@ -574,7 +596,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       retryItem.getByRole("link", { name: /workflow-failed/i }),
     ).toBeVisible();
-    await retryItem.getByRole("button", { name: "Retry" }).click();
+    await retryItem
+      .getByRole("button", { exact: true, name: "Retry" })
+      .click();
     await expect(retryItem).toContainText("Ready to run");
     await expect(retryItem).toContainText("Ready");
     await expect(retryItem).toContainText("Enqueue");

@@ -82,9 +82,13 @@ export function RequirementDeliveryConsole({
   const [newRequirementMessage, setNewRequirementMessage] = useState<string>();
   const [requirementActionState, setRequirementActionState] =
     useState<RequirementActionState>();
+  const [selectedRequirementId, setSelectedRequirementId] = useState<string>();
   const queueRows = buildRequirementQueueRows(model.requirements);
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
-  const selectedRequirement = model.requirements[0];
+  const selectedRequirement =
+    model.requirements.find(
+      (requirement) => requirement.id === selectedRequirementId,
+    ) ?? model.requirements[0];
   const stageSteps = buildRequirementStageStepper(
     selectedRequirement?.requirementStage ?? "draft",
   );
@@ -243,11 +247,22 @@ export function RequirementDeliveryConsole({
           {queueRows.length ? (
             <div className="requirementQueueList">
               {queueRows.map((row) => (
-                <article className="requirementQueueItem" key={row.id}>
-                  <div>
+                <article
+                  className={`requirementQueueItem ${
+                    row.id === selectedRequirement?.id ? "selected" : ""
+                  }`}
+                  key={row.id}
+                >
+                  <button
+                    aria-pressed={row.id === selectedRequirement?.id}
+                    aria-label={`Select requirement ${row.title}`}
+                    className="requirementQueueSelect"
+                    onClick={() => setSelectedRequirementId(row.id)}
+                    type="button"
+                  >
                     <strong>{row.title}</strong>
                     <span>{row.repositoryLabel}</span>
-                  </div>
+                  </button>
                   <div className="requirementQueueMeta">
                     <span>{row.stageLabel}</span>
                     <span>{row.riskLabel}</span>
@@ -384,14 +399,21 @@ export function RequirementDeliveryConsole({
           {decisionRows.length ? (
             <div className="decisionQueueList">
               {decisionRows.map((decision) => (
-                <article
-                  className={`decisionItem ${decision.tone}`}
+                <button
+                  aria-pressed={decision.requirementId === selectedRequirement?.id}
+                  className={`decisionItem ${decision.tone} ${
+                    decision.requirementId === selectedRequirement?.id
+                      ? "selected"
+                      : ""
+                  }`}
                   key={decision.id}
+                  onClick={() => setSelectedRequirementId(decision.requirementId)}
+                  type="button"
                 >
                   <span>{decision.severityLabel}</span>
                   <strong>{decision.title}</strong>
                   <p>{decision.actionLabel}</p>
-                </article>
+                </button>
               ))}
             </div>
           ) : (
