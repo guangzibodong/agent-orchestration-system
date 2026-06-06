@@ -112,6 +112,11 @@ export function RequirementDeliveryConsoleClient() {
     requirementId: string,
     action: RequirementLifecycleAction
   ) {
+    if (action === "cancel") {
+      await handleRequirementJobCancel(requirementId);
+      return;
+    }
+
     const result = await api(`/requirements/${requirementId}/${action}`, {
       method: "POST"
     });
@@ -155,6 +160,41 @@ export function RequirementDeliveryConsoleClient() {
     setModel(nextModel);
     setLoadState("ready");
     setMessage(buildLifecycleMessage(action, lifecycleResult.requirement));
+    setJobStatusByRequirementId(nextJobStatusByRequirementId);
+    setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
+  }
+
+  async function handleRequirementJobCancel(requirementId: string) {
+    const trackedJob = activeJobsByRequirementId[requirementId];
+
+    if (!trackedJob) {
+      throw new Error("Active job is required before canceling a requirement");
+    }
+
+    const canceledJob = workflowJobSchema.parse(
+      await api(`/jobs/${encodeURIComponent(trackedJob.jobId)}/cancel`, {
+        method: "POST"
+      })
+    );
+    const nextJobStatusByRequirementId = {
+      ...jobStatusByRequirementId,
+      [requirementId]: canceledJob.status
+    };
+    const nextActiveJobsByRequirementId = { ...activeJobsByRequirementId };
+    delete nextActiveJobsByRequirementId[requirementId];
+
+    const nextModel = await loadRequirementDeliveryModel(
+      api,
+      {},
+      {
+        jobStatusByRequirementId: nextJobStatusByRequirementId,
+        workflowOverrides: buildWorkflowOverrides(workflowOverridesById)
+      }
+    );
+
+    setModel(nextModel);
+    setLoadState("ready");
+    setMessage(buildCanceledJobMessage(requirementId, nextModel));
     setJobStatusByRequirementId(nextJobStatusByRequirementId);
     setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
   }
@@ -426,6 +466,23 @@ function buildSettledExecutionMessage(
     : "Requirement execution settled; evidence refreshed";
 }
 
+function buildCanceledJobMessage(
+  requirementId: string,
+  model: DeliveryConsoleModel
+): string {
+  const requirement = model.requirements.find(
+    (item) => item.id === requirementId
+  );
+  const title = requirement?.title ?? requirementId;
+  const nextAction = requirement?.availableActions.includes("enqueue")
+    ? "Enqueue"
+    : requirement?.availableActions.includes("retry")
+      ? "Retry"
+      : "Use the next action";
+
+  return `Requirement job canceled: ${title}. ${nextAction} to run fresh evidence.`;
+}
+
 function parseRequirementLifecycleResult(value: unknown): {
   job?: WorkflowJob;
   jobStatus?: WorkflowJobStatus;
@@ -479,6 +536,8 @@ function buildLifecycleMessage(
   const title = requirement?.title ?? "Requirement";
 
   switch (action) {
+    case "cancel":
+      return `Requirement job canceled: ${title}. Retry to run fresh evidence.`;
     case "confirm-plan":
       return `Plan confirmed: ${title}`;
     case "enqueue":

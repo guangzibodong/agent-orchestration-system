@@ -9,6 +9,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import type {
@@ -68,19 +69,21 @@ type RequirementReviewActionState = {
 };
 
 const actionLabels: Record<RequirementLifecycleAction, string> = {
+  cancel: "Cancel",
   "confirm-plan": "Confirm plan",
   enqueue: "Enqueue",
   retry: "Retry",
 };
 
 const loadingActionLabels: Record<RequirementLifecycleAction, string> = {
+  cancel: "Canceling",
   "confirm-plan": "Confirming plan",
   enqueue: "Enqueueing",
   retry: "Retrying",
 };
 
 const successActionMessages: Record<
-  Exclude<RequirementLifecycleAction, "retry">,
+  Exclude<RequirementLifecycleAction, "cancel" | "retry">,
   string
 > = {
   "confirm-plan": "Plan confirmed",
@@ -597,6 +600,10 @@ function buildRequirementLifecycleSuccessMessage(
   action: RequirementLifecycleAction,
   requirementTitle: string,
 ): string {
+  if (action === "cancel") {
+    return `Requirement job canceled: ${requirementTitle}. Run again for fresh evidence.`;
+  }
+
   if (action === "retry") {
     return `${retryResetMessage} ${requirementTitle}`;
   }
@@ -661,7 +668,11 @@ function RequirementQueueActions({
 
         return (
           <button
-            className={action === "retry" ? "secondaryButton dangerButton" : "secondaryButton"}
+            className={
+              action === "cancel" || action === "retry"
+                ? "secondaryButton dangerButton"
+                : "secondaryButton"
+            }
             disabled={disabled || isLoading}
             key={action}
             onClick={() => onAction(action)}
@@ -698,6 +709,8 @@ function ActionIcon({
   const className = spinning ? "spinIcon" : undefined;
 
   switch (action) {
+    case "cancel":
+      return <X className={className} size={16} aria-hidden="true" />;
     case "confirm-plan":
       return <Check className={className} size={16} aria-hidden="true" />;
     case "enqueue":

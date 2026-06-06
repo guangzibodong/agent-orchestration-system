@@ -6,7 +6,10 @@ import type {
   WorkflowRun,
   WorkflowStatus
 } from "@mawo/shared";
-import { canCleanupWorkflowStatus } from "../workflow-actions";
+import {
+  canCancelJobStatus,
+  canCleanupWorkflowStatus
+} from "../workflow-actions";
 
 export type RequirementStage =
   | "draft"
@@ -49,7 +52,11 @@ export type RequirementAgentAvailabilitySummary = {
   }>;
 };
 
-export type RequirementLifecycleAction = "confirm-plan" | "enqueue" | "retry";
+export type RequirementLifecycleAction =
+  | "cancel"
+  | "confirm-plan"
+  | "enqueue"
+  | "retry";
 export type RequirementReviewAction = "approve" | "reject";
 
 export type RequirementArtifactLink = {
@@ -673,7 +680,11 @@ export function mapRequirementTicketToSummary(
       ? context.repositorySafetyByRepositoryId?.[requirement.repositoryId]
       : undefined
   );
-  const baseAvailableActions = buildRequirementAvailableActions(requirement);
+  const currentJobStatus = context.jobStatusByRequirementId?.[requirement.id];
+  const baseAvailableActions = buildRequirementAvailableActions(
+    requirement,
+    currentJobStatus
+  );
   const repositoryAvailableActions = filterRepositoryBlockedLifecycleActions(
     baseAvailableActions,
     repositorySafety
@@ -726,7 +737,7 @@ export function mapRequirementTicketToSummary(
         : mapRequirementNextAction(requirement, workflowStatus),
     nodeLabel: buildRequirementNodeLabel(requirement),
     updatedAt: requirement.updatedAt,
-    currentJobStatus: context.jobStatusByRequirementId?.[requirement.id],
+    currentJobStatus,
     workflowRunHref: workflowRunId ? `/workflows/${workflowRunId}` : undefined,
     workflowRunId,
     workflowRunStatus: workflowStatus,
@@ -861,7 +872,9 @@ function filterRepositoryBlockedLifecycleActions(
     return actions;
   }
 
-  return actions.filter((action) => action === "confirm-plan");
+  return actions.filter(
+    (action) => action === "cancel" || action === "confirm-plan"
+  );
 }
 
 function buildRepositorySafetyActionBlockReason(
@@ -955,7 +968,9 @@ function filterAgentBlockedLifecycleActions(
     return actions;
   }
 
-  return actions.filter((action) => action === "confirm-plan");
+  return actions.filter(
+    (action) => action === "cancel" || action === "confirm-plan"
+  );
 }
 
 function buildAgentAvailabilityActionBlockReason(
@@ -996,13 +1011,16 @@ function buildWorkflowAvailableActions(
 }
 
 function buildRequirementAvailableActions(
-  requirement: RequirementDeliveryTicket
+  requirement: RequirementDeliveryTicket,
+  currentJobStatus?: WorkflowJobStatus
 ): RequirementLifecycleAction[] {
   switch (requirement.status) {
     case "plan_review":
       return ["confirm-plan"];
     case "ready_to_run":
       return ["enqueue"];
+    case "running":
+      return canCancelJobStatus(currentJobStatus) ? ["cancel"] : [];
     case "needs_rework":
       return requirement.currentWorkflowRunId ? ["retry"] : [];
     default:

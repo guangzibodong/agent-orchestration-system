@@ -1809,6 +1809,155 @@ test.describe("Requirement Delivery Console smoke", () => {
     ]);
   });
 
+  test("operator can cancel an active requirement job without stale running evidence", async ({
+    page,
+  }) => {
+    const workflows: WorkflowRun[] = [];
+    const requirements: RequirementDeliveryTicket[] = [
+      {
+        ...lifecyclePlanRequirement,
+        id: "requirement-cancel",
+        title: "Cancel active checkout evidence",
+        status: "ready_to_run",
+        updatedAt: "2026-06-06T12:20:00.000Z",
+      },
+    ];
+    const canceledJobs: string[] = [];
+    let jobPolls = 0;
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, workflows, {
+      requirements,
+      onRequirementAction: ({ action, id }) => {
+        if (id !== "requirement-cancel" || action !== "enqueue") {
+          throw new Error(`Unexpected action ${action}:${id}`);
+        }
+
+        workflows.push({
+          ...lifecycleQueuedWorkflow,
+          id: "workflow-cancel",
+          goal: "Cancel active checkout evidence",
+          status: "ready",
+          updatedAt: "2026-06-06T12:21:00.000Z",
+        });
+
+        return {
+          requirement: updateRequirement(requirements, id, {
+            status: "running",
+            currentWorkflowRunId: "workflow-cancel",
+            runLinks: [
+              {
+                workflowRunId: "workflow-cancel",
+                status: "ready",
+                linkedAt: "2026-06-06T12:21:00.000Z",
+              },
+            ],
+            updatedAt: "2026-06-06T12:21:00.000Z",
+          }),
+          workflow: workflows[0],
+          job: {
+            id: "job-cancel",
+            workflowId: "workflow-cancel",
+            status: "queued",
+            createdAt: "2026-06-06T12:21:00.000Z",
+            updatedAt: "2026-06-06T12:21:00.000Z",
+          },
+        };
+      },
+      onJobCancel: ({ id }) => {
+        if (id !== "job-cancel") {
+          throw new Error(`Unexpected job cancel ${id}`);
+        }
+
+        canceledJobs.push(id);
+        workflows[0] = {
+          ...workflows[0]!,
+          status: "ready",
+          updatedAt: "2026-06-06T12:22:00.000Z",
+        };
+        updateRequirement(requirements, "requirement-cancel", {
+          status: "ready_to_run",
+          currentWorkflowRunId: "workflow-cancel",
+          runLinks: [
+            {
+              workflowRunId: "workflow-cancel",
+              status: "ready",
+              linkedAt: "2026-06-06T12:22:00.000Z",
+            },
+          ],
+          updatedAt: "2026-06-06T12:22:00.000Z",
+        });
+
+        return {
+          id,
+          workflowId: "workflow-cancel",
+          status: "canceled",
+          createdAt: "2026-06-06T12:21:00.000Z",
+          updatedAt: "2026-06-06T12:22:00.000Z",
+          finishedAt: "2026-06-06T12:22:00.000Z",
+        };
+      },
+      onJobRequest: ({ id }) => {
+        if (id !== "job-cancel") {
+          throw new Error(`Unexpected job poll ${id}`);
+        }
+
+        jobPolls += 1;
+        return {
+          id,
+          workflowId: "workflow-cancel",
+          status: "running",
+          createdAt: "2026-06-06T12:21:00.000Z",
+          updatedAt: "2026-06-06T12:21:01.000Z",
+        };
+      },
+    });
+
+    await page.goto("/");
+
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Cancel active checkout evidence" });
+    const focusPanel = page.locator(".deliveryFocusPanel");
+    await expect(queueItem).toContainText("Ready to run");
+
+    await queueItem.getByRole("button", { exact: true, name: "Enqueue" }).click();
+    await expect(queueItem).toContainText("Running");
+    await expect(queueItem).toContainText("Queued");
+    await expect(queueItem.getByRole("button", { exact: true, name: "Cancel" })).toBeVisible();
+
+    await queueItem.getByRole("button", { exact: true, name: "Cancel" }).click();
+    await expect
+      .poll(() => canceledJobs, {
+        message: "wait for job cancel request",
+      })
+      .toEqual(["job-cancel"]);
+    await expect(page.getByLabel("Workflow sync")).toContainText(
+      "Requirement job canceled: Cancel active checkout evidence. Enqueue to run fresh evidence.",
+    );
+    await expect(queueItem).toContainText("Ready to run");
+    await expect(queueItem).toContainText("Canceled");
+    await expect(queueItem).toContainText("Enqueue");
+    await expect(queueItem).not.toContainText("Queued");
+    await expect(queueItem).not.toContainText("Running");
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Not review-ready",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
+      "Review-ready merge candidate",
+    );
+
+    const pollsAfterCancel = jobPolls;
+    await page.waitForTimeout(1800);
+    expect(jobPolls).toBe(pollsAfterCancel);
+  });
+
   test("automatically refreshes active requirement jobs after enqueue", async ({
     page,
   }) => {
@@ -1966,6 +2115,7 @@ async function mockApi(
       method: string;
       pathname: string;
     }) => void;
+    onJobCancel?: (request: { id: string }) => WorkflowJob | unknown;
     onJobRequest?: (request: { id: string }) => WorkflowJob | unknown;
     launchGateEvidence?: LaunchGateEvidence;
     mergeCandidates?: Record<string, unknown>;
@@ -2019,6 +2169,22 @@ async function mockApi(
         status: "queued",
         createdAt: "2026-06-06T11:00:00.000Z",
         updatedAt: "2026-06-06T11:00:00.000Z",
+      };
+
+      await route.fulfill({ json: job });
+      return;
+    }
+
+    const jobCancelMatch = url.pathname.match(/^\/jobs\/([^/]+)\/cancel$/);
+    if (request.method() === "POST" && jobCancelMatch) {
+      const id = decodeURIComponent(jobCancelMatch[1] ?? "");
+      const job = options.onJobCancel?.({ id }) ?? {
+        id,
+        workflowId: "",
+        status: "canceled",
+        createdAt: "2026-06-06T12:00:00.000Z",
+        updatedAt: "2026-06-06T12:00:00.000Z",
+        finishedAt: "2026-06-06T12:00:00.000Z",
       };
 
       await route.fulfill({ json: job });

@@ -68,12 +68,14 @@ const stageLabels: Record<RequirementStage, string> = {
 };
 
 const lifecycleActionLabels: Record<RequirementLifecycleAction, string> = {
+  cancel: "Cancel",
   "confirm-plan": "Confirm plan",
   enqueue: "Enqueue",
   retry: "Retry"
 };
 
 const lifecycleLoadingLabels: Record<RequirementLifecycleAction, string> = {
+  cancel: "Canceling",
   "confirm-plan": "Confirming plan",
   enqueue: "Enqueueing",
   retry: "Retrying"
@@ -436,7 +438,7 @@ function RequirementDetailLifecycleActions({
           <span>{requirement.actionBlockReason}</span>
         </p>
       ) : null}
-      {(["confirm-plan", "enqueue", "retry"] as RequirementLifecycleAction[]).map(
+      {(["confirm-plan", "enqueue", "cancel", "retry"] as RequirementLifecycleAction[]).map(
         (action) => {
           const isLoading =
             actionState?.status === "loading" &&
@@ -446,7 +448,9 @@ function RequirementDetailLifecycleActions({
           return (
             <button
               className={
-                action === "retry" ? "secondaryButton dangerButton" : "secondaryButton"
+                action === "cancel" || action === "retry"
+                  ? "secondaryButton dangerButton"
+                  : "secondaryButton"
               }
               disabled={disabled || !availableActions.includes(action) || isLoading}
               key={action}
@@ -475,6 +479,8 @@ function RequirementDetailActionIcon({
   const className = spinning ? "spinIcon" : undefined;
 
   switch (action) {
+    case "cancel":
+      return <X className={className} size={16} aria-hidden="true" />;
     case "confirm-plan":
       return <Check className={className} size={16} aria-hidden="true" />;
     case "enqueue":
