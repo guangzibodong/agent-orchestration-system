@@ -37,7 +37,7 @@ describe("delivery console model", () => {
       title: "Fix checkout test flake",
       repositoryLabel: "C:/work/shop",
       repositorySafety: {
-        allowedRootLabel: "Allowed root accepted by API",
+        allowedRootLabel: "Allowed root pending preflight",
         blockedReason: undefined,
         branchLabel: "Branch pending preflight",
         cleanStateLabel: "Clean state pending preflight",
@@ -124,6 +124,10 @@ describe("delivery console model", () => {
       id: "requirement-1",
       requirementStage: "plan_review",
       nextAction: "Confirm plan",
+      repositorySafety: expect.objectContaining({
+        allowedRootLabel: "Allowed root pending preflight",
+        cleanStateLabel: "Clean state pending preflight"
+      }),
       workflowRunStatusLabel: "No workflow run linked",
       availableActions: ["confirm-plan"]
     });

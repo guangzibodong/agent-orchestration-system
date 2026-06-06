@@ -267,7 +267,9 @@ function buildTicketRepositorySafety(
         : "Clean state pending preflight"
       : "No repository selected",
     allowedRootLabel: hasRepository
-      ? "Allowed root accepted by API"
+      ? hasRequirementPreflightEvidence(executionStatus)
+        ? "Allowed root accepted by API"
+        : "Allowed root pending preflight"
       : "Allowed root not checked",
     mergePolicyLabel: noAutoMergePolicyLabel,
     blockedReason: buildTicketBlockedReason(
@@ -348,7 +350,9 @@ function buildRepositorySafety(workflow: WorkflowRun): RepositorySafetySummary {
         : "Clean state pending preflight"
       : "No repository selected",
     allowedRootLabel: hasRepository
-      ? "Allowed root accepted by API"
+      ? hasWorkflowPreflightEvidence(workflow)
+        ? "Allowed root accepted by API"
+        : "Allowed root pending preflight"
       : "Allowed root not checked",
     mergePolicyLabel: noAutoMergePolicyLabel,
     blockedReason,
@@ -377,6 +381,32 @@ function buildRepositoryBlockedReason(
   }
 
   return undefined;
+}
+
+function hasWorkflowPreflightEvidence(workflow: WorkflowRun): boolean {
+  return (
+    workflow.status === "running" ||
+    workflow.status === "gate_failed" ||
+    workflow.status === "needs_review" ||
+    workflow.status === "completed" ||
+    workflow.status === "aborted" ||
+    workflow.status === "archived" ||
+    workflow.status === "failed"
+  );
+}
+
+function hasRequirementPreflightEvidence(
+  executionStatus: WorkflowRun["status"]
+): boolean {
+  return (
+    executionStatus === "running" ||
+    executionStatus === "gate_failed" ||
+    executionStatus === "needs_review" ||
+    executionStatus === "completed" ||
+    executionStatus === "aborted" ||
+    executionStatus === "archived" ||
+    executionStatus === "failed"
+  );
 }
 
 function buildRepositoryRecoveryAction(
