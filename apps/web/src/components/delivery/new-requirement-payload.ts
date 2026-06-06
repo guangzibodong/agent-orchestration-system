@@ -11,7 +11,7 @@ export type NewRequirementDraft = {
   contextPaths: string;
   riskLevel: string;
   tasks: NewRequirementTaskDraft[];
-  qualityGates: string;
+  qualityGates: NewRequirementQualityGateDraft[] | string;
 };
 
 export type NewRequirementTaskDraft = {
@@ -21,6 +21,12 @@ export type NewRequirementTaskDraft = {
   instructions: string;
   timeoutMs: string;
   dependsOn: string;
+};
+
+export type NewRequirementQualityGateDraft = {
+  command: string;
+  required: boolean;
+  timeoutMs: string;
 };
 
 export type NewRequirementPayload = {
@@ -42,7 +48,12 @@ export type NewRequirementPayload = {
     timeoutMs?: number;
     dependsOn?: string[];
   }>;
-  qualityGates: Array<{ title: string; command: string; required: boolean }>;
+  qualityGates: Array<{
+    title: string;
+    command: string;
+    required: boolean;
+    timeoutMs?: number;
+  }>;
 };
 
 export type NewRequirementPayloadResult =
@@ -96,6 +107,10 @@ export function buildNewRequirementPayload(
     errors.push("Task timeouts must be positive milliseconds.");
   }
 
+  if (qualityGates.some((gate) => gate.timeoutMs === "invalid")) {
+    errors.push("Quality gate timeouts must be positive milliseconds.");
+  }
+
   if (!qualityGates.some((gate) => gate.required)) {
     errors.push("Add at least one required quality gate.");
   }
@@ -131,7 +146,14 @@ export function buildNewRequirementPayload(
           : {}),
         ...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}),
       })),
-      qualityGates,
+      qualityGates: qualityGates.map((gate) => ({
+        title: gate.title,
+        command: gate.command,
+        required: gate.required,
+        ...(typeof gate.timeoutMs === "number"
+          ? { timeoutMs: gate.timeoutMs }
+          : {}),
+      })),
     },
   };
 }
@@ -163,7 +185,7 @@ export function newRequirementDraftFromFormData(
     contextPaths: getFormValue(formData, "contextPaths"),
     riskLevel: getFormValue(formData, "riskLevel"),
     tasks: getTaskDraftsFromFormData(formData),
-    qualityGates: getFormValue(formData, "qualityGates"),
+    qualityGates: getQualityGateDraftsFromFormData(formData),
   };
 }
 
@@ -200,6 +222,29 @@ function getTaskDraftsFromFormData(formData: FormData): NewRequirementTaskDraft[
     instructions: instructions[index] ?? "",
     timeoutMs: timeoutMs[index] ?? "",
     dependsOn: dependsOn[index] ?? "",
+  }));
+}
+
+function getQualityGateDraftsFromFormData(
+  formData: FormData,
+): NewRequirementQualityGateDraft[] | string {
+  const commands = formData.getAll("gateCommand").map((value) => String(value));
+
+  if (!commands.length) {
+    return getFormValue(formData, "qualityGates");
+  }
+
+  const required = formData
+    .getAll("gateRequired")
+    .map((value) => String(value));
+  const timeoutMs = formData
+    .getAll("gateTimeoutMs")
+    .map((value) => String(value));
+
+  return commands.map((command, index) => ({
+    command,
+    required: required[index] !== "false" && required[index] !== "optional",
+    timeoutMs: timeoutMs[index] ?? "",
   }));
 }
 
@@ -240,8 +285,40 @@ function parseList(value: string): string[] {
 }
 
 function parseQualityGates(
-  value: string,
-): Array<{ title: string; command: string; required: boolean }> {
+  value: NewRequirementDraft["qualityGates"],
+): Array<{
+  title: string;
+  command: string;
+  required: boolean;
+  timeoutMs?: number | "invalid";
+}> {
+  if (Array.isArray(value)) {
+    return value
+      .map((gate) => {
+        const command = cleanValue(gate.command);
+        const timeoutMs = parseOptionalPositiveInteger(gate.timeoutMs);
+
+        return {
+          title: command,
+          command,
+          required: gate.required,
+          timeoutMs,
+        };
+      })
+      .filter(
+        (gate) =>
+          Boolean(gate.command) ||
+          typeof gate.timeoutMs === "number" ||
+          gate.timeoutMs === "invalid",
+      )
+      .map((gate) => ({
+        title: gate.title,
+        command: gate.command,
+        required: gate.required,
+        ...(gate.timeoutMs !== undefined ? { timeoutMs: gate.timeoutMs } : {}),
+      }));
+  }
+
   return parseList(value).map((line) => {
     const optionalMatch = line.match(/^optional\s*:\s*(?<command>.+)$/i);
     const requiredMatch = line.match(/^required\s*:\s*(?<command>.+)$/i);

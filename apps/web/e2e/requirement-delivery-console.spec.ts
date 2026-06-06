@@ -709,6 +709,23 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Current workflow",
       "Workflow report",
     ]);
+
+    await page.getByRole("button", { name: "New Requirement" }).click();
+    const mobileFlow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await expect(mobileFlow).toBeVisible();
+    await expectNoHorizontalDocumentOverflow(page);
+    await expectElementsInsideViewport(page, mobileFlow);
+    await expectLabelsInsideViewport(page, [
+      "Gate 1 command",
+      "Gate 1 requirement",
+      "Gate 1 timeout",
+      "Gate 2 command",
+      "Gate 2 requirement",
+      "Gate 2 timeout",
+      "Create requirement draft",
+    ]);
   });
 
   test("New Requirement flow creates a structured requirement request when available", async ({
@@ -763,7 +780,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     await chooseTaskAgent(flow, /task 2 agent/i, "codex");
     await fillField(flow, /task 2 instructions/i, "Review the generated patch.");
     await fillField(flow, /task 2 depends/i, "task-1");
-    await fillField(flow, /quality gate|gate/i, "npm test\noptional: npm run smoke:ui");
+    await fillField(flow, /gate 1 command/i, "npm test");
+    await fillField(flow, /gate 1 timeout/i, "120000");
+    await chooseGateRequired(flow, /gate 2 requirement/i, "optional");
+    await fillField(flow, /gate 2 command/i, "npm run smoke:ui");
+    await fillField(flow, /gate 2 timeout/i, "180000");
     await chooseRisk(flow, "medium");
 
     await flow
@@ -807,10 +828,12 @@ test.describe("Requirement Delivery Console smoke", () => {
         expect.objectContaining({
           command: "npm test",
           required: true,
+          timeoutMs: 120000,
         }),
         expect.objectContaining({
           command: "npm run smoke:ui",
           required: false,
+          timeoutMs: 180000,
         }),
       ]),
     });
@@ -1429,6 +1452,12 @@ async function chooseTaskAgent(scope: Locator, label: RegExp, value: string) {
   const agent = scope.getByLabel(label).first();
   await expect(agent).toBeVisible();
   await agent.selectOption(value);
+}
+
+async function chooseGateRequired(scope: Locator, label: RegExp, value: string) {
+  const gateRequirement = scope.getByLabel(label).first();
+  await expect(gateRequirement).toBeVisible();
+  await gateRequirement.selectOption(value);
 }
 
 async function expectNoHorizontalDocumentOverflow(page: Page) {

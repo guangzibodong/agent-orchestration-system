@@ -15,7 +15,8 @@ type NewRequirementPanelProps = {
 };
 
 const taskSlots = [1, 2, 3, 4, 5];
-const defaultQualityGates = "delivery vitest\nweb typecheck";
+const gateSlots = [1, 2, 3];
+const defaultGateCommands = ["delivery vitest", "web typecheck", ""];
 
 export function NewRequirementPanel({
   viewerMode = false,
@@ -268,17 +269,55 @@ export function NewRequirementPanel({
           </div>
         </fieldset>
 
-        <label className="field">
-          <span>Quality gates</span>
-          <textarea
-            name="qualityGates"
-            defaultValue={defaultQualityGates}
-            placeholder="One gate per line. Prefix optional: for non-blocking gates"
-            required
-            rows={3}
-            disabled={viewerMode}
-          />
-        </label>
+        <fieldset className="newRequirementFieldset">
+          <legend>Quality gates</legend>
+          <div className="newRequirementGates">
+            {gateSlots.map((slot) => (
+              <section
+                aria-label={`Gate ${slot} contract`}
+                className="newRequirementGateCard"
+                key={slot}
+              >
+                <div className="newRequirementTaskHeader">
+                  <strong>Gate {slot}</strong>
+                  <span>{slot === 1 ? "required" : "optional"}</span>
+                </div>
+                <label className="field">
+                  <span>Gate {slot} command</span>
+                  <input
+                    name="gateCommand"
+                    defaultValue={defaultGateCommands[slot - 1]}
+                    placeholder="npm test or npm run smoke:ui"
+                    required={slot === 1}
+                    disabled={viewerMode}
+                  />
+                </label>
+                <div className="newRequirementTaskGrid">
+                  <label className="field">
+                    <span>Gate {slot} requirement</span>
+                    <select
+                      name="gateRequired"
+                      defaultValue={slot === 1 ? "required" : "optional"}
+                      disabled={viewerMode}
+                    >
+                      <option value="required">Required</option>
+                      <option value="optional">Optional</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Gate {slot} timeout</span>
+                    <input
+                      name="gateTimeoutMs"
+                      inputMode="numeric"
+                      placeholder="milliseconds"
+                      disabled={viewerMode}
+                    />
+                  </label>
+                </div>
+              </section>
+            ))}
+          </div>
+        </fieldset>
 
         {errors.length ? (
           <div className="errorText newRequirementErrors" role="alert">

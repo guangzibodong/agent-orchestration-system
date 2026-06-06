@@ -5,6 +5,7 @@ import type { WorkflowRun } from "@mawo/shared";
 import { buildDeliveryConsoleModel } from "./delivery-console-model";
 import {
   buildNewRequirementPayload,
+  newRequirementDraftFromFormData,
   submitNewRequirementDraft,
   type NewRequirementDraft,
 } from "./new-requirement-payload";
@@ -347,8 +348,105 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Task 1 depends on");
     expect(html).toContain("Task 5");
     expect(html).toContain("Quality gates");
+    expect(html).toContain("Gate 1 command");
+    expect(html).toContain("Gate 1 requirement");
+    expect(html).toContain("Gate 1 timeout");
+    expect(html).toContain("Gate 2 command");
+    expect(html).toContain("Gate 2 requirement");
+    expect(html).toContain("Gate 2 timeout");
     expect(html).toContain("Create requirement draft");
     expect(html).not.toContain("raw JSON");
+  });
+
+  it("reads structured quality gate timeout fields from New Requirement form data", () => {
+    const formData = new FormData();
+
+    formData.set("title", "Gate timeout requirement");
+    formData.set("repositoryPath", "C:/work/mawo");
+    formData.set("goal", "Capture quality gate timeout contract");
+    formData.set("acceptanceCriteria", "Gate timeout is submitted");
+    formData.set("riskLevel", "medium");
+    formData.append("taskTitle", "Build timeout form");
+    formData.append("taskAgent", "shell");
+    formData.append("taskCommand", "npm test");
+    formData.append("taskInstructions", "");
+    formData.append("taskTimeoutMs", "");
+    formData.append("taskDependsOn", "");
+    formData.append("gateCommand", "npm test");
+    formData.append("gateRequired", "true");
+    formData.append("gateTimeoutMs", "120000");
+    formData.append("gateCommand", "npm run smoke:ui");
+    formData.append("gateRequired", "false");
+    formData.append("gateTimeoutMs", "180000");
+
+    expect(newRequirementDraftFromFormData(formData).qualityGates).toEqual([
+      {
+        command: "npm test",
+        required: true,
+        timeoutMs: "120000",
+      },
+      {
+        command: "npm run smoke:ui",
+        required: false,
+        timeoutMs: "180000",
+      },
+    ]);
+  });
+
+  it("builds quality gate timeout contracts for submit callbacks", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      qualityGates: [
+        {
+          command: "npm test",
+          required: true,
+          timeoutMs: "120000",
+        },
+        {
+          command: "npm run smoke:ui",
+          required: false,
+          timeoutMs: "180000",
+        },
+      ],
+    } as unknown as NewRequirementDraft);
+
+    expect(result).toMatchObject({
+      ok: true,
+      payload: {
+        qualityGates: [
+          {
+            title: "npm test",
+            command: "npm test",
+            required: true,
+            timeoutMs: 120000,
+          },
+          {
+            title: "npm run smoke:ui",
+            command: "npm run smoke:ui",
+            required: false,
+            timeoutMs: 180000,
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects invalid quality gate timeout contracts", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      qualityGates: [
+        {
+          command: "npm test",
+          required: true,
+          timeoutMs: "0",
+        },
+      ],
+    } as unknown as NewRequirementDraft);
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Quality gate timeouts must be positive milliseconds."],
+    });
   });
 
   it("builds a structured New Requirement payload for submit callbacks", () => {
