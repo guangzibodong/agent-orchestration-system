@@ -48,6 +48,14 @@ const reviewReadyRequirement: RequirementSummary = {
         required: true,
         exitCode: 0,
       },
+      {
+        id: "gate-2",
+        title: "Visual smoke",
+        status: "failed",
+        command: "npm run smoke:ui",
+        required: false,
+        exitCode: 1,
+      },
     ],
     mergeCandidate: {
       status: "ready",
@@ -87,8 +95,13 @@ describe("RequirementEvidencePanel display model", () => {
             'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
         },
         {
-          label: "Gate evidence",
-          value: "Unit tests required passed (exit 0): npm test",
+          label: "Required gates",
+          value: "1 required passed: Unit tests passed (exit 0): npm test",
+        },
+        {
+          label: "Optional gates",
+          value:
+            "1 optional reported issues: Visual smoke failed (exit 1): npm run smoke:ui; does not block merge approval",
         },
         {
           label: "Evidence source",

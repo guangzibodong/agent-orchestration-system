@@ -264,12 +264,7 @@ function buildReviewEvidenceSummaryItems(
     });
   }
 
-  if (evidence.gateResults.length) {
-    items.push({
-      label: "Gate evidence",
-      value: formatGateEvidence(evidence.gateResults),
-    });
-  }
+  items.push(...buildGateEvidenceItems(evidence.gateResults));
 
   if (evidence.evidenceSourceWorkflowId) {
     items.push({
@@ -289,19 +284,60 @@ function formatEvidenceList(values: string[]): string {
   return `${values.slice(0, 3).join(", ")} and ${values.length - 3} more`;
 }
 
-function formatGateEvidence(
+function buildGateEvidenceItems(
   gates: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"],
-): string {
-  return gates
-    .map((gate) => {
-      const requirementLabel = gate.required ? "required" : "optional";
-      const exitLabel =
-        gate.exitCode === undefined ? "" : ` (exit ${gate.exitCode})`;
-      const commandLabel = gate.command ? `: ${gate.command}` : "";
+): RequirementEvidenceItem[] {
+  if (!gates.length) {
+    return [];
+  }
 
-      return `${gate.title} ${requirementLabel} ${gate.status}${exitLabel}${commandLabel}`;
-    })
-    .join(", ");
+  const requiredGates = gates.filter((gate) => gate.required);
+  const optionalGates = gates.filter((gate) => !gate.required);
+  const items: RequirementEvidenceItem[] = [];
+
+  if (requiredGates.length) {
+    const failedCount = countFailedGates(requiredGates);
+    const summary = failedCount
+      ? `${failedCount} required reported issues`
+      : `${requiredGates.length} required passed`;
+    const suffix = failedCount ? "; blocks merge approval" : "";
+
+    items.push({
+      label: "Required gates",
+      value: `${summary}: ${requiredGates.map(formatGateEvidenceDetail).join(", ")}${suffix}`,
+    });
+  }
+
+  if (optionalGates.length) {
+    const failedCount = countFailedGates(optionalGates);
+    const summary = failedCount
+      ? `${failedCount} optional reported issues`
+      : `${optionalGates.length} optional passed`;
+    const suffix = failedCount ? "; does not block merge approval" : "";
+
+    items.push({
+      label: "Optional gates",
+      value: `${summary}: ${optionalGates.map(formatGateEvidenceDetail).join(", ")}${suffix}`,
+    });
+  }
+
+  return items;
+}
+
+function countFailedGates(
+  gates: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"],
+): number {
+  return gates.filter((gate) => gate.status !== "passed").length;
+}
+
+function formatGateEvidenceDetail(
+  gate: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"][number],
+): string {
+  const exitLabel =
+    gate.exitCode === undefined ? "" : ` (exit ${gate.exitCode})`;
+  const commandLabel = gate.command ? `: ${gate.command}` : "";
+
+  return `${gate.title} ${gate.status}${exitLabel}${commandLabel}`;
 }
 
 export function buildRequirementEvidenceArtifactLinks(

@@ -275,7 +275,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(evidence).toContainText(
       "Merge candidate ready with 2 changed files",
     );
-    await expect(evidence).toContainText("1/1 tasks passed; 1/1 gates passed");
+    await expect(evidence).toContainText(
+      "1/1 tasks passed; 1 required gate passed; 1 optional gate failed",
+    );
     await expect(evidence).toContainText("apps/web/src/app/page.tsx");
     await expect(evidence).toContainText("packages/shared/src/index.ts");
     await expect(evidence).toContainText(
@@ -285,7 +287,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
     await expect(evidence).toContainText(
-      "Evidence visible required passed: npm test",
+      "1 required passed: Evidence visible passed: npm test",
+    );
+    await expect(evidence).toContainText(
+      "1 optional reported issues: Visual smoke failed (exit 1): npm run smoke:ui; does not block merge approval",
     );
     await expect(evidence).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(evidence).not.toContainText("diff --git");
@@ -382,7 +387,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Required gate failed; merge approval is blocked while evidence remains inspectable.",
     );
     await expect(evidence).toContainText(
-      "Copy checks required failed (exit 1): npm run copy:check",
+      "1 required reported issues: Copy checks failed (exit 1): npm run copy:check; blocks merge approval",
     );
     await expect(evidence).not.toContainText("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
     await expect(evidence).not.toContainText("RAW_GATE_STDERR_SHOULD_NOT_RENDER");
@@ -1570,6 +1575,12 @@ const requirementTickets: RequirementDeliveryTicket[] = [
         command: "npm test",
         required: true,
       },
+      {
+        id: "gate-visual",
+        title: "Visual smoke",
+        command: "npm run smoke:ui",
+        required: false,
+      },
     ],
     status: "needs_review",
     currentWorkflowRunId: "workflow-needs-review",
@@ -1588,7 +1599,7 @@ const requirementTickets: RequirementDeliveryTicket[] = [
 const requirementEvidenceReport = {
   workflowId: "workflow-needs-review",
   reportArtifactPath: "C:/mawo/artifacts/workflow-needs-review/report.json",
-  summary: "1/1 tasks passed; 1/1 gates passed",
+  summary: "1/1 tasks passed; 1 required gate passed; 1 optional gate failed",
   recommendation: "ready_for_review",
   failedTasks: [],
   failedGates: [],
@@ -1613,6 +1624,12 @@ const requirementEvidenceReport = {
       status: "passed",
       stdoutArtifactPath:
         "C:/mawo/artifacts/workflow-needs-review/gates/gate-view/stdout.txt",
+    },
+    {
+      id: "gate-visual",
+      title: "Visual smoke",
+      status: "failed",
+      exitCode: 1,
     },
   ],
 };
