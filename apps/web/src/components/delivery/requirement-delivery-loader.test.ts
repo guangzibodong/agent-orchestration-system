@@ -114,6 +114,100 @@ describe("requirement delivery loader", () => {
     });
   });
 
+  it("uses fresh workflow overrides so retry does not show stale failed evidence", async () => {
+    const model = await loadRequirementDeliveryModel(
+      async (path) => {
+        if (path === "/workflows") {
+          return [
+            {
+              id: "workflow-retry",
+              goal: "Retry stale gate",
+              repositoryPath: "C:/work/shop",
+              status: "gate_failed",
+              updatedAt: "2026-06-06T11:04:00.000Z",
+              tasks: [{ id: "task-1", title: "Patch", status: "failed" }],
+              qualityGates: [
+                {
+                  id: "gate-1",
+                  title: "Unit tests",
+                  status: "failed",
+                  result: { exitCode: 1, stderr: "old failure" }
+                }
+              ]
+            }
+          ];
+        }
+
+        return [
+          {
+            id: "requirement-retry",
+            title: "Retry stale gate",
+            repositoryPath: "C:/work/shop",
+            goal: "Retry without stale evidence",
+            acceptanceCriteria: ["Retry resets the current evidence"],
+            constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "high",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch",
+                agent: "shell",
+                instructions: "Patch"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "ready_to_run",
+            currentWorkflowRunId: "workflow-retry",
+            runLinks: [
+              {
+                workflowRunId: "workflow-retry",
+                status: "ready",
+                linkedAt: "2026-06-06T11:07:00.000Z"
+              }
+            ],
+            createdAt: "2026-06-06T11:00:00.000Z",
+            updatedAt: "2026-06-06T11:07:00.000Z"
+          }
+        ];
+      },
+      {},
+      {
+        workflowOverrides: [
+          {
+            id: "workflow-retry",
+            goal: "Retry stale gate",
+            repositoryPath: "C:/work/shop",
+            status: "ready",
+            updatedAt: "2026-06-06T11:07:00.000Z",
+            tasks: [{ id: "task-1", title: "Patch", status: "waiting" }],
+            qualityGates: [
+              { id: "gate-1", title: "Unit tests", status: "waiting" }
+            ]
+          }
+        ]
+      }
+    );
+
+    expect(model.requirements[0]).toMatchObject({
+      id: "requirement-retry",
+      executionStatus: "ready",
+      nextAction: "Enqueue",
+      requirementStage: "ready_to_run",
+      workflowRunStatusLabel: "Ready",
+      availableActions: ["enqueue"]
+    });
+    expect(model.requirements[0]?.artifactLinks).toBeUndefined();
+  });
+
   it("loads report artifact paths into read-only drawer links for linked requirements", async () => {
     const requests: string[] = [];
 

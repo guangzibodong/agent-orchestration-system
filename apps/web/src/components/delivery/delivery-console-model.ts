@@ -90,6 +90,7 @@ export type DeliveryConsoleModel = {
 
 export type DeliveryConsoleModelContext = {
   jobStatusByRequirementId?: Record<string, WorkflowJobStatus | undefined>;
+  workflowOverrides?: WorkflowRun[];
 };
 
 const noAutoMergePolicyLabel =

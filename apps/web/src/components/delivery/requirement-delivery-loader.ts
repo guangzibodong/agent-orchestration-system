@@ -1,5 +1,5 @@
 import { requirementDeliveryTicketSchema, runReportSchema } from "@mawo/shared";
-import type { RunReport } from "@mawo/shared";
+import type { RunReport, WorkflowRun } from "@mawo/shared";
 import type {
   DeliveryConsoleModel,
   RequirementArtifactLink,
@@ -39,7 +39,7 @@ export async function loadRequirementDeliveryModel(
   }
 
   const model = buildDeliveryConsoleModel(
-    workflows,
+    mergeWorkflowOverrides(workflows, context.workflowOverrides ?? []),
     new Date(),
     requirements,
     context
@@ -68,6 +68,43 @@ function buildRequirementListPath(options: WorkflowListOptions): string {
   }
 
   return `/requirements?${params.toString()}`;
+}
+
+function mergeWorkflowOverrides(
+  workflows: WorkflowRun[],
+  overrides: WorkflowRun[]
+): WorkflowRun[] {
+  if (!overrides.length) {
+    return workflows;
+  }
+
+  const merged = new Map(workflows.map((workflow) => [workflow.id, workflow]));
+
+  for (const override of overrides) {
+    const current = merged.get(override.id);
+
+    if (!current || shouldPreferWorkflowOverride(current, override)) {
+      merged.set(override.id, override);
+    }
+  }
+
+  return [...merged.values()];
+}
+
+function shouldPreferWorkflowOverride(
+  current: WorkflowRun,
+  override: WorkflowRun
+): boolean {
+  const currentUpdatedAt = Date.parse(current.updatedAt ?? current.createdAt ?? "");
+  const overrideUpdatedAt = Date.parse(
+    override.updatedAt ?? override.createdAt ?? ""
+  );
+
+  if (Number.isNaN(currentUpdatedAt) || Number.isNaN(overrideUpdatedAt)) {
+    return true;
+  }
+
+  return overrideUpdatedAt >= currentUpdatedAt;
 }
 
 async function loadRequirementArtifactEvidence(

@@ -521,6 +521,7 @@ test.describe("Requirement Delivery Console smoke", () => {
             workflow: {
               ...lifecycleFailedWorkflow,
               status: "ready",
+              updatedAt: "2026-06-06T11:07:00.000Z",
               qualityGates: lifecycleFailedWorkflow.qualityGates.map((gate) => ({
                 ...gate,
                 status: "waiting",
@@ -575,6 +576,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toBeVisible();
     await retryItem.getByRole("button", { name: "Retry" }).click();
     await expect(retryItem).toContainText("Ready to run");
+    await expect(retryItem).toContainText("Ready");
+    await expect(retryItem).toContainText("Enqueue");
+    await expect(retryItem).not.toContainText("Gate failed");
+    await expect(retryItem).not.toContainText("Required gate failed");
+    await expect(retryItem).not.toContainText("failing gate");
     expect(actions).toEqual([
       "confirm-plan:requirement-plan",
       "enqueue:requirement-plan",

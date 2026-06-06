@@ -2,8 +2,10 @@
 
 import {
   requirementDeliveryTicketSchema,
+  workflowRunSchema,
   workflowJobSchema,
   type RequirementDeliveryTicket,
+  type WorkflowRun,
   type WorkflowJobStatus
 } from "@mawo/shared";
 import { useEffect, useState } from "react";
@@ -37,6 +39,9 @@ export function RequirementDeliveryConsoleClient() {
   const [jobStatusByRequirementId, setJobStatusByRequirementId] = useState<
     Record<string, WorkflowJobStatus | undefined>
   >({});
+  const [workflowOverridesById, setWorkflowOverridesById] = useState<
+    Record<string, WorkflowRun | undefined>
+  >({});
 
   async function api(path: string, init?: RequestInit): Promise<unknown> {
     const token =
@@ -66,7 +71,10 @@ export function RequirementDeliveryConsoleClient() {
     const nextModel = await loadRequirementDeliveryModel(
       api,
       {},
-      { jobStatusByRequirementId }
+      {
+        jobStatusByRequirementId,
+        workflowOverrides: buildWorkflowOverrides(workflowOverridesById)
+      }
     );
     setModel(nextModel);
     setLoadState("ready");
@@ -91,11 +99,24 @@ export function RequirementDeliveryConsoleClient() {
     }
 
     setJobStatusByRequirementId(nextJobStatusByRequirementId);
+    const nextWorkflowOverridesById = lifecycleResult.workflow
+      ? {
+          ...workflowOverridesById,
+          [lifecycleResult.workflow.id]: lifecycleResult.workflow
+        }
+      : workflowOverridesById;
+
+    if (lifecycleResult.workflow) {
+      setWorkflowOverridesById(nextWorkflowOverridesById);
+    }
 
     const nextModel = await loadRequirementDeliveryModel(
       api,
       {},
-      { jobStatusByRequirementId: nextJobStatusByRequirementId }
+      {
+        jobStatusByRequirementId: nextJobStatusByRequirementId,
+        workflowOverrides: buildWorkflowOverrides(nextWorkflowOverridesById)
+      }
     );
     setModel(nextModel);
     setLoadState("ready");
@@ -118,7 +139,10 @@ export function RequirementDeliveryConsoleClient() {
         const nextModel = await loadRequirementDeliveryModel(
           api,
           {},
-          { jobStatusByRequirementId }
+          {
+            jobStatusByRequirementId,
+            workflowOverrides: buildWorkflowOverrides(workflowOverridesById)
+          }
         );
         if (canceled) {
           return;
@@ -144,7 +168,7 @@ export function RequirementDeliveryConsoleClient() {
     return () => {
       canceled = true;
     };
-  }, [jobStatusByRequirementId]);
+  }, [jobStatusByRequirementId, workflowOverridesById]);
 
   return (
     <RequirementDeliveryConsole
@@ -168,6 +192,7 @@ class ApiResponseError extends Error {
 function parseRequirementLifecycleResult(value: unknown): {
   jobStatus?: WorkflowJobStatus;
   requirement?: RequirementDeliveryTicket;
+  workflow?: WorkflowRun;
 } {
   const directRequirement = requirementDeliveryTicketSchema.safeParse(value);
   if (directRequirement.success) {
@@ -181,16 +206,27 @@ function parseRequirementLifecycleResult(value: unknown): {
   const result = value as {
     job?: unknown;
     requirement?: unknown;
+    workflow?: unknown;
   };
   const requirement = requirementDeliveryTicketSchema.safeParse(
     result.requirement
   );
   const job = workflowJobSchema.safeParse(result.job);
+  const workflow = workflowRunSchema.safeParse(result.workflow);
 
   return {
     jobStatus: job.success ? job.data.status : undefined,
-    requirement: requirement.success ? requirement.data : undefined
+    requirement: requirement.success ? requirement.data : undefined,
+    workflow: workflow.success ? workflow.data : undefined
   };
+}
+
+function buildWorkflowOverrides(
+  overridesById: Record<string, WorkflowRun | undefined>
+): WorkflowRun[] {
+  return Object.values(overridesById).filter(
+    (workflow): workflow is WorkflowRun => Boolean(workflow)
+  );
 }
 
 function buildLifecycleMessage(
