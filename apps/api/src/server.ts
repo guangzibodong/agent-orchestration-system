@@ -7,7 +7,7 @@ import {
   workflowStatusSchema,
   workflowReviewRequestSchema,
   type WorkflowJob,
-  type AuditEvent
+  type AuditEvent,
 } from "@mawo/shared";
 import Fastify from "fastify";
 import { spawnSync } from "node:child_process";
@@ -18,7 +18,7 @@ import {
   openSync,
   readSync,
   statSync,
-  unlinkSync
+  unlinkSync,
 } from "node:fs";
 import { resolve, sep, join, isAbsolute } from "node:path";
 import { prisma } from "./db.js";
@@ -26,35 +26,35 @@ import { FileArtifactStore } from "./runner/file-artifact-store.js";
 import {
   FileAuditStore,
   type AuditEventInput,
-  type AuditStore
+  type AuditStore,
 } from "./runner/file-audit-store.js";
 import { FileJobStore, type JobStore } from "./runner/file-job-store.js";
 import {
   FileRepositoryStore,
-  type RepositoryStore
+  type RepositoryStore,
 } from "./runner/file-repository-store.js";
 import { FileRunStore, type RunStore } from "./runner/file-run-store.js";
 import {
   PrismaAuditStore,
-  type PrismaAuditStoreClient
+  type PrismaAuditStoreClient,
 } from "./runner/prisma-audit-store.js";
 import {
   PrismaJobStore,
-  type PrismaJobStoreClient
+  type PrismaJobStoreClient,
 } from "./runner/prisma-job-store.js";
 import { PostgresWorkflowJobQueue } from "./runner/postgres-workflow-job-queue.js";
 import {
   PrismaRepositoryStore,
-  type PrismaRepositoryStoreClient
+  type PrismaRepositoryStoreClient,
 } from "./runner/prisma-repository-store.js";
 import {
   PrismaRunStore,
-  type PrismaRunStoreClient
+  type PrismaRunStoreClient,
 } from "./runner/prisma-run-store.js";
 import {
   createAgentHealthChecks,
   createAgentSummaries,
-  createConfiguredAgentConfigs
+  createConfiguredAgentConfigs,
 } from "./runner/agent-config.js";
 import {
   createDemoWorkflowDefinition,
@@ -63,19 +63,19 @@ import {
   WorkflowMergeCandidateNotReadyError,
   WorkflowNotRetryableError,
   WorkflowNotReviewReadyError,
-  WorkflowWorkspacesNotCleanableError
+  WorkflowWorkspacesNotCleanableError,
 } from "./runner/local-runner.js";
 import {
   createAgentDemoWorkflowDefinition,
-  createWorktreeDemoWorkflowDefinition
+  createWorktreeDemoWorkflowDefinition,
 } from "./runner/demo-repository.js";
 import {
   createRepositoryWorkflowDefinition,
-  RepositoryNotReadyError
+  RepositoryNotReadyError,
 } from "./runner/repository-workflow.js";
 import {
   WorkflowAlreadyRunningError,
-  WorkflowJobQueue
+  WorkflowJobQueue,
 } from "./runner/workflow-job-queue.js";
 
 export type BuildAppOptions = {
@@ -93,7 +93,43 @@ type PrismaStateStoreClient = PrismaAuditStoreClient &
   PrismaRepositoryStoreClient &
   PrismaRunStoreClient;
 
+type ApiAuthRole = "operator" | "viewer";
+
 type ActiveQueueBackend = "in_process" | "postgres";
+
+const VIEWER_READ_ENDPOINTS: Array<string | RegExp> = [
+  "/readiness",
+  "/agents",
+  "/agents/health",
+  "/workers/health",
+  "/operations/snapshot",
+  "/repositories",
+  "/workflows",
+  /^\/workflows\/[^/]+$/,
+  /^\/workflows\/[^/]+\/report$/,
+  /^\/workflows\/[^/]+\/artifact$/,
+  /^\/workflows\/[^/]+\/merge-candidate$/,
+  /^\/workflows\/[^/]+\/workspaces$/,
+  "/jobs",
+  /^\/jobs\/[^/]+$/,
+  /^\/jobs\/[^/]+\/timeline$/,
+  "/audit-events",
+];
+
+function requestPath(url: string): string {
+  return url.split("?")[0] || "/";
+}
+
+function isViewerReadableEndpoint(method: string, url: string): boolean {
+  if (method !== "GET") {
+    return false;
+  }
+
+  const path = requestPath(url);
+  return VIEWER_READ_ENDPOINTS.some((endpoint) =>
+    typeof endpoint === "string" ? endpoint === path : endpoint.test(path),
+  );
+}
 
 function createStateStores(input: {
   requestedStateBackend: string;
@@ -112,24 +148,24 @@ function createStateStores(input: {
       auditStore: new PrismaAuditStore(input.prismaClient),
       jobStore: new PrismaJobStore(input.prismaClient),
       repositoryStore: new PrismaRepositoryStore(input.prismaClient),
-      runStore: new PrismaRunStore(input.prismaClient)
+      runStore: new PrismaRunStore(input.prismaClient),
     };
   }
 
   return {
     activeStateBackend: "file",
     auditStore: new FileAuditStore({
-      stateFile: join(input.stateRoot, "audit-events.json")
+      stateFile: join(input.stateRoot, "audit-events.json"),
     }),
     jobStore: new FileJobStore({
-      stateFile: join(input.stateRoot, "jobs.json")
+      stateFile: join(input.stateRoot, "jobs.json"),
     }),
     repositoryStore: new FileRepositoryStore({
-      stateFile: join(input.stateRoot, "repositories.json")
+      stateFile: join(input.stateRoot, "repositories.json"),
     }),
     runStore: new FileRunStore({
-      stateFile: join(input.stateRoot, "workflows.json")
-    })
+      stateFile: join(input.stateRoot, "workflows.json"),
+    }),
   };
 }
 
@@ -151,7 +187,7 @@ const JOB_TIMELINE_WORKFLOW_EVENT_TYPES = new Set([
   "workflow.task_started",
   "workflow.task_completed",
   "workflow.gate_started",
-  "workflow.gate_completed"
+  "workflow.gate_completed",
 ]);
 
 export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
@@ -160,51 +196,49 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   const artifactRoot = join(root, ".mawo", "artifacts");
   const env = options.env ?? process.env;
   const apiToken = env.MAWO_API_TOKEN?.trim();
+  const viewerApiToken = env.MAWO_VIEWER_API_TOKEN?.trim();
+  const authRequired = Boolean(apiToken || viewerApiToken);
   const deploymentMode =
     env.NODE_ENV === "production" ? "production" : "development";
   const apiReplicaCount = parseApiReplicaCount(env.MAWO_API_REPLICA_COUNT);
   const maxConcurrentJobs = parseMaxConcurrentJobs(
-    env.MAWO_MAX_CONCURRENT_JOBS
+    env.MAWO_MAX_CONCURRENT_JOBS,
   );
   const workerStaleAfterMs = parseWorkerStaleAfterMs(env.MAWO_WORKER_STALE_MS);
   const requestedStateBackend = parseRuntimeBackend(
     env.MAWO_STATE_BACKEND,
-    "file"
+    "file",
   );
   const requestedQueueBackend = parseRuntimeBackend(
     env.MAWO_QUEUE_BACKEND,
-    "in_process"
+    "in_process",
   );
   const allowedRepositoryRoots = parseAllowedRepositoryRoots(
-    env.MAWO_ALLOWED_REPOSITORY_ROOTS
+    env.MAWO_ALLOWED_REPOSITORY_ROOTS,
   );
   const cliAgents = createConfiguredAgentConfigs(env);
   const stateStores = createStateStores({
     requestedStateBackend,
     stateRoot,
     prismaClient:
-      options.prismaClient ?? (prisma as unknown as PrismaStateStoreClient)
+      options.prismaClient ?? (prisma as unknown as PrismaStateStoreClient),
   });
   const activeStateBackend = stateStores.activeStateBackend;
   const activeQueueBackend = selectActiveQueueBackend({
     requestedQueueBackend,
-    activeStateBackend
+    activeStateBackend,
   });
-  const auditStore =
-    options.auditStore ??
-    stateStores.auditStore;
-  const jobStore =
-    options.jobStore ??
-    stateStores.jobStore;
+  const auditStore = options.auditStore ?? stateStores.auditStore;
+  const jobStore = options.jobStore ?? stateStores.jobStore;
   const app = Fastify({
-    logger: process.env.NODE_ENV !== "test"
+    logger: process.env.NODE_ENV !== "test",
   });
   const appendAuditEvent = (event: AuditEventInput) =>
     Promise.resolve(auditStore.append(event));
   const getWorkerHealth = async () =>
     createWorkerHealth(
       await auditStore.list({ type: "worker.heartbeat" }),
-      workerStaleAfterMs
+      workerStaleAfterMs,
     );
   const appendAuditEventInBackground = (event: AuditEventInput) => {
     void appendAuditEvent(event).catch((error: unknown) => {
@@ -215,11 +249,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     runner ??
     new LocalRunner(undefined, {
       cliAgents,
-      runStore:
-        options.runStore ??
-        stateStores.runStore,
+      runStore: options.runStore ?? stateStores.runStore,
       artifactStore: new FileArtifactStore({
-        root: artifactRoot
+        root: artifactRoot,
       }),
       eventSink: (event) => {
         appendAuditEventInBackground({
@@ -235,15 +267,15 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
               : {}),
             ...(event.durationMs !== undefined
               ? { durationMs: String(event.durationMs) }
-              : {})
-          }
+              : {}),
+          },
         });
-      }
+      },
     });
   const queue =
     activeQueueBackend === "postgres"
       ? new PostgresWorkflowJobQueue({
-          jobStore
+          jobStore,
         })
       : new WorkflowJobQueue({
           runner: activeRunner,
@@ -251,7 +283,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           jobStore,
           onJobRecovered: ({ original, recovered }) => {
             const workflowRecovery = activeRunner.recoverInterruptedWorkflow(
-              recovered.workflowId
+              recovered.workflowId,
             );
             appendAuditEventInBackground({
               type: "job.recovered",
@@ -266,10 +298,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
                 previousWorkflowStatus: workflowRecovery.previousStatus ?? "",
                 recoveredWorkflowStatus: workflowRecovery.status ?? "",
                 recoveredTaskIds: workflowRecovery.recoveredTasks.join(","),
-                recoveredGateIds: workflowRecovery.recoveredGates.join(",")
-              }
+                recoveredGateIds: workflowRecovery.recoveredGates.join(","),
+              },
             });
-          }
+          },
         });
   app.addHook("onReady", async () => {
     await activeRunner.ready();
@@ -278,33 +310,63 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     await queue.flush();
   });
   const repositoryStore =
-    options.repositoryStore ??
-    stateStores.repositoryStore;
+    options.repositoryStore ?? stateStores.repositoryStore;
 
   app.register(cors, {
-    origin: true
+    origin: true,
   });
 
+  const identifyAuthRole = (authorization: string): ApiAuthRole | undefined => {
+    if (apiToken && authorization === `Bearer ${apiToken}`) {
+      return "operator";
+    }
+
+    if (viewerApiToken && authorization === `Bearer ${viewerApiToken}`) {
+      return "viewer";
+    }
+
+    return undefined;
+  };
+
   app.addHook("preHandler", async (request, reply) => {
-    if (!apiToken || request.method === "OPTIONS" || request.url === "/health") {
+    if (
+      !authRequired ||
+      request.method === "OPTIONS" ||
+      request.url === "/health"
+    ) {
       return;
     }
 
     const authorization = request.headers.authorization ?? "";
-    if (authorization === `Bearer ${apiToken}`) {
-      return;
+    const role = identifyAuthRole(authorization);
+    if (!role) {
+      return reply
+        .code(401)
+        .header("www-authenticate", "Bearer")
+        .send({ error: "unauthorized" });
     }
 
-    return reply
-      .code(401)
-      .header("www-authenticate", "Bearer")
-      .send({ error: "unauthorized" });
+    if (
+      role === "viewer" &&
+      !isViewerReadableEndpoint(request.method, request.url)
+    ) {
+      return reply.code(403).send({
+        error: "forbidden",
+        message: "This endpoint requires an operator token.",
+        requiredRole: "operator",
+        role,
+      });
+    }
+
+    if (role === "operator" || role === "viewer") {
+      return;
+    }
   });
 
   app.get("/health", async () => {
     return {
       ok: true,
-      service: "mawo-api"
+      service: "mawo-api",
     };
   });
 
@@ -315,8 +377,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       createWritableDirectoryCheck(
         "artifact_store",
         "Artifact store",
-        artifactRoot
-      )
+        artifactRoot,
+      ),
     ];
     const gitCheck = createGitCliCheck();
     const agentHealth = await createAgentHealthChecks(cliAgents);
@@ -334,27 +396,27 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           id: agent.id,
           status: agent.status,
           message: agent.message,
-          command: agent.command
-        }))
+          command: agent.command,
+        })),
     };
-    const activeJobs = (await queue.listJobs())
-      .filter((job) => job.status === "queued" || job.status === "running")
-      .length;
+    const activeJobs = (await queue.listJobs()).filter(
+      (job) => job.status === "queued" || job.status === "running",
+    ).length;
     const productionConfigCheck = createProductionConfigCheck({
       deploymentMode,
       apiToken,
-      allowedRepositoryRoots
+      allowedRepositoryRoots,
     });
     const deploymentTopologyCheck = createDeploymentTopologyCheck({
       deploymentMode,
       apiReplicaCount,
       stateBackend: activeStateBackend,
-      queueBackend: activeQueueBackend
+      queueBackend: activeQueueBackend,
     });
     const workerHealth = await getWorkerHealth();
     const workerHealthCheck = createWorkerHealthCheck({
       queueBackend: activeQueueBackend,
-      workerHealth
+      workerHealth,
     });
     const runtimeBackendCheck = createRuntimeBackendCheck({
       requestedStateBackend,
@@ -363,7 +425,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       activeQueueBackend,
       maxConcurrentJobs,
       databaseUrlConfigured: Boolean(env.DATABASE_URL?.trim()),
-      redisUrlConfigured: Boolean(env.REDIS_URL?.trim())
+      redisUrlConfigured: Boolean(env.REDIS_URL?.trim()),
     });
     const checks = [
       ...storeChecks,
@@ -372,7 +434,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       productionConfigCheck,
       runtimeBackendCheck,
       workerHealthCheck,
-      deploymentTopologyCheck
+      deploymentTopologyCheck,
     ];
 
     return {
@@ -380,10 +442,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       service: "mawo-api",
       checkedAt,
       deploymentMode,
-      protectedByToken: Boolean(apiToken),
+      protectedByToken: authRequired,
       root,
       activeJobs,
-      checks
+      checks,
     };
   };
 
@@ -435,7 +497,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       ...(input.actor ? { actor: input.actor } : {}),
       ...(input.workflowId ? { workflowId: input.workflowId } : {}),
       ...(input.jobId ? { jobId: input.jobId } : {}),
-      ...(input.repositoryId ? { repositoryId: input.repositoryId } : {})
+      ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}),
     });
 
     return limitToRecent(events, input.limit);
@@ -465,7 +527,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       buildReadinessResponse(),
       getWorkerHealth(),
       listJobsForOperations({ limit, repositoryId }),
-      listAuditEventsForOperations({ limit, repositoryId })
+      listAuditEventsForOperations({ limit, repositoryId }),
     ]);
     const scopedWorkflows = activeRunner.listWorkflows().filter((workflow) => {
       if (repositoryId && workflow.repositoryId !== repositoryId) {
@@ -486,18 +548,18 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         activeJobs: queuedJobs + runningJobs,
         failedJobs: jobs.filter((job) => job.status === "failed").length,
         needsReviewWorkflows: scopedWorkflows.filter(
-          (workflow) => workflow.status === "needs_review"
+          (workflow) => workflow.status === "needs_review",
         ).length,
         blockedReadinessChecks: readiness.checks.filter(
-          (check) => check.status === "blocked" || check.status === "failed"
+          (check) => check.status === "blocked" || check.status === "failed",
         ).length,
         healthyWorkers: workerHealth.summary.healthyWorkers,
-        totalWorkers: workerHealth.summary.totalWorkers
+        totalWorkers: workerHealth.summary.totalWorkers,
       },
       auditEvents,
       jobs,
       readiness,
-      workerHealth
+      workerHealth,
     };
   });
 
@@ -517,7 +579,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     if (workflowStatus && !workflowStatus.success) {
       return reply.code(400).send({
         error: "invalid_workflow_status",
-        allowedStatuses: workflowStatusSchema.options
+        allowedStatuses: workflowStatusSchema.options,
       });
     }
 
@@ -567,7 +629,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     if (eventType && !eventType.success) {
       return reply.code(400).send({
         error: "invalid_audit_event_type",
-        allowedTypes: auditEventTypeSchema.options
+        allowedTypes: auditEventTypeSchema.options,
       });
     }
 
@@ -576,7 +638,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       jobId: request.query.jobId,
       repositoryId: request.query.repositoryId,
       type: eventType?.data,
-      workflowId: request.query.workflowId
+      workflowId: request.query.workflowId,
     });
     return limitToRecent(events, request.query.limit);
   });
@@ -591,7 +653,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "invalid_repository_registration_request",
-        issues: parsed.error.issues
+        issues: parsed.error.issues,
       });
     }
 
@@ -599,7 +661,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (!isRepositoryPathAllowed(parsed.data.path, allowedRepositoryRoots)) {
         return reply.code(403).send({
           error: "repository_path_not_allowed",
-          message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS."
+          message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS.",
         });
       }
 
@@ -611,12 +673,12 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
             {
               id: "validate",
               agent: "shell",
-              command: "git status --short"
-            }
+              command: "git status --short",
+            },
           ],
-          qualityGates: []
+          qualityGates: [],
         },
-        { root }
+        { root },
       );
       const result = await repositoryStore.upsert(parsed.data);
       const repository = result.repository;
@@ -631,8 +693,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           repositoryName: repository.name,
           repositoryPath: repository.path,
           defaultBranch: repository.defaultBranch ?? "",
-          qualityGates: String(repository.qualityGates.length)
-        }
+          qualityGates: String(repository.qualityGates.length),
+        },
       });
 
       return reply.code(result.created ? 201 : 200).send(repository);
@@ -640,7 +702,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (error instanceof RepositoryNotReadyError) {
         return reply.code(422).send({
           error: "repository_not_ready",
-          message: error.message
+          message: error.message,
         });
       }
 
@@ -665,8 +727,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         repositoryName: repository.name,
         repositoryPath: repository.path,
         defaultBranch: repository.defaultBranch ?? "",
-        qualityGates: String(repository.qualityGates.length)
-      }
+        qualityGates: String(repository.qualityGates.length),
+      },
     });
 
     return repository;
@@ -681,15 +743,17 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       actor: "operator",
       workflowId: run.id,
       metadata: {
-        source: "demo"
-      }
+        source: "demo",
+      },
     });
 
     return reply.code(201).send(run);
   });
 
   app.post("/workflows/worktree-demo", async (_request, reply) => {
-    const definition = await createWorktreeDemoWorkflowDefinition(options.demoRoot);
+    const definition = await createWorktreeDemoWorkflowDefinition(
+      options.demoRoot,
+    );
     const run = activeRunner.createWorkflow(definition);
     await activeRunner.flush();
 
@@ -698,15 +762,17 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       actor: "operator",
       workflowId: run.id,
       metadata: {
-        source: "worktree-demo"
-      }
+        source: "worktree-demo",
+      },
     });
 
     return reply.code(201).send(run);
   });
 
   app.post("/workflows/agent-demo", async (_request, reply) => {
-    const definition = await createAgentDemoWorkflowDefinition(options.demoRoot);
+    const definition = await createAgentDemoWorkflowDefinition(
+      options.demoRoot,
+    );
     const run = activeRunner.createWorkflow(definition);
     await activeRunner.flush();
 
@@ -715,20 +781,22 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       actor: "operator",
       workflowId: run.id,
       metadata: {
-        source: "agent-demo"
-      }
+        source: "agent-demo",
+      },
     });
 
     return reply.code(201).send(run);
   });
 
   app.post("/workflows/repository", async (request, reply) => {
-    const parsed = createRepositoryWorkflowRequestSchema.safeParse(request.body);
+    const parsed = createRepositoryWorkflowRequestSchema.safeParse(
+      request.body,
+    );
 
     if (!parsed.success) {
       return reply.code(400).send({
         error: "invalid_repository_workflow_request",
-        issues: parsed.error.issues
+        issues: parsed.error.issues,
       });
     }
 
@@ -744,14 +812,14 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       const repositoryPath = repository?.path ?? parsed.data.repositoryPath;
       if (!repositoryPath) {
         return reply.code(400).send({
-          error: "repository_path_required"
+          error: "repository_path_required",
         });
       }
 
       if (!isRepositoryPathAllowed(repositoryPath, allowedRepositoryRoots)) {
         return reply.code(403).send({
           error: "repository_path_not_allowed",
-          message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS."
+          message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS.",
         });
       }
 
@@ -762,11 +830,11 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           qualityGates:
             parsed.data.qualityGates.length > 0
               ? parsed.data.qualityGates
-              : repository?.qualityGates ?? []
+              : (repository?.qualityGates ?? []),
         },
         {
-        root
-        }
+          root,
+        },
       );
       const run = activeRunner.createWorkflow(definition);
       await activeRunner.flush();
@@ -778,8 +846,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         metadata: {
           source: "repository",
           repositoryId: run.repositoryId ?? "",
-          repositoryPath: run.repositoryPath ?? ""
-        }
+          repositoryPath: run.repositoryPath ?? "",
+        },
       });
 
       return reply.code(201).send(run);
@@ -787,7 +855,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (error instanceof RepositoryNotReadyError) {
         return reply.code(422).send({
           error: "repository_not_ready",
-          message: error.message
+          message: error.message,
         });
       }
 
@@ -803,7 +871,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "invalid_workflow_review_request",
-        issues: parsed.error.issues
+        issues: parsed.error.issues,
       });
     }
 
@@ -821,8 +889,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         actor: "operator",
         workflowId: run.id,
         metadata: {
-          decision: run.review?.decision ?? parsed.data.decision
-        }
+          decision: run.review?.decision ?? parsed.data.decision,
+        },
       });
 
       return run;
@@ -830,7 +898,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (error instanceof WorkflowNotReviewReadyError) {
         return reply.code(409).send({
           error: "workflow_not_review_ready",
-          message: error.message
+          message: error.message,
         });
       }
 
@@ -857,7 +925,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     try {
       const cleanup = await activeRunner.cleanupWorkflowWorkspaces(
-        request.params.id
+        request.params.id,
       );
       await activeRunner.flush();
 
@@ -870,8 +938,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           cleanedCount: String(cleanup.cleaned.length),
           cleanedTaskIds: cleanup.cleaned.map((item) => item.taskId).join(","),
           cleanedBranches: cleanup.cleaned.map((item) => item.branch).join(","),
-          cleanedPaths: cleanup.cleaned.map((item) => item.path).join(",")
-        }
+          cleanedPaths: cleanup.cleaned.map((item) => item.path).join(","),
+        },
       });
 
       return cleanup;
@@ -879,7 +947,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (error instanceof WorkflowWorkspacesNotCleanableError) {
         return reply.code(409).send({
           error: "workflow_workspaces_not_cleanable",
-          message: error.message
+          message: error.message,
         });
       }
 
@@ -920,7 +988,9 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     try {
-      const retry = await activeRunner.retryWorkflowWithResult(request.params.id);
+      const retry = await activeRunner.retryWorkflowWithResult(
+        request.params.id,
+      );
       const run = retry.run;
       await activeRunner.flush();
 
@@ -938,8 +1008,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           cleanedBranches: retry.cleanedWorkspaces
             .map((item) => item.branch)
             .join(","),
-          cleanedPaths: retry.cleanedWorkspaces.map((item) => item.path).join(",")
-        }
+          cleanedPaths: retry.cleanedWorkspaces
+            .map((item) => item.path)
+            .join(","),
+        },
       });
 
       return run;
@@ -947,7 +1019,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       if (error instanceof WorkflowNotRetryableError) {
         return reply.code(409).send({
           error: "workflow_not_retryable",
-          message: error.message
+          message: error.message,
         });
       }
 
@@ -975,8 +1047,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         metadata: {
           repositoryId: workflow.repositoryId ?? "",
           repositoryPath: workflow.repositoryPath ?? "",
-          status: job.status
-        }
+          status: job.status,
+        },
       });
 
       return reply.code(202).send(job);
@@ -985,7 +1057,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         return reply.code(409).send({
           error: "workflow_already_running",
           message: error.message,
-          job: error.job
+          job: error.job,
         });
       }
 
@@ -1008,7 +1080,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     if (jobStatus && !jobStatus.success) {
       return reply.code(400).send({
         error: "invalid_job_status",
-        allowedStatuses: workflowJobStatusSchema.options
+        allowedStatuses: workflowJobStatusSchema.options,
       });
     }
 
@@ -1017,7 +1089,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         return false;
       }
 
-      if (request.query.workflowId && job.workflowId !== request.query.workflowId) {
+      if (
+        request.query.workflowId &&
+        job.workflowId !== request.query.workflowId
+      ) {
         return false;
       }
 
@@ -1053,8 +1128,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       metadata: {
         repositoryId: workflow?.repositoryId ?? "",
         repositoryPath: workflow?.repositoryPath ?? "",
-        status: job.status
-      }
+        status: job.status,
+      },
     });
 
     return job;
@@ -1072,29 +1147,31 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const workflow = activeRunner.getWorkflow(job.workflowId);
     const report = workflow ? activeRunner.getReport(workflow.id) : undefined;
     const jobStartedAt = Date.parse(job.createdAt);
-    const jobFinishedAt = job.finishedAt ? Date.parse(job.finishedAt) : undefined;
-    const events = (await auditStore.list({ workflowId: job.workflowId })).filter(
-      (event) => {
-        if (event.jobId) {
-          return event.jobId === job.id;
-        }
-
-        if (!JOB_TIMELINE_WORKFLOW_EVENT_TYPES.has(event.type)) {
-          return false;
-        }
-
-        const eventTime = Date.parse(event.createdAt);
-        if (eventTime < jobStartedAt) {
-          return false;
-        }
-
-        if (jobFinishedAt && eventTime > jobFinishedAt) {
-          return false;
-        }
-
-        return true;
+    const jobFinishedAt = job.finishedAt
+      ? Date.parse(job.finishedAt)
+      : undefined;
+    const events = (
+      await auditStore.list({ workflowId: job.workflowId })
+    ).filter((event) => {
+      if (event.jobId) {
+        return event.jobId === job.id;
       }
-    );
+
+      if (!JOB_TIMELINE_WORKFLOW_EVENT_TYPES.has(event.type)) {
+        return false;
+      }
+
+      const eventTime = Date.parse(event.createdAt);
+      if (eventTime < jobStartedAt) {
+        return false;
+      }
+
+      if (jobFinishedAt && eventTime > jobFinishedAt) {
+        return false;
+      }
+
+      return true;
+    });
 
     return {
       job,
@@ -1103,7 +1180,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
             id: workflow.id,
             status: workflow.status,
             repositoryId: workflow.repositoryId,
-            repositoryPath: workflow.repositoryPath
+            repositoryPath: workflow.repositoryPath,
           }
         : undefined,
       summary: report
@@ -1111,10 +1188,10 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
             text: report.summary,
             recommendation: report.recommendation,
             failedTasks: report.failedTasks,
-            failedGates: report.failedGates
+            failedGates: report.failedGates,
           }
         : undefined,
-      events
+      events,
     };
   });
 
@@ -1155,13 +1232,13 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const workflowArtifactRoot = resolve(artifactRoot, request.params.id);
     const artifactPath = resolveArtifactPath(
       request.query.path,
-      workflowArtifactRoot
+      workflowArtifactRoot,
     );
 
     if (!isPathWithin(artifactPath, workflowArtifactRoot)) {
       return reply.code(403).send({
         error: "artifact_path_not_allowed",
-        message: "Artifact path is outside this workflow artifact directory."
+        message: "Artifact path is outside this workflow artifact directory.",
       });
     }
 
@@ -1176,14 +1253,15 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     await appendAuditEvent({
       type: "workflow.artifact_read",
-      actor: "operator",
+      actor:
+        identifyAuthRole(request.headers.authorization ?? "") ?? "operator",
       workflowId: request.params.id,
       metadata: {
         artifactPath,
         maxBytes: String(maxBytes),
         sizeBytes: String(sizeBytes),
-        truncated: String(truncated)
-      }
+        truncated: String(truncated),
+      },
     });
 
     return {
@@ -1193,7 +1271,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       contentType: "text/plain; charset=utf-8",
       sizeBytes,
       maxBytes,
-      truncated
+      truncated,
     };
   });
 
@@ -1207,7 +1285,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         return reply.code(409).send({
           error: "merge_candidate_not_ready",
           message: error.message,
-          status: error.status
+          status: error.status,
         });
       }
 
@@ -1230,8 +1308,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           repositoryPath: result.repositoryPath,
           sourceBranches: result.sourceBranches.join(","),
           patchArtifactPath: result.patchArtifactPath ?? "",
-          gitStatus: result.gitStatus
-        }
+          gitStatus: result.gitStatus,
+        },
       });
 
       return result;
@@ -1240,7 +1318,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
         return reply.code(409).send({
           error: "merge_candidate_not_ready",
           message: error.message,
-          status: error.status
+          status: error.status,
         });
       }
 
@@ -1249,7 +1327,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           error: "merge_candidate_apply_blocked",
           reason: error.reason,
           message: error.message,
-          detail: error.detail
+          detail: error.detail,
         });
       }
 
@@ -1268,7 +1346,10 @@ function parseAllowedRepositoryRoots(value?: string): string[] {
     .map((entry) => resolve(entry));
 }
 
-function isRepositoryPathAllowed(path: string, allowedRoots: string[]): boolean {
+function isRepositoryPathAllowed(
+  path: string,
+  allowedRoots: string[],
+): boolean {
   if (allowedRoots.length === 0) {
     return true;
   }
@@ -1298,7 +1379,10 @@ function limitToRecent<T>(items: T[], value?: string): T[] {
   return items.slice(-Math.min(parsed, 100));
 }
 
-function resolveArtifactPath(path: string, workflowArtifactRoot: string): string {
+function resolveArtifactPath(
+  path: string,
+  workflowArtifactRoot: string,
+): string {
   return isAbsolute(path) ? resolve(path) : resolve(workflowArtifactRoot, path);
 }
 
@@ -1346,18 +1430,14 @@ function readArtifactPrefix(path: string, maxBytes: number): string {
   }
 }
 
-function createWritableDirectoryCheck(
-  id: string,
-  label: string,
-  path: string
-) {
+function createWritableDirectoryCheck(id: string, label: string, path: string) {
   try {
     mkdirSync(path, { recursive: true });
     const probePath = join(
       path,
       `.readiness-${process.pid}-${Date.now()}-${Math.random()
         .toString(36)
-        .slice(2)}`
+        .slice(2)}`,
     );
     const file = openSync(probePath, "w");
     closeSync(file);
@@ -1368,7 +1448,7 @@ function createWritableDirectoryCheck(
       label,
       ok: true,
       status: "ready",
-      path
+      path,
     };
   } catch (error) {
     return {
@@ -1377,7 +1457,7 @@ function createWritableDirectoryCheck(
       ok: false,
       status: "failed",
       path,
-      message: error instanceof Error ? error.message : String(error)
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -1385,7 +1465,7 @@ function createWritableDirectoryCheck(
 function createGitCliCheck() {
   const result = spawnSync("git", ["--version"], {
     encoding: "utf8",
-    windowsHide: true
+    windowsHide: true,
   });
   const version = result.stdout.trim();
 
@@ -1395,7 +1475,7 @@ function createGitCliCheck() {
       label: "Git CLI",
       ok: true,
       status: "ready",
-      version
+      version,
     };
   }
 
@@ -1404,7 +1484,7 @@ function createGitCliCheck() {
     label: "Git CLI",
     ok: false,
     status: "failed",
-    message: result.stderr.trim() || "git --version failed"
+    message: result.stderr.trim() || "git --version failed",
   };
 }
 
@@ -1419,7 +1499,7 @@ function createProductionConfigCheck(input: {
           !isProductionApiToken(input.apiToken) ? "MAWO_API_TOKEN" : undefined,
           input.allowedRepositoryRoots.length === 0
             ? "MAWO_ALLOWED_REPOSITORY_ROOTS"
-            : undefined
+            : undefined,
         ].filter((item): item is string => Boolean(item))
       : [];
   const ok = missing.length === 0;
@@ -1432,7 +1512,7 @@ function createProductionConfigCheck(input: {
     deploymentMode: input.deploymentMode,
     protectedByToken: Boolean(input.apiToken),
     allowedRepositoryRootsConfigured: input.allowedRepositoryRoots.length > 0,
-    missing
+    missing,
   };
 }
 
@@ -1458,7 +1538,7 @@ function createDeploymentTopologyCheck(input: {
       maxSupportedApiReplicas,
       stateBackend: input.stateBackend,
       queueBackend: input.queueBackend,
-      message: "MAWO_API_REPLICA_COUNT must be a positive integer."
+      message: "MAWO_API_REPLICA_COUNT must be a positive integer.",
     };
   }
 
@@ -1478,7 +1558,7 @@ function createDeploymentTopologyCheck(input: {
     queueBackend: input.queueBackend,
     message: scaledPastRuntimeLimit
       ? "The active queue backend supports one API replica. Set MAWO_API_REPLICA_COUNT=1 or migrate the state and queue backends before scaling."
-      : "Runtime topology is compatible with the configured API replica count."
+      : "Runtime topology is compatible with the configured API replica count.",
   };
 }
 
@@ -1497,7 +1577,7 @@ function createRuntimeBackendCheck(input: {
       : undefined,
     input.requestedQueueBackend !== input.activeQueueBackend
       ? `MAWO_QUEUE_BACKEND=${input.requestedQueueBackend}`
-      : undefined
+      : undefined,
   ].filter((item): item is string => Boolean(item));
   const ok = unsupported.length === 0;
 
@@ -1516,7 +1596,7 @@ function createRuntimeBackendCheck(input: {
     unsupported,
     message: ok
       ? `Using ${input.activeStateBackend} state and ${input.activeQueueBackend} queue with max ${input.maxConcurrentJobs} concurrent workflow job${input.maxConcurrentJobs === 1 ? "" : "s"}.`
-      : `Requested runtime backend is not active yet: ${unsupported.join(", ")}. Keep unsupported backends on implemented values before rollout.`
+      : `Requested runtime backend is not active yet: ${unsupported.join(", ")}. Keep unsupported backends on implemented values before rollout.`,
   };
 }
 
@@ -1546,7 +1626,7 @@ type WorkerHealthResponse = {
 function createWorkerHealth(
   events: AuditEvent[],
   staleAfterMs: number,
-  checkedAt: Date = new Date()
+  checkedAt: Date = new Date(),
 ): WorkerHealthResponse {
   const latestByWorker = new Map<string, AuditEvent>();
 
@@ -1586,7 +1666,7 @@ function createWorkerHealth(
         ...(event.jobId ? { jobId: event.jobId } : {}),
         ...(event.metadata?.lastJobStatus
           ? { lastJobStatus: event.metadata.lastJobStatus }
-          : {})
+          : {}),
       };
     })
     .sort((left, right) => left.workerId.localeCompare(right.workerId));
@@ -1600,9 +1680,9 @@ function createWorkerHealth(
     summary: {
       totalWorkers: workers.length,
       healthyWorkers,
-      staleWorkers
+      staleWorkers,
     },
-    workers
+    workers,
   };
 }
 
@@ -1627,7 +1707,7 @@ function createWorkerHealthCheck(input: {
       ? required
         ? "At least one Postgres workflow worker is reporting a fresh heartbeat."
         : "External workers are optional for the active queue backend."
-      : "Postgres queue backend requires at least one fresh workflow worker heartbeat."
+      : "Postgres queue backend requires at least one fresh workflow worker heartbeat.",
   };
 }
 
@@ -1681,7 +1761,7 @@ function parseWorkerStaleAfterMs(value?: string): number {
 
 function parseRuntimeBackend(
   value: string | undefined,
-  fallback: "file" | "in_process"
+  fallback: "file" | "in_process",
 ): string {
   const normalized = value?.trim().toLowerCase().replace("-", "_");
 

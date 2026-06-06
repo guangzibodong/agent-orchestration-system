@@ -11,7 +11,7 @@ import type { PrismaAuditEventRow } from "./runner/prisma-audit-store.js";
 import type { PrismaWorkflowJobRow } from "./runner/prisma-job-store.js";
 import type {
   RepositoryStore,
-  RepositoryUpsertResult
+  RepositoryUpsertResult,
 } from "./runner/file-repository-store.js";
 import { LocalRunner, type LocalWorkflowRun } from "./runner/local-runner.js";
 import { ShellAdapter } from "./runner/shell-adapter.js";
@@ -40,7 +40,9 @@ async function run(command: string, cwd: string) {
   const result = await shell.run({ command, cwd });
 
   if (result.status !== "passed") {
-    throw new Error(result.stderr || result.stdout || `Command failed: ${command}`);
+    throw new Error(
+      result.stderr || result.stdout || `Command failed: ${command}`,
+    );
   }
 
   return result;
@@ -54,10 +56,12 @@ function delay(ms: number): Promise<void> {
 
 function matchesWorkflowJobWhere(
   row: PrismaWorkflowJobRow,
-  where: PrismaWorkflowJobWhere
+  where: PrismaWorkflowJobWhere,
 ): boolean {
   if (where.OR) {
-    return where.OR.some((condition) => matchesWorkflowJobWhere(row, condition));
+    return where.OR.some((condition) =>
+      matchesWorkflowJobWhere(row, condition),
+    );
   }
 
   if (where.id && row.id !== where.id) {
@@ -95,37 +99,39 @@ function createEmptyPrismaStateClient() {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
-      delete: vi.fn()
+      delete: vi.fn(),
     },
     workflowRun: {
       findMany: vi.fn(async () => []),
-      upsert: vi.fn()
+      upsert: vi.fn(),
     },
     workflowTaskRun: {
       deleteMany: vi.fn(),
-      createMany: vi.fn()
+      createMany: vi.fn(),
     },
     qualityGateRun: {
       deleteMany: vi.fn(),
-      createMany: vi.fn()
+      createMany: vi.fn(),
     },
     workflowJob: {
       findMany: vi.fn(async () => []),
       findFirst: vi.fn(async () => null),
       findUnique: vi.fn(async () => null),
       updateMany: vi.fn(async () => ({ count: 0 })),
-      upsert: vi.fn()
+      upsert: vi.fn(),
     },
     auditEvent: {
       findMany: vi.fn(async () => []),
-      create: vi.fn()
-    }
+      create: vi.fn(),
+    },
   };
 }
 
-function createMutablePrismaStateClient(input: {
-  workflowJobs?: PrismaWorkflowJobRow[];
-} = {}) {
+function createMutablePrismaStateClient(
+  input: {
+    workflowJobs?: PrismaWorkflowJobRow[];
+  } = {},
+) {
   const workflowJobs = [...(input.workflowJobs ?? [])];
   const auditEvents: PrismaAuditEventRow[] = [];
   const prismaClient = {
@@ -135,24 +141,25 @@ function createMutablePrismaStateClient(input: {
         [...workflowJobs].sort(
           (left, right) =>
             new Date(left.updatedAt).getTime() -
-            new Date(right.updatedAt).getTime()
-        )
+            new Date(right.updatedAt).getTime(),
+        ),
       ),
       findFirst: vi.fn(
         async (args: {
           where: PrismaWorkflowJobWhere;
           orderBy: { createdAt: "asc" };
         }) =>
-        [...workflowJobs]
-          .filter((job) => matchesWorkflowJobWhere(job, args.where))
-          .sort(
-            (left, right) =>
-              new Date(left.createdAt).getTime() -
-              new Date(right.createdAt).getTime()
-          )[0] ?? null
+          [...workflowJobs]
+            .filter((job) => matchesWorkflowJobWhere(job, args.where))
+            .sort(
+              (left, right) =>
+                new Date(left.createdAt).getTime() -
+                new Date(right.createdAt).getTime(),
+            )[0] ?? null,
       ),
-      findUnique: vi.fn(async (args: { where: { id: string } }) =>
-        workflowJobs.find((job) => job.id === args.where.id) ?? null
+      findUnique: vi.fn(
+        async (args: { where: { id: string } }) =>
+          workflowJobs.find((job) => job.id === args.where.id) ?? null,
       ),
       updateMany: vi.fn(
         async (args: {
@@ -162,7 +169,7 @@ function createMutablePrismaStateClient(input: {
           };
         }) => {
           const index = workflowJobs.findIndex((job) =>
-            matchesWorkflowJobWhere(job, args.where)
+            matchesWorkflowJobWhere(job, args.where),
           );
 
           if (index < 0) {
@@ -173,11 +180,11 @@ function createMutablePrismaStateClient(input: {
           workflowJobs[index] = {
             ...existing,
             ...args.data,
-            attempts: existing.attempts + (args.data.attempts?.increment ?? 0)
+            attempts: existing.attempts + (args.data.attempts?.increment ?? 0),
           };
 
           return { count: 1 };
-        }
+        },
       ),
       upsert: vi.fn(
         async (args: {
@@ -185,7 +192,9 @@ function createMutablePrismaStateClient(input: {
           create: PrismaWorkflowJobRow;
           update: Omit<PrismaWorkflowJobRow, "id" | "attempts">;
         }) => {
-          const index = workflowJobs.findIndex((job) => job.id === args.where.id);
+          const index = workflowJobs.findIndex(
+            (job) => job.id === args.where.id,
+          );
 
           if (index < 0) {
             workflowJobs.push(args.create);
@@ -194,12 +203,12 @@ function createMutablePrismaStateClient(input: {
 
           workflowJobs[index] = {
             ...workflowJobs[index]!,
-            ...args.update
+            ...args.update,
           };
 
           return workflowJobs[index]!;
-        }
-      )
+        },
+      ),
     },
     auditEvent: {
       findMany: vi.fn(async () => auditEvents),
@@ -222,19 +231,19 @@ function createMutablePrismaStateClient(input: {
             workflowRunId: args.data.workflowRunId,
             jobId: args.data.jobId,
             metadata: args.data.metadata,
-            createdAt: args.data.createdAt ?? new Date()
+            createdAt: args.data.createdAt ?? new Date(),
           };
           auditEvents.push(row);
           return row;
-        }
-      )
-    }
+        },
+      ),
+    },
   };
 
   return {
     auditEvents,
     prismaClient,
-    workflowJobs
+    workflowJobs,
   };
 }
 
@@ -265,63 +274,223 @@ describe("runner API", () => {
   it("requires bearer auth for protected endpoints when an API token is configured", async () => {
     const app = buildApp(undefined, {
       env: {
-        MAWO_API_TOKEN: "secret-token"
-      }
+        MAWO_API_TOKEN: "secret-token",
+      },
     });
 
     const healthResponse = await app.inject({
       method: "GET",
-      url: "/health"
+      url: "/health",
     });
     const rejectedResponse = await app.inject({
       method: "GET",
-      url: "/workflows"
+      url: "/workflows",
     });
     const acceptedResponse = await app.inject({
       method: "GET",
       url: "/workflows",
       headers: {
-        authorization: "Bearer secret-token"
-      }
+        authorization: "Bearer secret-token",
+      },
     });
 
     expect(healthResponse.statusCode).toBe(200);
     expect(rejectedResponse.statusCode).toBe(401);
     expect(rejectedResponse.json()).toMatchObject({
-      error: "unauthorized"
+      error: "unauthorized",
     });
     expect(acceptedResponse.statusCode).toBe(200);
+  });
+
+  it("allows a viewer token to read operational endpoints", async () => {
+    const app = buildApp(undefined, {
+      env: {
+        MAWO_API_TOKEN: "operator-token",
+        MAWO_VIEWER_API_TOKEN: "viewer-token",
+      },
+    });
+    const viewerHeaders = {
+      authorization: "Bearer viewer-token",
+    };
+    const requests = [
+      { method: "GET", url: "/readiness" },
+      { method: "GET", url: "/agents" },
+      { method: "GET", url: "/agents/health" },
+      { method: "GET", url: "/workers/health" },
+      { method: "GET", url: "/operations/snapshot" },
+      { method: "GET", url: "/repositories" },
+      { method: "GET", url: "/workflows" },
+      { method: "GET", url: "/workflows/missing-workflow" },
+      { method: "GET", url: "/workflows/missing-workflow/report" },
+      {
+        method: "GET",
+        url: "/workflows/missing-workflow/artifact?path=report.json",
+      },
+      { method: "GET", url: "/workflows/missing-workflow/merge-candidate" },
+      { method: "GET", url: "/workflows/missing-workflow/workspaces" },
+      { method: "GET", url: "/jobs" },
+      { method: "GET", url: "/jobs/missing-job" },
+      { method: "GET", url: "/jobs/missing-job/timeline" },
+      { method: "GET", url: "/audit-events" },
+    ] as const;
+
+    const responses = await Promise.all(
+      requests.map((request) =>
+        app.inject({
+          ...request,
+          headers: viewerHeaders,
+        }),
+      ),
+    );
+
+    expect(responses.map((response) => response.statusCode)).toEqual([
+      200, 200, 200, 200, 200, 200, 200, 404, 404, 404, 404, 404, 200, 404, 404,
+      200,
+    ]);
+  });
+
+  it("blocks a viewer token from mutating repositories, workflows, jobs, and merge candidates", async () => {
+    const app = buildApp(undefined, {
+      env: {
+        MAWO_API_TOKEN: "operator-token",
+        MAWO_VIEWER_API_TOKEN: "viewer-token",
+      },
+    });
+    const viewerHeaders = {
+      authorization: "Bearer viewer-token",
+    };
+    const requests = [
+      { method: "POST", url: "/repositories", payload: {} },
+      { method: "DELETE", url: "/repositories/missing-repository" },
+      { method: "POST", url: "/workflows/demo" },
+      { method: "POST", url: "/workflows/worktree-demo" },
+      { method: "POST", url: "/workflows/agent-demo" },
+      { method: "POST", url: "/workflows/repository", payload: {} },
+      {
+        method: "POST",
+        url: "/workflows/missing-workflow/review",
+        payload: {},
+      },
+      { method: "POST", url: "/workflows/missing-workflow/run" },
+      { method: "POST", url: "/workflows/missing-workflow/retry" },
+      { method: "POST", url: "/workflows/missing-workflow/enqueue" },
+      { method: "POST", url: "/workflows/missing-workflow/workspaces/cleanup" },
+      {
+        method: "POST",
+        url: "/workflows/missing-workflow/merge-candidate/apply",
+      },
+      { method: "POST", url: "/jobs/missing-job/cancel" },
+    ] as const;
+
+    const responses = await Promise.all(
+      requests.map((request) =>
+        app.inject({
+          ...request,
+          headers: viewerHeaders,
+        }),
+      ),
+    );
+
+    for (const response of responses) {
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({
+        error: "forbidden",
+        message: "This endpoint requires an operator token.",
+        requiredRole: "operator",
+        role: "viewer",
+      });
+    }
+  });
+
+  it("keeps operator token access for mutating endpoints when a viewer token is configured", async () => {
+    const app = buildApp(undefined, {
+      env: {
+        MAWO_API_TOKEN: "operator-token",
+        MAWO_VIEWER_API_TOKEN: "viewer-token",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/workflows/demo",
+      headers: {
+        authorization: "Bearer operator-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: expect.any(String),
+      status: "ready",
+    });
+  });
+
+  it("protects write endpoints when only a viewer token is configured", async () => {
+    const app = buildApp(undefined, {
+      env: {
+        MAWO_VIEWER_API_TOKEN: "viewer-token",
+      },
+    });
+
+    const unauthenticatedRead = await app.inject({
+      method: "GET",
+      url: "/workflows",
+    });
+    const viewerRead = await app.inject({
+      method: "GET",
+      url: "/workflows",
+      headers: {
+        authorization: "Bearer viewer-token",
+      },
+    });
+    const viewerWrite = await app.inject({
+      method: "POST",
+      url: "/workflows/demo",
+      headers: {
+        authorization: "Bearer viewer-token",
+      },
+    });
+
+    expect(unauthenticatedRead.statusCode).toBe(401);
+    expect(viewerRead.statusCode).toBe(200);
+    expect(viewerWrite.statusCode).toBe(403);
+    expect(viewerWrite.json()).toMatchObject({
+      error: "forbidden",
+      requiredRole: "operator",
+      role: "viewer",
+    });
   });
 
   it("lists configured agents without exposing command templates", async () => {
     const app = buildApp(undefined, {
       env: {
-        MAWO_CODEX_COMMAND_TEMPLATE: "codex run --prompt-file {promptFile}"
-      }
+        MAWO_CODEX_COMMAND_TEMPLATE: "codex run --prompt-file {promptFile}",
+      },
     });
 
     const response = await app.inject({
       method: "GET",
-      url: "/agents"
+      url: "/agents",
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual([
       { id: "fake-agent", label: "Fake CLI Agent" },
-      { id: "codex", label: "Codex CLI" }
+      { id: "codex", label: "Codex CLI" },
     ]);
   });
 
   it("exposes agent health without exposing command templates", async () => {
     const app = buildApp(undefined, {
       env: {
-        MAWO_CODEX_COMMAND_TEMPLATE: "missing-codex-binary run --prompt-file {promptFile}"
-      }
+        MAWO_CODEX_COMMAND_TEMPLATE:
+          "missing-codex-binary run --prompt-file {promptFile}",
+      },
     });
 
     const response = await app.inject({
       method: "GET",
-      url: "/agents/health"
+      url: "/agents/health",
     });
     const health = response.json();
 
@@ -330,14 +499,14 @@ describe("runner API", () => {
       expect.objectContaining({
         id: "fake-agent",
         healthy: true,
-        status: "healthy"
+        status: "healthy",
       }),
       expect.objectContaining({
         id: "codex",
         healthy: false,
         status: "missing_command",
-        command: "missing-codex-binary"
-      })
+        command: "missing-codex-binary",
+      }),
     ]);
     expect(JSON.stringify(health)).not.toContain("{promptFile}");
   });
@@ -353,8 +522,8 @@ describe("runner API", () => {
         actor: "worker",
         metadata: {
           workerId: "worker-a",
-          status: "idle"
-        }
+          status: "idle",
+        },
       },
       {
         id: "audit-worker-a-new",
@@ -365,8 +534,8 @@ describe("runner API", () => {
         jobId: "job-1",
         metadata: {
           workerId: "worker-a",
-          status: "running"
-        }
+          status: "running",
+        },
       },
       {
         id: "audit-worker-b-stale",
@@ -375,28 +544,28 @@ describe("runner API", () => {
         actor: "worker",
         metadata: {
           workerId: "worker-b",
-          status: "idle"
-        }
-      }
+          status: "idle",
+        },
+      },
     ];
     const auditStore: AuditStore = {
       list: vi.fn(async (filter) =>
         auditEvents.filter((event) =>
-          filter?.type ? event.type === filter.type : true
-        )
+          filter?.type ? event.type === filter.type : true,
+        ),
       ),
-      append: vi.fn()
+      append: vi.fn(),
     };
     const app = buildApp(undefined, {
       auditStore,
       env: {
-        MAWO_WORKER_STALE_MS: "60000"
-      }
+        MAWO_WORKER_STALE_MS: "60000",
+      },
     });
 
     const response = await app.inject({
       method: "GET",
-      url: "/workers/health"
+      url: "/workers/health",
     });
     const health = response.json();
 
@@ -407,7 +576,7 @@ describe("runner API", () => {
       summary: {
         totalWorkers: 2,
         healthyWorkers: 1,
-        staleWorkers: 1
+        staleWorkers: 1,
       },
       workers: [
         {
@@ -416,15 +585,15 @@ describe("runner API", () => {
           status: "running",
           lastSeenAt: freshSeenAt,
           workflowId: "workflow-1",
-          jobId: "job-1"
+          jobId: "job-1",
         },
         {
           workerId: "worker-b",
           healthy: false,
           status: "idle",
-          lastSeenAt: staleSeenAt
-        }
-      ]
+          lastSeenAt: staleSeenAt,
+        },
+      ],
     });
   });
 
@@ -436,20 +605,20 @@ describe("runner API", () => {
       env: {
         MAWO_API_TOKEN: "secret-token",
         MAWO_CODEX_COMMAND_TEMPLATE:
-          "missing-codex-binary run --prompt-file {promptFile}"
-      }
+          "missing-codex-binary run --prompt-file {promptFile}",
+      },
     });
 
     const rejectedResponse = await app.inject({
       method: "GET",
-      url: "/readiness"
+      url: "/readiness",
     });
     const response = await app.inject({
       method: "GET",
       url: "/readiness",
       headers: {
-        authorization: "Bearer secret-token"
-      }
+        authorization: "Bearer secret-token",
+      },
     });
     const readiness = response.json();
 
@@ -459,7 +628,7 @@ describe("runner API", () => {
       ok: false,
       service: "mawo-api",
       protectedByToken: true,
-      activeJobs: 0
+      activeJobs: 0,
     });
     expect(readiness.checkedAt).toEqual(expect.any(String));
     expect(readiness.checks).toEqual(
@@ -468,33 +637,35 @@ describe("runner API", () => {
           id: "state_store",
           ok: true,
           status: "ready",
-          path: join(demoRoot, ".mawo", "state")
+          path: join(demoRoot, ".mawo", "state"),
         }),
         expect.objectContaining({
           id: "artifact_store",
           ok: true,
           status: "ready",
-          path: join(demoRoot, ".mawo", "artifacts")
+          path: join(demoRoot, ".mawo", "artifacts"),
         }),
         expect.objectContaining({
           id: "git_cli",
           ok: true,
-          status: "ready"
+          status: "ready",
         }),
         expect.objectContaining({
           id: "agents",
           ok: false,
           status: "degraded",
           healthyAgents: 1,
-          totalAgents: 2
-        })
-      ])
+          totalAgents: 2,
+        }),
+      ]),
     );
     expect(JSON.stringify(readiness)).not.toContain("{promptFile}");
   });
 
   it("blocks production readiness when postgres queue has no fresh worker heartbeat", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-postgres-worker-blocked-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-postgres-worker-blocked-test-"),
+    );
     tempRoots.push(demoRoot);
     const token = "production-token-1234567890";
     const { prismaClient } = createMutablePrismaStateClient();
@@ -507,24 +678,24 @@ describe("runner API", () => {
         MAWO_STATE_BACKEND: "postgres",
         MAWO_QUEUE_BACKEND: "postgres",
         DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
-        MAWO_WORKER_STALE_MS: "60000"
+        MAWO_WORKER_STALE_MS: "60000",
       },
-      prismaClient
+      prismaClient,
     });
 
     const response = await app.inject({
       method: "GET",
       url: "/readiness",
       headers: {
-        authorization: `Bearer ${token}`
-      }
+        authorization: `Bearer ${token}`,
+      },
     });
     const readiness = response.json();
 
     expect(response.statusCode).toBe(200);
     expect(readiness).toMatchObject({
       ok: false,
-      deploymentMode: "production"
+      deploymentMode: "production",
     });
     expect(readiness.checks).toContainEqual(
       expect.objectContaining({
@@ -533,29 +704,31 @@ describe("runner API", () => {
         status: "blocked",
         required: true,
         healthyWorkers: 0,
-        totalWorkers: 0
-      })
+        totalWorkers: 0,
+      }),
     );
   });
 
   it("blocks production readiness when security deployment settings are placeholders", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-readiness-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-production-readiness-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, {
       demoRoot,
       env: {
         NODE_ENV: "production",
         MAWO_API_TOKEN: "change-me-before-production",
-        MAWO_ALLOWED_REPOSITORY_ROOTS: ""
-      }
+        MAWO_ALLOWED_REPOSITORY_ROOTS: "",
+      },
     });
 
     const response = await app.inject({
       method: "GET",
       url: "/readiness",
       headers: {
-        authorization: "Bearer change-me-before-production"
-      }
+        authorization: "Bearer change-me-before-production",
+      },
     });
     const readiness = response.json();
 
@@ -563,7 +736,7 @@ describe("runner API", () => {
     expect(readiness).toMatchObject({
       ok: false,
       deploymentMode: "production",
-      protectedByToken: true
+      protectedByToken: true,
     });
     expect(readiness.checks).toContainEqual(
       expect.objectContaining({
@@ -572,15 +745,19 @@ describe("runner API", () => {
         status: "blocked",
         missing: expect.arrayContaining([
           "MAWO_API_TOKEN",
-          "MAWO_ALLOWED_REPOSITORY_ROOTS"
-        ])
-      })
+          "MAWO_ALLOWED_REPOSITORY_ROOTS",
+        ]),
+      }),
     );
-    expect(JSON.stringify(readiness)).not.toContain("change-me-before-production");
+    expect(JSON.stringify(readiness)).not.toContain(
+      "change-me-before-production",
+    );
   });
 
   it("blocks production readiness when file-backed runtime is scaled past one API replica", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-topology-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-production-topology-test-"),
+    );
     tempRoots.push(demoRoot);
     const token = "production-token-1234567890";
     const app = buildApp(undefined, {
@@ -589,23 +766,23 @@ describe("runner API", () => {
         NODE_ENV: "production",
         MAWO_API_TOKEN: token,
         MAWO_ALLOWED_REPOSITORY_ROOTS: demoRoot,
-        MAWO_API_REPLICA_COUNT: "2"
-      }
+        MAWO_API_REPLICA_COUNT: "2",
+      },
     });
 
     const response = await app.inject({
       method: "GET",
       url: "/readiness",
       headers: {
-        authorization: `Bearer ${token}`
-      }
+        authorization: `Bearer ${token}`,
+      },
     });
     const readiness = response.json();
 
     expect(response.statusCode).toBe(200);
     expect(readiness).toMatchObject({
       ok: false,
-      deploymentMode: "production"
+      deploymentMode: "production",
     });
     expect(readiness.checks).toContainEqual(
       expect.objectContaining({
@@ -614,13 +791,15 @@ describe("runner API", () => {
         status: "blocked",
         apiReplicaCount: 2,
         stateBackend: "file",
-        queueBackend: "in_process"
-      })
+        queueBackend: "in_process",
+      }),
     );
   });
 
   it("blocks production readiness when an unsupported queue backend is requested", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-production-backend-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-production-backend-test-"),
+    );
     tempRoots.push(demoRoot);
     const token = "production-token-1234567890";
     const app = buildApp(undefined, {
@@ -632,24 +811,24 @@ describe("runner API", () => {
         MAWO_STATE_BACKEND: "postgres",
         MAWO_QUEUE_BACKEND: "redis",
         DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
-        REDIS_URL: "redis://localhost:6379"
+        REDIS_URL: "redis://localhost:6379",
       },
-      prismaClient: createEmptyPrismaStateClient()
+      prismaClient: createEmptyPrismaStateClient(),
     });
 
     const response = await app.inject({
       method: "GET",
       url: "/readiness",
       headers: {
-        authorization: `Bearer ${token}`
-      }
+        authorization: `Bearer ${token}`,
+      },
     });
     const readiness = response.json();
 
     expect(response.statusCode).toBe(200);
     expect(readiness).toMatchObject({
       ok: false,
-      deploymentMode: "production"
+      deploymentMode: "production",
     });
     expect(readiness.checks).toContainEqual(
       expect.objectContaining({
@@ -661,13 +840,15 @@ describe("runner API", () => {
         requestedQueueBackend: "redis",
         activeQueueBackend: "in_process",
         databaseUrlConfigured: true,
-        redisUrlConfigured: true
-      })
+        redisUrlConfigured: true,
+      }),
     );
   });
 
   it("allows production readiness to scale when postgres state and queue backends are active", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-postgres-queue-ready-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-postgres-queue-ready-test-"),
+    );
     tempRoots.push(demoRoot);
     const token = "production-token-1234567890";
     const { auditEvents, prismaClient } = createMutablePrismaStateClient();
@@ -679,9 +860,9 @@ describe("runner API", () => {
       jobId: null,
       metadata: {
         workerId: "worker-a",
-        status: "idle"
+        status: "idle",
       },
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     const app = buildApp(undefined, {
       demoRoot,
@@ -692,33 +873,33 @@ describe("runner API", () => {
         MAWO_STATE_BACKEND: "postgres",
         MAWO_QUEUE_BACKEND: "postgres",
         MAWO_API_REPLICA_COUNT: "2",
-        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo"
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
       },
-      prismaClient
+      prismaClient,
     });
 
     const response = await app.inject({
       method: "GET",
       url: "/readiness",
       headers: {
-        authorization: `Bearer ${token}`
-      }
+        authorization: `Bearer ${token}`,
+      },
     });
     const readiness = response.json();
     const runtimeBackend = readiness.checks.find(
-      (check: { id: string }) => check.id === "runtime_backend"
+      (check: { id: string }) => check.id === "runtime_backend",
     );
     const deploymentTopology = readiness.checks.find(
-      (check: { id: string }) => check.id === "deployment_topology"
+      (check: { id: string }) => check.id === "deployment_topology",
     );
     const workerHealth = readiness.checks.find(
-      (check: { id: string }) => check.id === "workers"
+      (check: { id: string }) => check.id === "workers",
     );
 
     expect(response.statusCode).toBe(200);
     expect(readiness).toMatchObject({
       ok: true,
-      deploymentMode: "production"
+      deploymentMode: "production",
     });
     expect(runtimeBackend).toMatchObject({
       ok: true,
@@ -727,27 +908,31 @@ describe("runner API", () => {
       activeStateBackend: "postgres",
       requestedQueueBackend: "postgres",
       activeQueueBackend: "postgres",
-      databaseUrlConfigured: true
+      databaseUrlConfigured: true,
     });
     expect(deploymentTopology).toMatchObject({
       ok: true,
       status: "ready",
       apiReplicaCount: 2,
       stateBackend: "postgres",
-      queueBackend: "postgres"
+      queueBackend: "postgres",
     });
     expect(workerHealth).toMatchObject({
       ok: true,
       status: "ready",
       required: true,
       healthyWorkers: 1,
-      totalWorkers: 1
+      totalWorkers: 1,
     });
-    expect(deploymentTopology.maxSupportedApiReplicas).toBeGreaterThanOrEqual(2);
+    expect(deploymentTopology.maxSupportedApiReplicas).toBeGreaterThanOrEqual(
+      2,
+    );
   });
 
   it("returns an operations snapshot with scoped jobs audit readiness and worker health", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-operations-snapshot-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-operations-snapshot-test-"),
+    );
     tempRoots.push(demoRoot);
     const now = new Date().toISOString();
     const auditEvents: AuditEvent[] = [
@@ -759,8 +944,8 @@ describe("runner API", () => {
         workflowId: "workflow-1",
         jobId: "job-1",
         metadata: {
-          repositoryId: "repo-1"
-        }
+          repositoryId: "repo-1",
+        },
       },
       {
         id: "audit-2",
@@ -769,8 +954,8 @@ describe("runner API", () => {
         actor: "operator",
         workflowId: "workflow-2",
         metadata: {
-          repositoryId: "repo-2"
-        }
+          repositoryId: "repo-2",
+        },
       },
       {
         id: "audit-worker",
@@ -781,9 +966,9 @@ describe("runner API", () => {
         jobId: "job-1",
         metadata: {
           workerId: "worker-a",
-          status: "running"
-        }
-      }
+          status: "running",
+        },
+      },
     ];
     const auditStore: AuditStore = {
       list: vi.fn(async (filter) =>
@@ -791,13 +976,16 @@ describe("runner API", () => {
           if (filter?.type && event.type !== filter.type) {
             return false;
           }
-          if (filter?.repositoryId && event.metadata?.repositoryId !== filter.repositoryId) {
+          if (
+            filter?.repositoryId &&
+            event.metadata?.repositoryId !== filter.repositoryId
+          ) {
             return false;
           }
           return true;
-        })
+        }),
       ),
-      append: vi.fn()
+      append: vi.fn(),
     };
     const jobs: WorkflowJob[] = [
       {
@@ -805,19 +993,19 @@ describe("runner API", () => {
         workflowId: "workflow-1",
         status: "queued",
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
       },
       {
         id: "job-2",
         workflowId: "workflow-2",
         status: "failed",
         createdAt: now,
-        updatedAt: now
-      }
+        updatedAt: now,
+      },
     ];
     const jobStore: JobStore = {
       list: vi.fn(() => jobs),
-      save: vi.fn()
+      save: vi.fn(),
     };
     const storedWorkflows: LocalWorkflowRun[] = [
       {
@@ -829,7 +1017,7 @@ describe("runner API", () => {
         createdAt: now,
         updatedAt: now,
         tasks: [],
-        qualityGates: []
+        qualityGates: [],
       },
       {
         id: "workflow-2",
@@ -840,27 +1028,27 @@ describe("runner API", () => {
         createdAt: now,
         updatedAt: now,
         tasks: [],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     ];
     const runner = new LocalRunner(undefined, {
       runStore: {
         list: vi.fn(async () => storedWorkflows),
-        save: vi.fn()
-      }
+        save: vi.fn(),
+      },
     });
     const app = buildApp(runner, {
       demoRoot,
       auditStore,
       jobStore,
       env: {
-        MAWO_WORKER_STALE_MS: "60000"
-      }
+        MAWO_WORKER_STALE_MS: "60000",
+      },
     });
 
     const response = await app.inject({
       method: "GET",
-      url: "/operations/snapshot?repositoryId=repo-1&limit=1"
+      url: "/operations/snapshot?repositoryId=repo-1&limit=1",
     });
     const snapshot = response.json();
 
@@ -874,25 +1062,27 @@ describe("runner API", () => {
         failedJobs: 0,
         needsReviewWorkflows: 1,
         healthyWorkers: 1,
-        totalWorkers: 1
-      }
+        totalWorkers: 1,
+      },
     });
     expect(snapshot.auditEvents).toHaveLength(1);
     expect(snapshot.auditEvents[0]).toMatchObject({
       id: "audit-1",
-      workflowId: "workflow-1"
+      workflowId: "workflow-1",
     });
     expect(snapshot.jobs).toHaveLength(1);
     expect(snapshot.jobs[0]).toMatchObject({
       id: "job-1",
-      workflowId: "workflow-1"
+      workflowId: "workflow-1",
     });
     expect(snapshot.readiness.activeJobs).toBe(1);
     expect(snapshot.workerHealth.summary.healthyWorkers).toBe(1);
   });
 
   it("refreshes persisted workflow state before building operations snapshots", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-operations-refresh-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-operations-refresh-test-"),
+    );
     tempRoots.push(demoRoot);
     const now = new Date().toISOString();
     let storedWorkflows: LocalWorkflowRun[] = [
@@ -905,20 +1095,20 @@ describe("runner API", () => {
         createdAt: now,
         updatedAt: now,
         tasks: [],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     ];
     const runner = new LocalRunner(undefined, {
       runStore: {
         list: vi.fn(async () => storedWorkflows),
-        save: vi.fn()
-      }
+        save: vi.fn(),
+      },
     });
     const app = buildApp(runner, {
       demoRoot,
       env: {
-        MAWO_WORKER_STALE_MS: "60000"
-      }
+        MAWO_WORKER_STALE_MS: "60000",
+      },
     });
 
     await app.ready();
@@ -928,12 +1118,12 @@ describe("runner API", () => {
       {
         ...storedWorkflows[0]!,
         status: "needs_review",
-        updatedAt: new Date().toISOString()
-      }
+        updatedAt: new Date().toISOString(),
+      },
     ];
     const response = await app.inject({
       method: "GET",
-      url: "/operations/snapshot?repositoryId=repo-refresh"
+      url: "/operations/snapshot?repositoryId=repo-refresh",
     });
 
     expect(response.statusCode).toBe(200);
@@ -954,16 +1144,16 @@ describe("runner API", () => {
         createdAt: now,
         updatedAt: now,
         tasks: [],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     ];
     const runner = new LocalRunner(undefined, {
       runStore: {
         list: vi.fn(async () => storedWorkflows),
         save: vi.fn((run: LocalWorkflowRun) => {
           storedWorkflows = [run];
-        })
-      }
+        }),
+      },
     });
     const app = buildApp(runner, { demoRoot });
 
@@ -972,16 +1162,16 @@ describe("runner API", () => {
       {
         ...storedWorkflows[0]!,
         status: "needs_review",
-        updatedAt: new Date().toISOString()
-      }
+        updatedAt: new Date().toISOString(),
+      },
     ];
     const response = await app.inject({
       method: "POST",
       url: "/workflows/workflow-review-refresh/review",
       payload: {
         decision: "approve",
-        note: "External worker finished"
-      }
+        note: "External worker finished",
+      },
     });
 
     expect(response.statusCode).toBe(200);
@@ -990,8 +1180,8 @@ describe("runner API", () => {
       status: "completed",
       review: {
         decision: "approved",
-        note: "External worker finished"
-      }
+        note: "External worker finished",
+      },
     });
   });
 
@@ -1000,7 +1190,7 @@ describe("runner API", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
@@ -1010,7 +1200,7 @@ describe("runner API", () => {
 
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = runResponse.json();
 
@@ -1019,7 +1209,7 @@ describe("runner API", () => {
 
     const reportResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const report = reportResponse.json();
 
@@ -1035,7 +1225,7 @@ describe("runner API", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
 
@@ -1045,7 +1235,7 @@ describe("runner API", () => {
 
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = runResponse.json();
 
@@ -1056,7 +1246,7 @@ describe("runner API", () => {
 
     const reportResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const report = reportResponse.json();
 
@@ -1070,7 +1260,7 @@ describe("runner API", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/agent-demo"
+      url: "/workflows/agent-demo",
     });
     const created = createResponse.json();
 
@@ -1079,7 +1269,7 @@ describe("runner API", () => {
 
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = runResponse.json();
 
@@ -1090,7 +1280,7 @@ describe("runner API", () => {
 
     const reportResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const report = reportResponse.json();
 
@@ -1105,22 +1295,22 @@ describe("runner API", () => {
 
     const createResponse = await firstApp.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     await firstApp.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
 
     const secondApp = buildApp(undefined, { demoRoot });
     const restoredResponse = await secondApp.inject({
       method: "GET",
-      url: `/workflows/${created.id}`
+      url: `/workflows/${created.id}`,
     });
     const reportResponse = await secondApp.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const restored = restoredResponse.json();
     const report = reportResponse.json();
@@ -1133,14 +1323,16 @@ describe("runner API", () => {
   });
 
   it("filters workflow history by status and repository path before limiting", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-filter-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-workflow-filter-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
     await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const firstRepositoryWorkflowResponse = await app.inject({
       method: "POST",
@@ -1152,11 +1344,11 @@ describe("runner API", () => {
           {
             id: "noop",
             agent: "shell",
-            command: `${node} -e "console.log('first')"`
-          }
+            command: `${node} -e "console.log('first')"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const secondRepositoryWorkflowResponse = await app.inject({
       method: "POST",
@@ -1168,11 +1360,11 @@ describe("runner API", () => {
           {
             id: "noop",
             agent: "shell",
-            command: `${node} -e "console.log('second')"`
-          }
+            command: `${node} -e "console.log('second')"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const firstRepositoryWorkflow = firstRepositoryWorkflowResponse.json();
     const secondRepositoryWorkflow = secondRepositoryWorkflowResponse.json();
@@ -1180,12 +1372,12 @@ describe("runner API", () => {
     const filteredResponse = await app.inject({
       method: "GET",
       url: `/workflows?status=ready&repositoryPath=${encodeURIComponent(
-        repoPath
-      )}&limit=1`
+        repoPath,
+      )}&limit=1`,
     });
     const invalidStatusResponse = await app.inject({
       method: "GET",
-      url: "/workflows?status=not-real"
+      url: "/workflows?status=not-real",
     });
 
     expect(filteredResponse.statusCode).toBe(200);
@@ -1193,17 +1385,17 @@ describe("runner API", () => {
       expect.objectContaining({
         id: secondRepositoryWorkflow.id,
         status: "ready",
-        repositoryPath: repoPath
-      })
+        repositoryPath: repoPath,
+      }),
     ]);
     expect(filteredResponse.json()).not.toEqual([
       expect.objectContaining({
-        id: firstRepositoryWorkflow.id
-      })
+        id: firstRepositoryWorkflow.id,
+      }),
     ]);
     expect(invalidStatusResponse.statusCode).toBe(400);
     expect(invalidStatusResponse.json()).toMatchObject({
-      error: "invalid_workflow_status"
+      error: "invalid_workflow_status",
     });
   });
 
@@ -1214,24 +1406,24 @@ describe("runner API", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const reportResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const report = reportResponse.json();
 
     const artifactResponse = await app.inject({
       method: "GET",
       url: `/workflows/${created.id}/artifact?path=${encodeURIComponent(
-        report.reportArtifactPath
-      )}`
+        report.reportArtifactPath,
+      )}`,
     });
     const artifact = artifactResponse.json();
 
@@ -1239,7 +1431,7 @@ describe("runner API", () => {
     expect(artifact).toMatchObject({
       workflowId: created.id,
       contentType: "text/plain; charset=utf-8",
-      truncated: false
+      truncated: false,
     });
     expect(artifact.path).toContain("report.json");
     expect(artifact.sizeBytes).toBeGreaterThan(0);
@@ -1247,38 +1439,42 @@ describe("runner API", () => {
   });
 
   it("records audit events when workflow artifacts are read", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-audit-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-artifact-audit-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const reportResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const report = reportResponse.json();
 
     await app.inject({
       method: "GET",
       url: `/workflows/${created.id}/artifact?maxBytes=128&path=${encodeURIComponent(
-        report.reportArtifactPath
-      )}`
+        report.reportArtifactPath,
+      )}`,
     });
     const auditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?workflowId=${created.id}`
+      url: `/audit-events?workflowId=${created.id}`,
     });
     const artifactRead = auditResponse
       .json()
-      .find((event: { type: string }) => event.type === "workflow.artifact_read");
+      .find(
+        (event: { type: string }) => event.type === "workflow.artifact_read",
+      );
 
     expect(auditResponse.statusCode).toBe(200);
     expect(artifactRead).toMatchObject({
@@ -1288,57 +1484,61 @@ describe("runner API", () => {
       metadata: {
         artifactPath: report.reportArtifactPath,
         maxBytes: "128",
-        truncated: "true"
-      }
+        truncated: "true",
+      },
     });
     expect(Number(artifactRead.metadata.sizeBytes)).toBeGreaterThan(128);
   });
 
   it("rejects artifact reads outside the workflow artifact directory", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-guard-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-artifact-guard-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
 
     const artifactResponse = await app.inject({
       method: "GET",
       url: `/workflows/${created.id}/artifact?path=${encodeURIComponent(
-        join(demoRoot, ".mawo", "state", "workflows.json")
-      )}`
+        join(demoRoot, ".mawo", "state", "workflows.json"),
+      )}`,
     });
 
     expect(artifactResponse.statusCode).toBe(403);
     expect(artifactResponse.json()).toMatchObject({
-      error: "artifact_path_not_allowed"
+      error: "artifact_path_not_allowed",
     });
   });
 
   it("returns only the requested artifact prefix for large files", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-artifact-limit-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-artifact-limit-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const reportResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/report`
+      url: `/workflows/${created.id}/report`,
     });
     const report = reportResponse.json();
     await writeFile(report.reportArtifactPath, "🙂🙂🙂", "utf8");
@@ -1346,8 +1546,8 @@ describe("runner API", () => {
     const artifactResponse = await app.inject({
       method: "GET",
       url: `/workflows/${created.id}/artifact?maxBytes=8&path=${encodeURIComponent(
-        report.reportArtifactPath
-      )}`
+        report.reportArtifactPath,
+      )}`,
     });
     const artifact = artifactResponse.json();
 
@@ -1366,35 +1566,35 @@ describe("runner API", () => {
 
     const demoCreateResponse = await firstApp.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const demoWorkflow = demoCreateResponse.json();
     const enqueueResponse = await firstApp.inject({
       method: "POST",
-      url: `/workflows/${demoWorkflow.id}/enqueue`
+      url: `/workflows/${demoWorkflow.id}/enqueue`,
     });
     const queuedJob = enqueueResponse.json();
     await firstApp.inject({
       method: "POST",
-      url: `/jobs/${queuedJob.id}/cancel`
+      url: `/jobs/${queuedJob.id}/cancel`,
     });
 
     const reviewCreateResponse = await firstApp.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const reviewWorkflow = reviewCreateResponse.json();
     await firstApp.inject({
       method: "POST",
-      url: `/workflows/${reviewWorkflow.id}/run`
+      url: `/workflows/${reviewWorkflow.id}/run`,
     });
     await firstApp.inject({
       method: "POST",
       url: `/workflows/${reviewWorkflow.id}/review`,
       payload: {
         decision: "approve",
-        note: "Audit trail ready"
-      }
+        note: "Audit trail ready",
+      },
     });
 
     const failCreateResponse = await firstApp.inject({
@@ -1408,16 +1608,16 @@ describe("runner API", () => {
             id: "fail",
             title: "Fail once",
             agent: "shell",
-            command: `${node} -e "process.exit(7)"`
-          }
+            command: `${node} -e "process.exit(7)"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const retryWorkflow = failCreateResponse.json();
     const failedRetryRunResponse = await firstApp.inject({
       method: "POST",
-      url: `/workflows/${retryWorkflow.id}/run`
+      url: `/workflows/${retryWorkflow.id}/run`,
     });
     const failedRetryRun = failedRetryRunResponse.json() as {
       tasks: Array<{ workspace?: { path: string; branch: string } }>;
@@ -1425,12 +1625,12 @@ describe("runner API", () => {
     const retryWorkspace = failedRetryRun.tasks[0]?.workspace;
     await firstApp.inject({
       method: "POST",
-      url: `/workflows/${retryWorkflow.id}/retry`
+      url: `/workflows/${retryWorkflow.id}/retry`,
     });
 
     const auditResponse = await firstApp.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
     const events = auditResponse.json();
 
@@ -1441,25 +1641,25 @@ describe("runner API", () => {
         "workflow.enqueued",
         "job.canceled",
         "workflow.reviewed",
-        "workflow.retry_requested"
-      ])
+        "workflow.retry_requested",
+      ]),
     );
     expect(
       events.find(
         (event: { type: string; workflowId?: string; jobId?: string }) =>
-          event.type === "job.canceled" && event.jobId === queuedJob.id
-      )
+          event.type === "job.canceled" && event.jobId === queuedJob.id,
+      ),
     ).toMatchObject({
       workflowId: demoWorkflow.id,
-      jobId: queuedJob.id
+      jobId: queuedJob.id,
     });
     expect(retryWorkspace).toBeDefined();
     expect(
       events.find(
         (event: { type: string; workflowId?: string }) =>
           event.type === "workflow.retry_requested" &&
-          event.workflowId === retryWorkflow.id
-      )
+          event.workflowId === retryWorkflow.id,
+      ),
     ).toMatchObject({
       metadata: {
         previousStatus: "failed",
@@ -1467,41 +1667,43 @@ describe("runner API", () => {
         cleanedCount: "1",
         cleanedTaskIds: "fail",
         cleanedBranches: retryWorkspace?.branch,
-        cleanedPaths: retryWorkspace?.path
-      }
+        cleanedPaths: retryWorkspace?.path,
+      },
     });
 
     const secondApp = buildApp(undefined, { demoRoot });
     const restoredResponse = await secondApp.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
     const restoredEvents = restoredResponse.json();
 
     expect(restoredResponse.statusCode).toBe(200);
     expect(restoredEvents.map((event: { id: string }) => event.id)).toEqual(
-      events.map((event: { id: string }) => event.id)
+      events.map((event: { id: string }) => event.id),
     );
   });
 
   it("persists task and gate lifecycle audit events while workflows run", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-runtime-audit-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-runtime-audit-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
 
     const auditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?workflowId=${created.id}`
+      url: `/audit-events?workflowId=${created.id}`,
     });
     const events = auditResponse.json();
 
@@ -1512,38 +1714,40 @@ describe("runner API", () => {
           type: "workflow.task_started",
           workflowId: created.id,
           metadata: expect.objectContaining({
-            taskId: "plan"
-          })
+            taskId: "plan",
+          }),
         }),
         expect.objectContaining({
           type: "workflow.task_completed",
           workflowId: created.id,
           metadata: expect.objectContaining({
             taskId: "plan",
-            status: "passed"
-          })
+            status: "passed",
+          }),
         }),
         expect.objectContaining({
           type: "workflow.gate_started",
           workflowId: created.id,
           metadata: expect.objectContaining({
-            gateId: "node"
-          })
+            gateId: "node",
+          }),
         }),
         expect.objectContaining({
           type: "workflow.gate_completed",
           workflowId: created.id,
           metadata: expect.objectContaining({
             gateId: "node",
-            status: "passed"
-          })
-        })
-      ])
+            status: "passed",
+          }),
+        }),
+      ]),
     );
   });
 
   it("limits audit event history to the most recent events", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-audit-limit-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-audit-limit-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
@@ -1553,23 +1757,25 @@ describe("runner API", () => {
 
     const allResponse = await app.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
     const limitedResponse = await app.inject({
       method: "GET",
-      url: "/audit-events?limit=2"
+      url: "/audit-events?limit=2",
     });
     const events = allResponse.json();
     const limited = limitedResponse.json();
 
     expect(limitedResponse.statusCode).toBe(200);
     expect(limited.map((event: { id: string }) => event.id)).toEqual(
-      events.slice(-2).map((event: { id: string }) => event.id)
+      events.slice(-2).map((event: { id: string }) => event.id),
     );
   });
 
   it("filters audit events by type actor job and repository metadata", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-audit-filter-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-audit-filter-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
@@ -1581,8 +1787,8 @@ describe("runner API", () => {
         name: "Filter repo",
         path: repoPath,
         defaultBranch: "main",
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const repository = repositoryResponse.json();
     await app.inject({
@@ -1592,35 +1798,35 @@ describe("runner API", () => {
         name: "Filter repo updated",
         path: repoPath,
         defaultBranch: "main",
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const workflowResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const workflow = workflowResponse.json();
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${workflow.id}/enqueue`
+      url: `/workflows/${workflow.id}/enqueue`,
     });
     const job = enqueueResponse.json();
     await app.inject({
       method: "POST",
-      url: `/jobs/${job.id}/cancel`
+      url: `/jobs/${job.id}/cancel`,
     });
 
     const repositoryAuditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?type=repository.updated&actor=operator&repositoryId=${repository.id}&limit=1`
+      url: `/audit-events?type=repository.updated&actor=operator&repositoryId=${repository.id}&limit=1`,
     });
     const jobAuditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?type=job.canceled&jobId=${job.id}&actor=operator`
+      url: `/audit-events?type=job.canceled&jobId=${job.id}&actor=operator`,
     });
     const invalidTypeResponse = await app.inject({
       method: "GET",
-      url: "/audit-events?type=not.real"
+      url: "/audit-events?type=not.real",
     });
 
     expect(repositoryAuditResponse.statusCode).toBe(200);
@@ -1630,45 +1836,51 @@ describe("runner API", () => {
         actor: "operator",
         metadata: expect.objectContaining({
           repositoryId: repository.id,
-          repositoryName: "Filter repo updated"
-        })
-      })
+          repositoryName: "Filter repo updated",
+        }),
+      }),
     ]);
     expect(jobAuditResponse.statusCode).toBe(200);
     expect(jobAuditResponse.json()).toEqual([
       expect.objectContaining({
         type: "job.canceled",
         jobId: job.id,
-        actor: "operator"
-      })
+        actor: "operator",
+      }),
     ]);
     expect(invalidTypeResponse.statusCode).toBe(400);
     expect(invalidTypeResponse.json()).toMatchObject({
-      error: "invalid_audit_event_type"
+      error: "invalid_audit_event_type",
     });
   });
 
   it("restores completed job history when the API is rebuilt", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-persist-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-job-persist-test-"),
+    );
     tempRoots.push(demoRoot);
     const firstApp = buildApp(undefined, { demoRoot });
     const createResponse = await firstApp.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
     const enqueueResponse = await firstApp.inject({
       method: "POST",
-      url: `/workflows/${created.id}/enqueue`
+      url: `/workflows/${created.id}/enqueue`,
     });
     const queued = enqueueResponse.json();
     let job = queued;
-    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < 20 && job.status !== "completed";
+      attempt++
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const jobResponse = await firstApp.inject({
         method: "GET",
-        url: `/jobs/${queued.id}`
+        url: `/jobs/${queued.id}`,
       });
       job = jobResponse.json();
     }
@@ -1676,7 +1888,7 @@ describe("runner API", () => {
     const secondApp = buildApp(undefined, { demoRoot });
     const jobsResponse = await secondApp.inject({
       method: "GET",
-      url: "/jobs"
+      url: "/jobs",
     });
     const restoredJobs = jobsResponse.json();
 
@@ -1687,40 +1899,46 @@ describe("runner API", () => {
         expect.objectContaining({
           id: queued.id,
           workflowId: created.id,
-          status: "completed"
-        })
-      ])
+          status: "completed",
+        }),
+      ]),
     );
   });
 
   it("returns a job timeline with workflow summary and lifecycle events", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-timeline-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-job-timeline-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/enqueue`
+      url: `/workflows/${created.id}/enqueue`,
     });
     const queued = enqueueResponse.json();
     let job = queued;
-    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < 20 && job.status !== "completed";
+      attempt++
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const jobResponse = await app.inject({
         method: "GET",
-        url: `/jobs/${queued.id}`
+        url: `/jobs/${queued.id}`,
       });
       job = jobResponse.json();
     }
 
     const timelineResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${queued.id}/timeline`
+      url: `/jobs/${queued.id}/timeline`,
     });
     const timeline = timelineResponse.json();
 
@@ -1729,25 +1947,27 @@ describe("runner API", () => {
     expect(timeline.job).toMatchObject({
       id: queued.id,
       workflowId: created.id,
-      status: "completed"
+      status: "completed",
     });
     expect(timeline.workflow).toMatchObject({
       id: created.id,
-      status: "needs_review"
+      status: "needs_review",
     });
     expect(timeline.summary).toMatchObject({
       recommendation: "ready_for_review",
       failedTasks: [],
-      failedGates: []
+      failedGates: [],
     });
-    expect(timeline.events.map((event: { type: string }) => event.type)).toEqual(
+    expect(
+      timeline.events.map((event: { type: string }) => event.type),
+    ).toEqual(
       expect.arrayContaining([
         "workflow.enqueued",
         "workflow.task_started",
         "workflow.task_completed",
         "workflow.gate_started",
-        "workflow.gate_completed"
-      ])
+        "workflow.gate_completed",
+      ]),
     );
     expect(timeline.events).toEqual(
       expect.arrayContaining([
@@ -1755,10 +1975,10 @@ describe("runner API", () => {
           type: "workflow.task_completed",
           metadata: expect.objectContaining({
             taskId: "plan",
-            status: "passed"
-          })
-        })
-      ])
+            status: "passed",
+          }),
+        }),
+      ]),
     );
   });
 
@@ -1778,20 +1998,23 @@ describe("runner API", () => {
     ).json();
 
     await app.inject({ method: "POST", url: `/workflows/${first.id}/enqueue` });
-    await app.inject({ method: "POST", url: `/workflows/${second.id}/enqueue` });
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${second.id}/enqueue`,
+    });
     await app.inject({ method: "POST", url: `/workflows/${third.id}/enqueue` });
 
     const allResponse = await app.inject({ method: "GET", url: "/jobs" });
     const limitedResponse = await app.inject({
       method: "GET",
-      url: "/jobs?limit=2"
+      url: "/jobs?limit=2",
     });
     const jobs = allResponse.json();
     const limited = limitedResponse.json();
 
     expect(limitedResponse.statusCode).toBe(200);
     expect(limited.map((job: { id: string }) => job.id)).toEqual(
-      jobs.slice(-2).map((job: { id: string }) => job.id)
+      jobs.slice(-2).map((job: { id: string }) => job.id),
     );
   });
 
@@ -1814,27 +2037,27 @@ describe("runner API", () => {
     const firstJob = (
       await app.inject({
         method: "POST",
-        url: `/workflows/${first.id}/enqueue`
+        url: `/workflows/${first.id}/enqueue`,
       })
     ).json();
     await app.inject({ method: "POST", url: `/jobs/${firstJob.id}/cancel` });
     const secondJob = (
       await app.inject({
         method: "POST",
-        url: `/workflows/${second.id}/enqueue`
+        url: `/workflows/${second.id}/enqueue`,
       })
     ).json();
     await app.inject({ method: "POST", url: `/jobs/${secondJob.id}/cancel` });
     const thirdJob = (
       await app.inject({
         method: "POST",
-        url: `/workflows/${third.id}/enqueue`
+        url: `/workflows/${third.id}/enqueue`,
       })
     ).json();
 
     const filteredResponse = await app.inject({
       method: "GET",
-      url: `/jobs?status=canceled&workflowId=${second.id}&limit=1`
+      url: `/jobs?status=canceled&workflowId=${second.id}&limit=1`,
     });
     const filtered = filteredResponse.json();
 
@@ -1843,19 +2066,21 @@ describe("runner API", () => {
       expect.objectContaining({
         id: secondJob.id,
         workflowId: second.id,
-        status: "canceled"
-      })
+        status: "canceled",
+      }),
     ]);
     expect(filtered).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: firstJob.id }),
-        expect.objectContaining({ id: thirdJob.id })
-      ])
+        expect.objectContaining({ id: thirdJob.id }),
+      ]),
     );
   });
 
   it("filters job history and job audit events by registered repository id", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-repository-filter-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-job-repository-filter-test-"),
+    );
     const firstRepoPath = await createCommittedRepo();
     const secondRepoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
@@ -1868,8 +2093,8 @@ describe("runner API", () => {
         payload: {
           name: "First job repo",
           path: firstRepoPath,
-          qualityGates: []
-        }
+          qualityGates: [],
+        },
       })
     ).json();
     const secondRepository = (
@@ -1879,8 +2104,8 @@ describe("runner API", () => {
         payload: {
           name: "Second job repo",
           path: secondRepoPath,
-          qualityGates: []
-        }
+          qualityGates: [],
+        },
       })
     ).json();
     const firstWorkflow = (
@@ -1894,10 +2119,10 @@ describe("runner API", () => {
             {
               id: "first-task",
               agent: "shell",
-              command: `${node} -e "console.log('first')"`
-            }
-          ]
-        }
+              command: `${node} -e "console.log('first')"`,
+            },
+          ],
+        },
       })
     ).json();
     const secondWorkflow = (
@@ -1911,10 +2136,10 @@ describe("runner API", () => {
             {
               id: "second-task",
               agent: "shell",
-              command: `${node} -e "console.log('second')"`
-            }
-          ]
-        }
+              command: `${node} -e "console.log('second')"`,
+            },
+          ],
+        },
       })
     ).json();
 
@@ -1922,29 +2147,29 @@ describe("runner API", () => {
     const firstJob = (
       await app.inject({
         method: "POST",
-        url: `/workflows/${firstWorkflow.id}/enqueue`
+        url: `/workflows/${firstWorkflow.id}/enqueue`,
       })
     ).json();
     await app.inject({ method: "POST", url: `/jobs/${firstJob.id}/cancel` });
     const secondJob = (
       await app.inject({
         method: "POST",
-        url: `/workflows/${secondWorkflow.id}/enqueue`
+        url: `/workflows/${secondWorkflow.id}/enqueue`,
       })
     ).json();
     await app.inject({ method: "POST", url: `/jobs/${secondJob.id}/cancel` });
 
     const repositoryJobsResponse = await app.inject({
       method: "GET",
-      url: `/jobs?status=canceled&repositoryId=${firstRepository.id}&limit=1`
+      url: `/jobs?status=canceled&repositoryId=${firstRepository.id}&limit=1`,
     });
     const enqueuedAuditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?type=workflow.enqueued&repositoryId=${firstRepository.id}`
+      url: `/audit-events?type=workflow.enqueued&repositoryId=${firstRepository.id}`,
     });
     const canceledAuditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?type=job.canceled&repositoryId=${firstRepository.id}`
+      url: `/audit-events?type=job.canceled&repositoryId=${firstRepository.id}`,
     });
 
     expect(repositoryJobsResponse.statusCode).toBe(200);
@@ -1952,11 +2177,11 @@ describe("runner API", () => {
       expect.objectContaining({
         id: firstJob.id,
         workflowId: firstWorkflow.id,
-        status: "canceled"
-      })
+        status: "canceled",
+      }),
     ]);
     expect(repositoryJobsResponse.json()).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: secondJob.id })])
+      expect.arrayContaining([expect.objectContaining({ id: secondJob.id })]),
     );
     expect(enqueuedAuditResponse.statusCode).toBe(200);
     expect(enqueuedAuditResponse.json()).toContainEqual(
@@ -1966,9 +2191,9 @@ describe("runner API", () => {
         jobId: firstJob.id,
         metadata: expect.objectContaining({
           repositoryId: firstRepository.id,
-          repositoryPath: firstRepoPath
-        })
-      })
+          repositoryPath: firstRepoPath,
+        }),
+      }),
     );
     expect(canceledAuditResponse.statusCode).toBe(200);
     expect(canceledAuditResponse.json()).toContainEqual(
@@ -1978,9 +2203,9 @@ describe("runner API", () => {
         jobId: firstJob.id,
         metadata: expect.objectContaining({
           repositoryId: firstRepository.id,
-          repositoryPath: firstRepoPath
-        })
-      })
+          repositoryPath: firstRepoPath,
+        }),
+      }),
     );
   });
 
@@ -1989,18 +2214,20 @@ describe("runner API", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/jobs?status=not-real"
+      url: "/jobs?status=not-real",
     });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({
       error: "invalid_job_status",
-      allowedStatuses: ["queued", "running", "completed", "failed", "canceled"]
+      allowedStatuses: ["queued", "running", "completed", "failed", "canceled"],
     });
   });
 
   it("records audit events for jobs recovered after API restart", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-job-recovery-audit-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-job-recovery-audit-test-"),
+    );
     const stateRoot = join(demoRoot, ".mawo", "state");
     tempRoots.push(demoRoot);
     await mkdir(stateRoot, { recursive: true });
@@ -2014,19 +2241,19 @@ describe("runner API", () => {
             status: "running",
             createdAt: "2026-06-05T00:00:00.000Z",
             updatedAt: "2026-06-05T00:00:01.000Z",
-            startedAt: "2026-06-05T00:00:01.000Z"
-          }
+            startedAt: "2026-06-05T00:00:01.000Z",
+          },
         ],
         null,
-        2
+        2,
       ),
-      "utf8"
+      "utf8",
     );
 
     const app = buildApp(undefined, { demoRoot });
     const auditResponse = await app.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
 
     expect(auditResponse.statusCode).toBe(200);
@@ -2038,14 +2265,16 @@ describe("runner API", () => {
         jobId: "running-job",
         metadata: expect.objectContaining({
           previousStatus: "running",
-          recoveredStatus: "failed"
-        })
-      })
+          recoveredStatus: "failed",
+        }),
+      }),
     );
   });
 
   it("recovers interrupted workflow state when active jobs are recovered after API restart", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-recovery-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-workflow-recovery-test-"),
+    );
     const stateRoot = join(demoRoot, ".mawo", "state");
     tempRoots.push(demoRoot);
     await mkdir(stateRoot, { recursive: true });
@@ -2059,13 +2288,13 @@ describe("runner API", () => {
             status: "running",
             createdAt: "2026-06-05T00:00:00.000Z",
             updatedAt: "2026-06-05T00:00:01.000Z",
-            startedAt: "2026-06-05T00:00:01.000Z"
-          }
+            startedAt: "2026-06-05T00:00:01.000Z",
+          },
         ],
         null,
-        2
+        2,
       ),
-      "utf8"
+      "utf8",
     );
     await writeFile(
       join(stateRoot, "workflows.json"),
@@ -2084,48 +2313,48 @@ describe("runner API", () => {
                 title: "Running task",
                 agent: "shell",
                 command: `${node} -e "console.log('task')"`,
-                status: "running"
+                status: "running",
               },
               {
                 id: "waiting-task",
                 title: "Waiting task",
                 agent: "shell",
                 command: `${node} -e "console.log('waiting')"`,
-                status: "waiting"
-              }
+                status: "waiting",
+              },
             ],
             qualityGates: [
               {
                 id: "running-gate",
                 title: "Running gate",
                 command: `${node} -e "console.log('gate')"`,
-                status: "running"
-              }
-            ]
-          }
+                status: "running",
+              },
+            ],
+          },
         ],
         null,
-        2
+        2,
       ),
-      "utf8"
+      "utf8",
     );
 
     const app = buildApp(undefined, { demoRoot });
     const workflowResponse = await app.inject({
       method: "GET",
-      url: "/workflows/workflow-restart"
+      url: "/workflows/workflow-restart",
     });
     const jobResponse = await app.inject({
       method: "GET",
-      url: "/jobs/running-job"
+      url: "/jobs/running-job",
     });
     const auditResponse = await app.inject({
       method: "GET",
-      url: "/audit-events?type=job.recovered&workflowId=workflow-restart"
+      url: "/audit-events?type=job.recovered&workflowId=workflow-restart",
     });
     const retryResponse = await app.inject({
       method: "POST",
-      url: "/workflows/workflow-restart/retry"
+      url: "/workflows/workflow-restart/retry",
     });
     const retry = retryResponse.json();
 
@@ -2133,7 +2362,7 @@ describe("runner API", () => {
     expect(jobResponse.json()).toMatchObject({
       id: "running-job",
       status: "failed",
-      error: "Job was interrupted by API restart."
+      error: "Job was interrupted by API restart.",
     });
     expect(workflowResponse.statusCode).toBe(200);
     expect(workflowResponse.json()).toMatchObject({
@@ -2146,14 +2375,14 @@ describe("runner API", () => {
           result: expect.objectContaining({
             status: "canceled",
             metadata: expect.objectContaining({
-              interrupted: "api_restart"
-            })
-          })
+              interrupted: "api_restart",
+            }),
+          }),
         }),
         expect.objectContaining({
           id: "waiting-task",
-          status: "waiting"
-        })
+          status: "waiting",
+        }),
       ],
       qualityGates: [
         expect.objectContaining({
@@ -2162,11 +2391,11 @@ describe("runner API", () => {
           result: expect.objectContaining({
             status: "canceled",
             metadata: expect.objectContaining({
-              interrupted: "api_restart"
-            })
-          })
-        })
-      ]
+              interrupted: "api_restart",
+            }),
+          }),
+        }),
+      ],
     });
     expect(auditResponse.statusCode).toBe(200);
     expect(auditResponse.json()).toContainEqual(
@@ -2180,9 +2409,9 @@ describe("runner API", () => {
           recoveredStatus: "failed",
           workflowRecovered: "true",
           previousWorkflowStatus: "running",
-          recoveredWorkflowStatus: "aborted"
-        })
-      })
+          recoveredWorkflowStatus: "aborted",
+        }),
+      }),
     );
     expect(retryResponse.statusCode).toBe(200);
     expect(retry).toMatchObject({
@@ -2191,22 +2420,24 @@ describe("runner API", () => {
       tasks: expect.arrayContaining([
         expect.objectContaining({
           id: "running-task",
-          status: "waiting"
-        })
+          status: "waiting",
+        }),
       ]),
       qualityGates: expect.arrayContaining([
         expect.objectContaining({
           id: "running-gate",
-          status: "waiting"
-        })
-      ])
+          status: "waiting",
+        }),
+      ]),
     });
     expect(retry.tasks[0]?.result).toBeUndefined();
     expect(retry.qualityGates[0]?.result).toBeUndefined();
   });
 
   it("resumes persisted queued jobs when the API is rebuilt", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-queued-resume-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-queued-resume-test-"),
+    );
     const stateRoot = join(demoRoot, ".mawo", "state");
     tempRoots.push(demoRoot);
     await mkdir(stateRoot, { recursive: true });
@@ -2219,13 +2450,13 @@ describe("runner API", () => {
             workflowId: "workflow-queued",
             status: "queued",
             createdAt: "2026-06-05T00:00:00.000Z",
-            updatedAt: "2026-06-05T00:00:00.000Z"
-          }
+            updatedAt: "2026-06-05T00:00:00.000Z",
+          },
         ],
         null,
-        2
+        2,
       ),
-      "utf8"
+      "utf8",
     );
     await writeFile(
       join(stateRoot, "workflows.json"),
@@ -2244,46 +2475,52 @@ describe("runner API", () => {
                 title: "Queued task",
                 agent: "shell",
                 command: `${node} -e "console.log('resumed by rebuilt api')"`,
-                status: "waiting"
-              }
+                status: "waiting",
+              },
             ],
-            qualityGates: []
-          }
+            qualityGates: [],
+          },
         ],
         null,
-        2
+        2,
       ),
-      "utf8"
+      "utf8",
     );
 
     const app = buildApp(undefined, { demoRoot });
     let job = { status: "queued" };
-    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < 20 && job.status !== "completed";
+      attempt++
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const jobResponse = await app.inject({
         method: "GET",
-        url: "/jobs/queued-job"
+        url: "/jobs/queued-job",
       });
       job = jobResponse.json();
     }
     const workflowResponse = await app.inject({
       method: "GET",
-      url: "/workflows/workflow-queued"
+      url: "/workflows/workflow-queued",
     });
 
     expect(job).toMatchObject({
       id: "queued-job",
       workflowId: "workflow-queued",
-      status: "completed"
+      status: "completed",
     });
     expect(workflowResponse.json()).toMatchObject({
       id: "workflow-queued",
-      status: "needs_review"
+      status: "needs_review",
     });
   });
 
   it("registers repositories and restores them across API rebuilds", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-registry-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-repository-registry-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const firstApp = buildApp(undefined, { demoRoot });
@@ -2299,16 +2536,16 @@ describe("runner API", () => {
           {
             id: "readme",
             title: "README exists",
-            command: `${node} -e "const fs = require('fs'); if (!fs.existsSync('README.md')) process.exit(1)"`
-          }
-        ]
-      }
+            command: `${node} -e "const fs = require('fs'); if (!fs.existsSync('README.md')) process.exit(1)"`,
+          },
+        ],
+      },
     });
     const created = createResponse.json();
     const secondApp = buildApp(undefined, { demoRoot });
     const listResponse = await secondApp.inject({
       method: "GET",
-      url: "/repositories"
+      url: "/repositories",
     });
     const restored = listResponse.json();
 
@@ -2316,7 +2553,7 @@ describe("runner API", () => {
     expect(created).toMatchObject({
       name: "Registered repo",
       path: repoPath,
-      defaultBranch: "main"
+      defaultBranch: "main",
     });
     expect(listResponse.statusCode).toBe(200);
     expect(restored).toEqual([
@@ -2325,15 +2562,17 @@ describe("runner API", () => {
         path: repoPath,
         qualityGates: [
           expect.objectContaining({
-            id: "readme"
-          })
-        ]
-      })
+            id: "readme",
+          }),
+        ],
+      }),
     ]);
   });
 
   it("records an audit event when a repository is registered", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-audit-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-repository-audit-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
@@ -2349,15 +2588,15 @@ describe("runner API", () => {
           {
             id: "test",
             title: "Test gate",
-            command: "npm test"
-          }
-        ]
-      }
+            command: "npm test",
+          },
+        ],
+      },
     });
     const created = createResponse.json();
     const auditResponse = await app.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
 
     expect(createResponse.statusCode).toBe(201);
@@ -2370,15 +2609,15 @@ describe("runner API", () => {
           repositoryId: created.id,
           repositoryName: "Audited repo",
           repositoryPath: repoPath,
-          qualityGates: "1"
-        })
-      })
+          qualityGates: "1",
+        }),
+      }),
     );
   });
 
   it("awaits asynchronous repository and audit stores during registration", async () => {
     const demoRoot = await mkdtemp(
-      join(tmpdir(), "mawo-api-async-store-test-")
+      join(tmpdir(), "mawo-api-async-store-test-"),
     );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
@@ -2401,26 +2640,26 @@ describe("runner API", () => {
           defaultBranch: input.defaultBranch,
           qualityGates: input.qualityGates,
           createdAt: now,
-          updatedAt: now
+          updatedAt: now,
         };
 
         repositories.push(repository);
 
         return {
           repository,
-          created: true
+          created: true,
         };
       },
       async remove(id: string) {
         const index = repositories.findIndex(
-          (repository) => repository.id === id
+          (repository) => repository.id === id,
         );
         if (index < 0) {
           return undefined;
         }
 
         return repositories.splice(index, 1)[0];
-      }
+      },
     } as unknown as RepositoryStore;
     const auditStore = {
       async list() {
@@ -2431,18 +2670,18 @@ describe("runner API", () => {
         const event = {
           ...input,
           id: "async-audit-event",
-          createdAt: "2026-06-05T00:00:01.000Z"
+          createdAt: "2026-06-05T00:00:01.000Z",
         };
 
         auditEvents.push(event);
 
         return event;
-      }
+      },
     } as unknown as AuditStore;
     const app = buildApp(undefined, {
       auditStore,
       demoRoot,
-      repositoryStore
+      repositoryStore,
     });
 
     const createResponse = await app.inject({
@@ -2452,42 +2691,44 @@ describe("runner API", () => {
         name: "Async store repo",
         path: repoPath,
         defaultBranch: "main",
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const listResponse = await app.inject({
       method: "GET",
-      url: "/repositories"
+      url: "/repositories",
     });
     const auditResponse = await app.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
 
     expect(createResponse.statusCode).toBe(201);
     expect(createResponse.json()).toMatchObject({
       id: "async-repository",
       name: "Async store repo",
-      path: repoPath
+      path: repoPath,
     });
     expect(listResponse.json()).toEqual([
       expect.objectContaining({
-        id: "async-repository"
-      })
+        id: "async-repository",
+      }),
     ]);
     expect(auditResponse.json()).toEqual([
       expect.objectContaining({
         type: "repository.registered",
         metadata: expect.objectContaining({
           repositoryId: "async-repository",
-          repositoryPath: repoPath
-        })
-      })
+          repositoryPath: repoPath,
+        }),
+      }),
     ]);
   });
 
   it("awaits asynchronous workflow and job stores before serving runtime reads", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-async-runtime-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-async-runtime-test-"),
+    );
     tempRoots.push(demoRoot);
     const workflow: LocalWorkflowRun = {
       id: "async-workflow",
@@ -2497,7 +2738,7 @@ describe("runner API", () => {
       createdAt: "2026-06-05T00:00:00.000Z",
       updatedAt: "2026-06-05T00:01:00.000Z",
       tasks: [],
-      qualityGates: []
+      qualityGates: [],
     };
     const job: WorkflowJob = {
       id: "async-job",
@@ -2506,7 +2747,7 @@ describe("runner API", () => {
       createdAt: "2026-06-05T00:00:00.000Z",
       updatedAt: "2026-06-05T00:02:00.000Z",
       startedAt: "2026-06-05T00:00:30.000Z",
-      finishedAt: "2026-06-05T00:02:00.000Z"
+      finishedAt: "2026-06-05T00:02:00.000Z",
     };
     const runStore = {
       async list() {
@@ -2515,7 +2756,7 @@ describe("runner API", () => {
       },
       async save() {
         await delay(5);
-      }
+      },
     } as RunStore;
     const jobStore = {
       async list() {
@@ -2524,33 +2765,33 @@ describe("runner API", () => {
       },
       async save() {
         await delay(5);
-      }
+      },
     } as JobStore;
     const app = buildApp(undefined, {
       demoRoot,
       jobStore,
-      runStore
+      runStore,
     });
 
     const workflowResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${workflow.id}`
+      url: `/workflows/${workflow.id}`,
     });
     const jobResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${job.id}`
+      url: `/jobs/${job.id}`,
     });
 
     expect(workflowResponse.statusCode).toBe(200);
     expect(workflowResponse.json()).toMatchObject({
       id: workflow.id,
-      status: "needs_review"
+      status: "needs_review",
     });
     expect(jobResponse.statusCode).toBe(200);
     expect(jobResponse.json()).toMatchObject({
       id: job.id,
       workflowId: workflow.id,
-      status: "completed"
+      status: "completed",
     });
   });
 
@@ -2567,7 +2808,7 @@ describe("runner API", () => {
         const snapshot = structuredClone(run);
         await delay(5);
         savedWorkflows.push(snapshot);
-      }
+      },
     } as RunStore;
     const jobStore = {
       async list() {
@@ -2577,17 +2818,17 @@ describe("runner API", () => {
         const snapshot = { ...job };
         await delay(5);
         savedJobs.push(snapshot);
-      }
+      },
     } as JobStore;
     const app = buildApp(undefined, {
       demoRoot,
       jobStore,
-      runStore
+      runStore,
     });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
@@ -2595,13 +2836,13 @@ describe("runner API", () => {
     expect(savedWorkflows).toEqual([
       expect.objectContaining({
         id: created.id,
-        status: "ready"
-      })
+        status: "ready",
+      }),
     ]);
 
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/enqueue`
+      url: `/workflows/${created.id}/enqueue`,
     });
     const job = enqueueResponse.json();
 
@@ -2610,13 +2851,15 @@ describe("runner API", () => {
       expect.objectContaining({
         id: job.id,
         workflowId: created.id,
-        status: "queued"
-      })
+        status: "queued",
+      }),
     ]);
   });
 
   it("uses Prisma stores when the postgres state backend is requested", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-postgres-state-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-postgres-state-test-"),
+    );
     tempRoots.push(demoRoot);
     const createdAt = new Date("2026-06-05T00:00:00.000Z");
     const updatedAt = new Date("2026-06-05T00:01:00.000Z");
@@ -2627,7 +2870,7 @@ describe("runner API", () => {
       defaultBranch: "main",
       qualityGates: [],
       createdAt,
-      updatedAt
+      updatedAt,
     };
     const workflow = {
       id: "postgres-workflow",
@@ -2643,7 +2886,7 @@ describe("runner API", () => {
       createdAt,
       updatedAt,
       tasks: [],
-      qualityGates: []
+      qualityGates: [],
     };
     const job = {
       id: "postgres-job",
@@ -2657,7 +2900,7 @@ describe("runner API", () => {
       lockedBy: null,
       lockedAt: null,
       leaseExpiresAt: null,
-      attempts: 0
+      attempts: 0,
     };
     const auditEvent = {
       id: "postgres-audit",
@@ -2666,9 +2909,9 @@ describe("runner API", () => {
       workflowRunId: workflow.id,
       jobId: null,
       metadata: {
-        repositoryId: repository.id
+        repositoryId: repository.id,
       },
-      createdAt
+      createdAt,
     };
     const prismaClient = {
       repositoryRecord: {
@@ -2676,60 +2919,60 @@ describe("runner API", () => {
         findUnique: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
-        delete: vi.fn()
+        delete: vi.fn(),
       },
       workflowRun: {
         findMany: vi.fn(async () => [workflow]),
-        upsert: vi.fn()
+        upsert: vi.fn(),
       },
       workflowTaskRun: {
         deleteMany: vi.fn(),
-        createMany: vi.fn()
+        createMany: vi.fn(),
       },
       qualityGateRun: {
         deleteMany: vi.fn(),
-        createMany: vi.fn()
+        createMany: vi.fn(),
       },
       workflowJob: {
         findMany: vi.fn(async () => [job]),
         findFirst: vi.fn(async () => null),
         findUnique: vi.fn(async () => null),
         updateMany: vi.fn(async () => ({ count: 0 })),
-        upsert: vi.fn()
+        upsert: vi.fn(),
       },
       auditEvent: {
         findMany: vi.fn(async () => [auditEvent]),
-        create: vi.fn()
-      }
+        create: vi.fn(),
+      },
     };
     const app = buildApp(undefined, {
       demoRoot,
       env: {
         MAWO_STATE_BACKEND: "postgres",
-        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo"
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
       },
-      prismaClient
+      prismaClient,
     });
 
     const readinessResponse = await app.inject({
       method: "GET",
-      url: "/readiness"
+      url: "/readiness",
     });
     const repositoriesResponse = await app.inject({
       method: "GET",
-      url: "/repositories"
+      url: "/repositories",
     });
     const workflowResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${workflow.id}`
+      url: `/workflows/${workflow.id}`,
     });
     const jobResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${job.id}`
+      url: `/jobs/${job.id}`,
     });
     const auditResponse = await app.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
 
     expect(readinessResponse.statusCode).toBe(200);
@@ -2740,122 +2983,128 @@ describe("runner API", () => {
         requestedStateBackend: "postgres",
         activeStateBackend: "postgres",
         requestedQueueBackend: "in_process",
-        activeQueueBackend: "in_process"
-      })
+        activeQueueBackend: "in_process",
+      }),
     );
     expect(repositoriesResponse.json()).toEqual([
       expect.objectContaining({
         id: repository.id,
-        name: repository.name
-      })
+        name: repository.name,
+      }),
     ]);
     expect(workflowResponse.json()).toMatchObject({
       id: workflow.id,
       repositoryId: repository.id,
-      status: "needs_review"
+      status: "needs_review",
     });
     expect(jobResponse.json()).toMatchObject({
       id: job.id,
       workflowId: workflow.id,
-      status: "completed"
+      status: "completed",
     });
     expect(auditResponse.json()).toEqual([
       expect.objectContaining({
         id: auditEvent.id,
-        workflowId: workflow.id
-      })
+        workflowId: workflow.id,
+      }),
     ]);
   });
 
   it("uses postgres queue storage for API enqueue, listing, and cancel without running in the API", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-postgres-queue-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-postgres-queue-test-"),
+    );
     tempRoots.push(demoRoot);
     const { prismaClient, workflowJobs } = createMutablePrismaStateClient();
     const runner = new LocalRunner();
     const runWorkflow = vi
       .spyOn(runner, "runWorkflow")
-      .mockImplementation(async (workflowId) => runner.getWorkflow(workflowId)!);
+      .mockImplementation(
+        async (workflowId) => runner.getWorkflow(workflowId)!,
+      );
     const app = buildApp(runner, {
       demoRoot,
       env: {
         MAWO_STATE_BACKEND: "postgres",
         MAWO_QUEUE_BACKEND: "postgres",
-        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo"
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
       },
-      prismaClient
+      prismaClient,
     });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/enqueue`
+      url: `/workflows/${created.id}/enqueue`,
     });
     const queued = enqueueResponse.json();
     await delay(20);
     const queuedJobsResponse = await app.inject({
       method: "GET",
-      url: `/jobs?status=queued&workflowId=${created.id}`
+      url: `/jobs?status=queued&workflowId=${created.id}`,
     });
     const jobResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${queued.id}`
+      url: `/jobs/${queued.id}`,
     });
     const cancelResponse = await app.inject({
       method: "POST",
-      url: `/jobs/${queued.id}/cancel`
+      url: `/jobs/${queued.id}/cancel`,
     });
     const canceled = cancelResponse.json();
     const workflowResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}`
+      url: `/workflows/${created.id}`,
     });
 
     expect(enqueueResponse.statusCode).toBe(202);
     expect(queued).toMatchObject({
       id: expect.any(String),
       workflowId: created.id,
-      status: "queued"
+      status: "queued",
     });
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(workflowJobs).toHaveLength(1);
     expect(workflowJobs[0]).toMatchObject({
       id: queued.id,
       workflowRunId: created.id,
-      status: "canceled"
+      status: "canceled",
     });
     expect(queuedJobsResponse.statusCode).toBe(200);
     expect(queuedJobsResponse.json()).toEqual([
       expect.objectContaining({
         id: queued.id,
         workflowId: created.id,
-        status: "queued"
-      })
+        status: "queued",
+      }),
     ]);
     expect(jobResponse.statusCode).toBe(200);
     expect(jobResponse.json()).toMatchObject({
       id: queued.id,
       workflowId: created.id,
-      status: "queued"
+      status: "queued",
     });
     expect(cancelResponse.statusCode).toBe(200);
     expect(canceled).toMatchObject({
       id: queued.id,
       workflowId: created.id,
       status: "canceled",
-      finishedAt: expect.any(String)
+      finishedAt: expect.any(String),
     });
     expect(workflowResponse.json()).toMatchObject({
       id: created.id,
-      status: "ready"
+      status: "ready",
     });
   });
 
   it("updates existing repository registrations for the same normalized path", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-upsert-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-repository-upsert-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
@@ -2867,8 +3116,8 @@ describe("runner API", () => {
         name: "Original repo",
         path: repoPath,
         defaultBranch: "main",
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const created = createResponse.json();
     const updateResponse = await app.inject({
@@ -2882,19 +3131,19 @@ describe("runner API", () => {
           {
             id: "test",
             title: "Test gate",
-            command: "npm test"
-          }
-        ]
-      }
+            command: "npm test",
+          },
+        ],
+      },
     });
     const updated = updateResponse.json();
     const listResponse = await app.inject({
       method: "GET",
-      url: "/repositories"
+      url: "/repositories",
     });
     const auditResponse = await app.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
 
     expect(createResponse.statusCode).toBe(201);
@@ -2908,16 +3157,16 @@ describe("runner API", () => {
       qualityGates: [
         expect.objectContaining({
           id: "test",
-          command: "npm test"
-        })
-      ]
+          command: "npm test",
+        }),
+      ],
     });
     expect(listResponse.json()).toEqual([
       expect.objectContaining({
         id: created.id,
         name: "Updated repo",
-        path: repoPath
-      })
+        path: repoPath,
+      }),
     ]);
     expect(auditResponse.json()).toContainEqual(
       expect.objectContaining({
@@ -2929,14 +3178,16 @@ describe("runner API", () => {
           repositoryName: "Updated repo",
           repositoryPath: repoPath,
           defaultBranch: "develop",
-          qualityGates: "1"
-        })
-      })
+          qualityGates: "1",
+        }),
+      }),
     );
   });
 
   it("deletes repository registrations and records an audit event", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-repository-delete-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-repository-delete-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const firstApp = buildApp(undefined, { demoRoot });
@@ -2948,37 +3199,37 @@ describe("runner API", () => {
         name: "Delete me",
         path: repoPath,
         defaultBranch: "main",
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const created = createResponse.json();
     const deleteResponse = await firstApp.inject({
       method: "DELETE",
-      url: `/repositories/${created.id}`
+      url: `/repositories/${created.id}`,
     });
     const secondDeleteResponse = await firstApp.inject({
       method: "DELETE",
-      url: `/repositories/${created.id}`
+      url: `/repositories/${created.id}`,
     });
     const secondApp = buildApp(undefined, { demoRoot });
     const listResponse = await secondApp.inject({
       method: "GET",
-      url: "/repositories"
+      url: "/repositories",
     });
     const auditResponse = await secondApp.inject({
       method: "GET",
-      url: "/audit-events"
+      url: "/audit-events",
     });
 
     expect(deleteResponse.statusCode).toBe(200);
     expect(deleteResponse.json()).toMatchObject({
       id: created.id,
       name: "Delete me",
-      path: repoPath
+      path: repoPath,
     });
     expect(secondDeleteResponse.statusCode).toBe(404);
     expect(secondDeleteResponse.json()).toMatchObject({
-      error: "repository_not_found"
+      error: "repository_not_found",
     });
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json()).toEqual([]);
@@ -2989,9 +3240,9 @@ describe("runner API", () => {
         metadata: expect.objectContaining({
           repositoryId: created.id,
           repositoryName: "Delete me",
-          repositoryPath: repoPath
-        })
-      })
+          repositoryPath: repoPath,
+        }),
+      }),
     );
   });
 
@@ -3003,8 +3254,8 @@ describe("runner API", () => {
     const app = buildApp(undefined, {
       demoRoot,
       env: {
-        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRoot
-      }
+        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRoot,
+      },
     });
 
     const response = await app.inject({
@@ -3012,26 +3263,30 @@ describe("runner API", () => {
       url: "/repositories",
       payload: {
         name: "Disallowed repo",
-        path: disallowedRepo
-      }
+        path: disallowedRepo,
+      },
     });
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({
-      error: "repository_path_not_allowed"
+      error: "repository_path_not_allowed",
     });
   });
 
   it("rejects direct repository workflows outside configured allowed roots", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-allowlist-test-"));
-    const allowedRoot = await mkdtemp(join(tmpdir(), "mawo-api-workflow-allowed-root-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-workflow-allowlist-test-"),
+    );
+    const allowedRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-workflow-allowed-root-"),
+    );
     const disallowedRepo = await createCommittedRepo();
     tempRoots.push(demoRoot, allowedRoot);
     const app = buildApp(undefined, {
       demoRoot,
       env: {
-        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRoot
-      }
+        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRoot,
+      },
     });
 
     const response = await app.inject({
@@ -3044,21 +3299,23 @@ describe("runner API", () => {
           {
             id: "noop",
             agent: "shell",
-            command: `${node} -e "console.log('noop')"`
-          }
+            command: `${node} -e "console.log('noop')"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({
-      error: "repository_path_not_allowed"
+      error: "repository_path_not_allowed",
     });
   });
 
   it("creates repository workflows from a registered repository id", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-registered-workflow-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-registered-workflow-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
@@ -3072,10 +3329,10 @@ describe("runner API", () => {
           {
             id: "readme-gate",
             title: "README has registered marker",
-            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('registered workflow')) process.exit(1)"`
-          }
-        ]
-      }
+            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('registered workflow')) process.exit(1)"`,
+          },
+        ],
+      },
     });
     const repository = repositoryResponse.json();
 
@@ -3090,10 +3347,10 @@ describe("runner API", () => {
             id: "edit-readme",
             title: "Edit README",
             agent: "shell",
-            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'registered workflow\\\\n')"`
-          }
-        ]
-      }
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'registered workflow\\\\n')"`,
+          },
+        ],
+      },
     });
     const created = createResponse.json();
     const unrelatedReadyWorkflow = (
@@ -3101,15 +3358,15 @@ describe("runner API", () => {
     ).json();
     const filteredWorkflowResponse = await app.inject({
       method: "GET",
-      url: `/workflows?status=ready&repositoryId=${repository.id}&limit=10`
+      url: `/workflows?status=ready&repositoryId=${repository.id}&limit=10`,
     });
     const workflowCreatedAuditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?type=workflow.created&repositoryId=${repository.id}`
+      url: `/audit-events?type=workflow.created&repositoryId=${repository.id}`,
     });
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = runResponse.json();
 
@@ -3118,16 +3375,18 @@ describe("runner API", () => {
     expect(created.repositoryPath).toBe(repoPath);
     expect(created.qualityGates[0]).toMatchObject({
       id: "readme-gate",
-      title: "README has registered marker"
+      title: "README has registered marker",
     });
     expect(filteredWorkflowResponse.statusCode).toBe(200);
     expect(
-      filteredWorkflowResponse.json().map((workflow: { id: string }) => workflow.id)
+      filteredWorkflowResponse
+        .json()
+        .map((workflow: { id: string }) => workflow.id),
     ).toEqual([created.id]);
     expect(filteredWorkflowResponse.json()).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: unrelatedReadyWorkflow.id })
-      ])
+        expect.objectContaining({ id: unrelatedReadyWorkflow.id }),
+      ]),
     );
     expect(workflowCreatedAuditResponse.statusCode).toBe(200);
     expect(workflowCreatedAuditResponse.json()).toContainEqual(
@@ -3136,9 +3395,9 @@ describe("runner API", () => {
         workflowId: created.id,
         metadata: expect.objectContaining({
           repositoryId: repository.id,
-          repositoryPath: repoPath
-        })
-      })
+          repositoryPath: repoPath,
+        }),
+      }),
     );
     expect(runResponse.statusCode).toBe(200);
     expect(completed.repositoryId).toBe(repository.id);
@@ -3150,13 +3409,13 @@ describe("runner API", () => {
     const app = buildApp();
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/enqueue`
+      url: `/workflows/${created.id}/enqueue`,
     });
     const queued = enqueueResponse.json();
 
@@ -3165,11 +3424,15 @@ describe("runner API", () => {
     expect(queued.workflowId).toBe(created.id);
 
     let job = queued;
-    for (let attempt = 0; attempt < 20 && job.status !== "completed"; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < 20 && job.status !== "completed";
+      attempt++
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const jobResponse = await app.inject({
         method: "GET",
-        url: `/jobs/${queued.id}`
+        url: `/jobs/${queued.id}`,
       });
       job = jobResponse.json();
     }
@@ -3178,7 +3441,7 @@ describe("runner API", () => {
 
     const workflowResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}`
+      url: `/workflows/${created.id}`,
     });
     const workflow = workflowResponse.json();
 
@@ -3204,27 +3467,27 @@ describe("runner API", () => {
     });
     const app = buildApp(runner, {
       env: {
-        MAWO_MAX_CONCURRENT_JOBS: "1"
-      }
+        MAWO_MAX_CONCURRENT_JOBS: "1",
+      },
     });
     const firstCreateResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const secondCreateResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const firstWorkflow = firstCreateResponse.json();
     const secondWorkflow = secondCreateResponse.json();
 
     const firstEnqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${firstWorkflow.id}/enqueue`
+      url: `/workflows/${firstWorkflow.id}/enqueue`,
     });
     const secondEnqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${secondWorkflow.id}/enqueue`
+      url: `/workflows/${secondWorkflow.id}/enqueue`,
     });
     const firstJob = firstEnqueueResponse.json();
     const secondJob = secondEnqueueResponse.json();
@@ -3232,7 +3495,7 @@ describe("runner API", () => {
     for (let attempt = 0; attempt < 20; attempt++) {
       const firstJobResponse = await app.inject({
         method: "GET",
-        url: `/jobs/${firstJob.id}`
+        url: `/jobs/${firstJob.id}`,
       });
 
       if (firstJobResponse.json().status === "running") {
@@ -3243,13 +3506,13 @@ describe("runner API", () => {
     }
     const queuedSecondJobResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${secondJob.id}`
+      url: `/jobs/${secondJob.id}`,
     });
 
     expect(queuedSecondJobResponse.json()).toMatchObject({
       id: secondJob.id,
       workflowId: secondWorkflow.id,
-      status: "queued"
+      status: "queued",
     });
     expect(started).toEqual([firstWorkflow.id]);
 
@@ -3263,7 +3526,7 @@ describe("runner API", () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const secondJobResponse = await app.inject({
         method: "GET",
-        url: `/jobs/${secondJob.id}`
+        url: `/jobs/${secondJob.id}`,
       });
       completedSecondJob = secondJobResponse.json();
     }
@@ -3277,19 +3540,19 @@ describe("runner API", () => {
     const app = buildApp();
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
     const [enqueueResponse, duplicateResponse] = await Promise.all([
       app.inject({
         method: "POST",
-        url: `/workflows/${created.id}/enqueue`
+        url: `/workflows/${created.id}/enqueue`,
       }),
       app.inject({
         method: "POST",
-        url: `/workflows/${created.id}/enqueue`
-      })
+        url: `/workflows/${created.id}/enqueue`,
+      }),
     ]);
     const acceptedResponse =
       enqueueResponse.statusCode === 202 ? enqueueResponse : duplicateResponse;
@@ -3300,10 +3563,9 @@ describe("runner API", () => {
 
     await vi.runAllTimersAsync();
 
-    expect([enqueueResponse.statusCode, duplicateResponse.statusCode].sort()).toEqual([
-      202,
-      409
-    ]);
+    expect(
+      [enqueueResponse.statusCode, duplicateResponse.statusCode].sort(),
+    ).toEqual([202, 409]);
     expect(rejectedResponse.statusCode).toBe(409);
     expect(acceptedResponse.statusCode).toBe(202);
     expect(duplicate).toMatchObject({
@@ -3311,8 +3573,8 @@ describe("runner API", () => {
       job: {
         id: queued.id,
         workflowId: created.id,
-        status: "queued"
-      }
+        status: "queued",
+      },
     });
   });
 
@@ -3326,15 +3588,15 @@ describe("runner API", () => {
           id: "slow-task",
           title: "Slow task",
           agent: "shell",
-          command: `${node} -e "setTimeout(() => console.log('done'), 1200)"`
-        }
+          command: `${node} -e "setTimeout(() => console.log('done'), 1200)"`,
+        },
       ],
-      qualityGates: []
+      qualityGates: [],
     });
 
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${run.id}/enqueue`
+      url: `/workflows/${run.id}/enqueue`,
     });
     const queued = enqueueResponse.json();
 
@@ -3342,7 +3604,7 @@ describe("runner API", () => {
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const jobResponse = await app.inject({
         method: "GET",
-        url: `/jobs/${queued.id}`
+        url: `/jobs/${queued.id}`,
       });
       runningJob = jobResponse.json();
       if (runningJob.status === "running") {
@@ -3353,17 +3615,17 @@ describe("runner API", () => {
 
     const duplicateResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${run.id}/enqueue`
+      url: `/workflows/${run.id}/enqueue`,
     });
     const duplicate = duplicateResponse.json();
     await app.inject({
       method: "POST",
-      url: `/jobs/${queued.id}/cancel`
+      url: `/jobs/${queued.id}/cancel`,
     });
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const workflowResponse = await app.inject({
         method: "GET",
-        url: `/workflows/${run.id}`
+        url: `/workflows/${run.id}`,
       });
       if (workflowResponse.json().status === "aborted") {
         break;
@@ -3373,12 +3635,12 @@ describe("runner API", () => {
 
     const nextEnqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${run.id}/enqueue`
+      url: `/workflows/${run.id}/enqueue`,
     });
     const nextJob = nextEnqueueResponse.json();
     await app.inject({
       method: "POST",
-      url: `/jobs/${nextJob.id}/cancel`
+      url: `/jobs/${nextJob.id}/cancel`,
     });
 
     expect(enqueueResponse.statusCode).toBe(202);
@@ -3389,8 +3651,8 @@ describe("runner API", () => {
       job: {
         id: queued.id,
         workflowId: run.id,
-        status: "running"
-      }
+        status: "running",
+      },
     });
     expect(nextEnqueueResponse.statusCode).toBe(202);
     expect(nextJob.id).not.toBe(queued.id);
@@ -3401,26 +3663,26 @@ describe("runner API", () => {
     const app = buildApp();
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
     const enqueueResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/enqueue`
+      url: `/workflows/${created.id}/enqueue`,
     });
     const queued = enqueueResponse.json();
 
     const cancelResponse = await app.inject({
       method: "POST",
-      url: `/jobs/${queued.id}/cancel`
+      url: `/jobs/${queued.id}/cancel`,
     });
     const canceled = cancelResponse.json();
 
     await vi.runAllTimersAsync();
     const workflowResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}`
+      url: `/workflows/${created.id}`,
     });
 
     expect(cancelResponse.statusCode).toBe(200);
@@ -3432,12 +3694,12 @@ describe("runner API", () => {
     const app = buildApp();
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
 
     const reviewResponse = await app.inject({
@@ -3445,8 +3707,8 @@ describe("runner API", () => {
       url: `/workflows/${created.id}/review`,
       payload: {
         decision: "approve",
-        note: "Looks ready"
-      }
+        note: "Looks ready",
+      },
     });
     const reviewed = reviewResponse.json();
 
@@ -3454,7 +3716,7 @@ describe("runner API", () => {
     expect(reviewed.status).toBe("completed");
     expect(reviewed.review).toMatchObject({
       decision: "approved",
-      note: "Looks ready"
+      note: "Looks ready",
     });
   });
 
@@ -3465,17 +3727,17 @@ describe("runner API", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
 
     const candidateResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/merge-candidate`
+      url: `/workflows/${created.id}/merge-candidate`,
     });
     const candidate = candidateResponse.json();
 
@@ -3504,33 +3766,33 @@ describe("runner API", () => {
             id: "edit-readme",
             title: "Edit README",
             agent: "shell",
-            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'applied merge candidate\\\\n')"`
-          }
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'applied merge candidate\\\\n')"`,
+          },
         ],
         qualityGates: [
           {
             id: "readme",
             title: "README changed",
-            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('applied merge candidate')) process.exit(1)"`
-          }
-        ]
-      }
+            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('applied merge candidate')) process.exit(1)"`,
+          },
+        ],
+      },
     });
     const created = createResponse.json();
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
 
     const applyResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/merge-candidate/apply`
+      url: `/workflows/${created.id}/merge-candidate/apply`,
     });
     const applyResult = applyResponse.json();
     const readme = await readFile(join(repoPath, "README.md"), "utf8");
     const auditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?type=workflow.merge_candidate_applied&workflowId=${created.id}`
+      url: `/audit-events?type=workflow.merge_candidate_applied&workflowId=${created.id}`,
     });
     const auditEvents = auditResponse.json();
 
@@ -3541,7 +3803,9 @@ describe("runner API", () => {
       workflowId: created.id,
       status: "applied",
       repositoryPath: repoPath,
-      sourceBranches: expect.arrayContaining([expect.stringContaining("mawo/")])
+      sourceBranches: expect.arrayContaining([
+        expect.stringContaining("mawo/"),
+      ]),
     });
     expect(applyResult.gitStatus).toContain("README.md");
     expect(readme).toContain("applied merge candidate");
@@ -3552,13 +3816,15 @@ describe("runner API", () => {
       workflowId: created.id,
       metadata: expect.objectContaining({
         status: "applied",
-        repositoryPath: repoPath
-      })
+        repositoryPath: repoPath,
+      }),
     });
   });
 
   it("blocks applying a merge candidate when the target repository is dirty", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-apply-dirty-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-apply-dirty-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
@@ -3574,33 +3840,35 @@ describe("runner API", () => {
             id: "edit-readme",
             title: "Edit README",
             agent: "shell",
-            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'dirty apply candidate\\\\n')"`
-          }
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'dirty apply candidate\\\\n')"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const created = createResponse.json();
     await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     await writeFile(join(repoPath, "LOCAL.txt"), "operator change\n", "utf8");
 
     const applyResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/merge-candidate/apply`
+      url: `/workflows/${created.id}/merge-candidate/apply`,
     });
 
     expect(applyResponse.statusCode).toBe(409);
     expect(applyResponse.json()).toMatchObject({
       error: "merge_candidate_apply_blocked",
-      reason: "repository_not_clean"
+      reason: "repository_not_clean",
     });
   });
 
   it("blocks merge candidates for workflows that failed quality gates", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-merge-block-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-merge-block-test-"),
+    );
     const repoPath = await createCommittedRepo();
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
@@ -3616,26 +3884,26 @@ describe("runner API", () => {
             id: "edit-readme",
             title: "Edit README",
             agent: "shell",
-            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'blocked API candidate\\\\n')"`
-          }
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'blocked API candidate\\\\n')"`,
+          },
         ],
         qualityGates: [
           {
             id: "unit",
             title: "Unit tests",
-            command: `${node} -e "process.exit(8)"`
-          }
-        ]
-      }
+            command: `${node} -e "process.exit(8)"`,
+          },
+        ],
+      },
     });
     const created = createResponse.json();
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const candidateResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/merge-candidate`
+      url: `/workflows/${created.id}/merge-candidate`,
     });
 
     expect(createResponse.statusCode).toBe(201);
@@ -3644,15 +3912,15 @@ describe("runner API", () => {
       tasks: [
         expect.objectContaining({
           diff: expect.objectContaining({
-            patch: expect.stringContaining("+blocked API candidate")
-          })
-        })
-      ]
+            patch: expect.stringContaining("+blocked API candidate"),
+          }),
+        }),
+      ],
     });
     expect(candidateResponse.statusCode).toBe(409);
     expect(candidateResponse.json()).toMatchObject({
       error: "merge_candidate_not_ready",
-      status: "gate_failed"
+      status: "gate_failed",
     });
   });
 
@@ -3663,39 +3931,40 @@ describe("runner API", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const reviewReady = runResponse.json();
     const blockedCleanupResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/workspaces/cleanup`
+      url: `/workflows/${created.id}/workspaces/cleanup`,
     });
     await app.inject({
       method: "POST",
       url: `/workflows/${created.id}/review`,
       payload: {
         decision: "approve",
-        note: "Clean it"
-      }
+        note: "Clean it",
+      },
     });
     const cleanupResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/workspaces/cleanup`
+      url: `/workflows/${created.id}/workspaces/cleanup`,
     });
     const cleanup = cleanupResponse.json();
     const auditResponse = await app.inject({
       method: "GET",
-      url: `/audit-events?workflowId=${created.id}`
+      url: `/audit-events?workflowId=${created.id}`,
     });
     const cleanupAuditEvents = auditResponse
       .json()
       .filter(
-        (event: { type: string }) => event.type === "workflow.workspaces_cleaned"
+        (event: { type: string }) =>
+          event.type === "workflow.workspaces_cleaned",
       );
 
     expect(blockedCleanupResponse.statusCode).toBe(409);
@@ -3706,9 +3975,9 @@ describe("runner API", () => {
       cleaned: [
         expect.objectContaining({
           taskId: "worktree-edit",
-          path: reviewReady.tasks[0].workspace.path
-        })
-      ]
+          path: reviewReady.tasks[0].workspace.path,
+        }),
+      ],
     });
     expect(cleanupAuditEvents).toContainEqual(
       expect.objectContaining({
@@ -3717,30 +3986,32 @@ describe("runner API", () => {
           cleanedCount: "1",
           cleanedTaskIds: "worktree-edit",
           cleanedBranches: expect.stringContaining("worktree-edit"),
-          cleanedPaths: reviewReady.tasks[0].workspace.path
-        })
-      })
+          cleanedPaths: reviewReady.tasks[0].workspace.path,
+        }),
+      }),
     );
   });
 
   it("previews workflow workspace cleanup readiness through the API", async () => {
-    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-cleanup-preview-test-"));
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-api-cleanup-preview-test-"),
+    );
     tempRoots.push(demoRoot);
     const app = buildApp(undefined, { demoRoot });
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/worktree-demo"
+      url: "/workflows/worktree-demo",
     });
     const created = createResponse.json();
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const reviewReady = runResponse.json();
     const blockedPreviewResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/workspaces`
+      url: `/workflows/${created.id}/workspaces`,
     });
     const blockedPreview = blockedPreviewResponse.json();
 
@@ -3749,20 +4020,20 @@ describe("runner API", () => {
       url: `/workflows/${created.id}/review`,
       payload: {
         decision: "approve",
-        note: "Preview cleanup"
-      }
+        note: "Preview cleanup",
+      },
     });
     const allowedPreviewResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/workspaces`
+      url: `/workflows/${created.id}/workspaces`,
     });
     const cleanupResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/workspaces/cleanup`
+      url: `/workflows/${created.id}/workspaces/cleanup`,
     });
     const emptyPreviewResponse = await app.inject({
       method: "GET",
-      url: `/workflows/${created.id}/workspaces`
+      url: `/workflows/${created.id}/workspaces`,
     });
 
     expect(blockedPreviewResponse.statusCode).toBe(200);
@@ -3780,9 +4051,9 @@ describe("runner API", () => {
           taskTitle: "Edit demo repository",
           path: reviewReady.tasks[0].workspace.path,
           exists: true,
-          cleanupAllowed: false
-        })
-      ]
+          cleanupAllowed: false,
+        }),
+      ],
     });
     expect(allowedPreviewResponse.statusCode).toBe(200);
     expect(allowedPreviewResponse.json()).toMatchObject({
@@ -3793,9 +4064,9 @@ describe("runner API", () => {
       existingCount: 1,
       workspaces: [
         expect.objectContaining({
-          cleanupAllowed: true
-        })
-      ]
+          cleanupAllowed: true,
+        }),
+      ],
     });
     expect(cleanupResponse.statusCode).toBe(200);
     expect(emptyPreviewResponse.statusCode).toBe(200);
@@ -3805,7 +4076,7 @@ describe("runner API", () => {
       cleanupAllowed: true,
       workspaceCount: 0,
       existingCount: 0,
-      workspaces: []
+      workspaces: [],
     });
   });
 
@@ -3813,7 +4084,7 @@ describe("runner API", () => {
     const app = buildApp();
     const createResponse = await app.inject({
       method: "POST",
-      url: "/workflows/demo"
+      url: "/workflows/demo",
     });
     const created = createResponse.json();
 
@@ -3821,13 +4092,13 @@ describe("runner API", () => {
       method: "POST",
       url: `/workflows/${created.id}/review`,
       payload: {
-        decision: "approve"
-      }
+        decision: "approve",
+      },
     });
 
     expect(reviewResponse.statusCode).toBe(409);
     expect(reviewResponse.json()).toMatchObject({
-      error: "workflow_not_review_ready"
+      error: "workflow_not_review_ready",
     });
   });
 
@@ -3848,17 +4119,17 @@ describe("runner API", () => {
             id: "edit-readme",
             title: "Edit README",
             agent: "shell",
-            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'real repo workflow\\\\n')"`
-          }
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'real repo workflow\\\\n')"`,
+          },
         ],
         qualityGates: [
           {
             id: "readme",
             title: "README changed",
-            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('real repo workflow')) process.exit(1)"`
-          }
-        ]
-      }
+            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('real repo workflow')) process.exit(1)"`,
+          },
+        ],
+      },
     });
     const created = createResponse.json();
 
@@ -3869,7 +4140,7 @@ describe("runner API", () => {
 
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = runResponse.json();
 
@@ -3898,17 +4169,17 @@ describe("runner API", () => {
             title: "Slow task",
             agent: "shell",
             command: `${node} -e "setTimeout(() => console.log('too late'), 1000)"`,
-            timeoutMs: 50
-          }
+            timeoutMs: 50,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const created = createResponse.json();
 
     const runResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = runResponse.json();
 
@@ -3936,27 +4207,27 @@ describe("runner API", () => {
             id: "flaky-task",
             title: "Flaky task",
             agent: "shell",
-            command: `${node} -e "const fs = require('fs'); const p = '${counterPath}'; const n = fs.existsSync(p) ? Number(fs.readFileSync(p, 'utf8')) + 1 : 1; fs.writeFileSync(p, String(n)); console.log('attempt ' + n); if (n < 2) process.exit(7);"`
-          }
+            command: `${node} -e "const fs = require('fs'); const p = '${counterPath}'; const n = fs.existsSync(p) ? Number(fs.readFileSync(p, 'utf8')) + 1 : 1; fs.writeFileSync(p, String(n)); console.log('attempt ' + n); if (n < 2) process.exit(7);"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
     const created = createResponse.json();
 
     const failedResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const failed = failedResponse.json();
     const retryResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/retry`
+      url: `/workflows/${created.id}/retry`,
     });
     const retried = retryResponse.json();
     const rerunResponse = await app.inject({
       method: "POST",
-      url: `/workflows/${created.id}/run`
+      url: `/workflows/${created.id}/run`,
     });
     const completed = rerunResponse.json();
 
@@ -3989,16 +4260,16 @@ describe("runner API", () => {
             id: "noop",
             title: "Noop",
             agent: "shell",
-            command: `${node} -e "console.log('noop')"`
-          }
+            command: `${node} -e "console.log('noop')"`,
+          },
         ],
-        qualityGates: []
-      }
+        qualityGates: [],
+      },
     });
 
     expect(createResponse.statusCode).toBe(422);
     expect(createResponse.json()).toMatchObject({
-      error: "repository_not_ready"
+      error: "repository_not_ready",
     });
   });
 });

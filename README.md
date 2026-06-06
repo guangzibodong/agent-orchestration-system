@@ -112,6 +112,7 @@ $env:PATH = "$root\.tools\node;$root\.tools\git\cmd;$env:PATH"
 Copy-Item .env.example .env
 notepad .env
 # 填写 MAWO_API_TOKEN、MAWO_ALLOWED_REPOSITORY_ROOTS、POSTGRES_PASSWORD
+# 可选填写 MAWO_VIEWER_API_TOKEN，给只读审查者查看运行状态和报告
 docker compose up --build -d
 docker compose ps
 ```
@@ -261,6 +262,7 @@ POST /workflows/:id/review
 GET  /workflows/:id/workspaces
 POST /workflows/:id/workspaces/cleanup
 GET  /workflows/:id/report
+GET  /workflows/:id/artifact?path=<artifact-path>&maxBytes=<n>
 GET  /workflows/:id/merge-candidate
 POST /workflows/:id/merge-candidate/apply
 GET  /jobs
@@ -332,11 +334,19 @@ Invoke-RestMethod http://127.0.0.1:4000/agents/health
 
 ## API 访问控制
 
-设置 `MAWO_API_TOKEN` 后，除 `GET /health` 外的 API 都要求：
+设置 `MAWO_API_TOKEN` 后，除 `GET /health` 外的 API 都要求 operator token：
 
 ```text
 Authorization: Bearer <MAWO_API_TOKEN>
 ```
+
+可选设置 `MAWO_VIEWER_API_TOKEN` 给只读审查者：
+
+```text
+Authorization: Bearer <MAWO_VIEWER_API_TOKEN>
+```
+
+viewer token 只能访问健康检查、agent/worker 状态、仓库列表、workflow/job 列表与详情、报告、artifact、merge candidate 预览、审计事件和 operations snapshot。创建/删除仓库、创建/运行/重试/审核 workflow、enqueue/cancel job、清理 worktree、应用 merge candidate 都必须使用 operator token；viewer 调用这些写接口会返回 `403 forbidden`。如果只设置 viewer token，API 会启用保护，但没有任何 token 能执行写操作。
 
 Web 控制台右上角可以输入 API token，token 只保存在当前浏览器的 localStorage 中。生产环境仍建议放在 VPN、防火墙或反向代理认证后面，并启用 TLS。
 
@@ -348,7 +358,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 
 ## 当前限制
 
-- 目前是 local-first 系统，有 API token 保护，但没有用户账号、角色权限、租户隔离。
+- 目前是 local-first 系统，有 operator/viewer token 保护，但没有用户账号、细粒度 RBAC、租户隔离。
 - API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
 - `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
 - 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；Postgres state + Postgres queue + `worker:postgres` 可支持多 API 副本，`GET /readiness` 会通过 `deployment_topology` 校验拓扑是否匹配。

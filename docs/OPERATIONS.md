@@ -47,8 +47,13 @@ Required for normal local operation:
 - `API_HOST`: API bind host. Use `127.0.0.1` for local-only access. Use
   `0.0.0.0` on a server only when a firewall or reverse proxy controls access.
 - `API_PORT`: API port. Default `4000`.
-- `MAWO_API_TOKEN`: bearer token for all API routes except `GET /health`.
-  Set a long random value before shared or production use.
+- `MAWO_API_TOKEN`: operator bearer token for all protected API routes. Set a
+  long random value before shared or production use. Operator tokens can create,
+  run, retry, review, cancel, clean up, and apply merge candidates.
+- `MAWO_VIEWER_API_TOKEN`: optional read-only bearer token for reviewers. Viewer
+  tokens can inspect health, readiness, agents, workers, repositories,
+  workflows, reports, artifacts, jobs, audit events, merge candidate previews,
+  and operations snapshots, but receive `403 forbidden` on mutating endpoints.
 - `NEXT_PUBLIC_API_URL`: browser-visible API URL. For local use:
   `http://127.0.0.1:4000`. For server use, set the public or reverse-proxied
   API origin.
@@ -289,8 +294,9 @@ it deletes the named `.mawo`, Postgres, and Redis volumes.
 ## 5. Server Startup
 
 Use a dedicated checkout or release directory on the server. The app should run
-behind a firewall or reverse proxy. `MAWO_API_TOKEN` protects direct API calls,
-but it is not a replacement for TLS, network controls, or operator identity.
+behind a firewall or reverse proxy. `MAWO_API_TOKEN` protects direct operator
+API calls, and `MAWO_VIEWER_API_TOKEN` can be issued to read-only reviewers, but
+neither token is a replacement for TLS, network controls, or operator identity.
 
 One-time setup:
 
@@ -309,6 +315,7 @@ For server access, set at minimum:
 API_HOST="0.0.0.0"
 API_PORT="4000"
 MAWO_API_TOKEN="<long-random-token>"
+MAWO_VIEWER_API_TOKEN="<optional-read-only-token>"
 NEXT_PUBLIC_API_URL="https://<your-api-host-or-proxy>"
 MAWO_ALLOWED_REPOSITORY_ROOTS="C:\work\repos;D:\client-repos"
 MAWO_STATE_BACKEND="file"
@@ -517,8 +524,10 @@ back the web process first while keeping the API and `.mawo` untouched.
 
 - Do not expose the API directly to the public internet without
   `MAWO_API_TOKEN`, TLS, VPN, IP allowlist, or reverse proxy access control.
-- The API can execute repository workflow commands; treat users with API access
-  as trusted operators.
+- The API can execute repository workflow commands; treat users with
+  `MAWO_API_TOKEN` access as trusted operators.
+- Issue `MAWO_VIEWER_API_TOKEN` for read-only review, demos, audits, and
+  operations dashboards instead of sharing the operator token.
 - Keep `.env`, `.mawo`, `.logs`, and backups out of git and public file shares.
 - Review CLI agent templates before enabling them on a shared server.
 - Use least-privilege OS users for the service account. Avoid running the app as
@@ -530,8 +539,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 
 ## 11. Known Limits
 
-- API token auth exists, but there are no user accounts, roles, or tenant
-  isolation.
+- Operator/viewer token auth exists, but there are no user accounts,
+  fine-grained RBAC policies, or tenant isolation.
 - CORS currently allows all origins.
 - File-backed workflow state plus the in-process queue does not support
   concurrent multi-host API replicas. Set `MAWO_API_REPLICA_COUNT=1` for that
@@ -558,6 +567,9 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `.env` exists on the target host and matches the intended API/web URLs.
 - [ ] `MAWO_API_TOKEN` is set to a long random value and is not the example
       value.
+- [ ] `MAWO_VIEWER_API_TOKEN` is set when non-operators need read-only access;
+      viewer access has been smoke-tested against a read endpoint and a blocked
+      write endpoint.
 - [ ] `MAWO_ALLOWED_REPOSITORY_ROOTS` is set to the smallest practical set of
       repository parent directories.
 - [ ] `POSTGRES_PASSWORD` is set to a strong value before running Docker

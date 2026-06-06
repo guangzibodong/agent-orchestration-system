@@ -25,6 +25,7 @@ services:
       MAWO_MAX_CONCURRENT_JOBS: ${MAWO_MAX_CONCURRENT_JOBS:-1}
       MAWO_API_REPLICA_COUNT: ${MAWO_API_REPLICA_COUNT:-1}
       MAWO_API_TOKEN: ${MAWO_API_TOKEN:?Set MAWO_API_TOKEN to a long random token before production}
+      MAWO_VIEWER_API_TOKEN: ${MAWO_VIEWER_API_TOKEN:-}
       MAWO_ALLOWED_REPOSITORY_ROOTS: ${MAWO_ALLOWED_REPOSITORY_ROOTS:?Set MAWO_ALLOWED_REPOSITORY_ROOTS to an absolute repository root before production}
       DATABASE_URL: "postgresql://mawo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before production}@postgres:5432/mawo?schema=public"
       REDIS_URL: redis://redis:6379
@@ -46,7 +47,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:4000/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 12

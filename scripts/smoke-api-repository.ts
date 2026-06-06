@@ -45,14 +45,13 @@ async function request(
   method: string,
   path: string,
   payload?: JsonObject,
+  authToken = process.env.MAWO_API_TOKEN,
 ) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       ...(payload ? { "content-type": "application/json" } : {}),
-      ...(process.env.MAWO_API_TOKEN
-        ? { authorization: `Bearer ${process.env.MAWO_API_TOKEN}` }
-        : {}),
+      ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
     },
     body: payload ? JSON.stringify(payload) : undefined,
   });
@@ -200,7 +199,9 @@ async function main() {
       !JSON.stringify(agentHealthRows).includes("{promptFile}"),
       "Agent health leaked a command template.",
     );
-    log("agent health endpoint reports configured agents without leaking templates");
+    log(
+      "agent health endpoint reports configured agents without leaking templates",
+    );
 
     const readiness = await request(baseUrl, "GET", "/readiness");
     assert(
@@ -208,9 +209,15 @@ async function main() {
       `GET /readiness returned ${readiness.status}`,
     );
     const readinessChecks = readiness.body.checks as Array<JsonObject>;
-    assert(readiness.body.ok === true, "Readiness endpoint did not return ok=true.");
     assert(
-      readiness.body.protectedByToken === Boolean(process.env.MAWO_API_TOKEN),
+      readiness.body.ok === true,
+      "Readiness endpoint did not return ok=true.",
+    );
+    assert(
+      readiness.body.protectedByToken ===
+        Boolean(
+          process.env.MAWO_API_TOKEN || process.env.MAWO_VIEWER_API_TOKEN,
+        ),
       "Readiness endpoint did not report token protection state.",
     );
     assert(
@@ -223,17 +230,21 @@ async function main() {
         readinessChecks.some(
           (check) => check.id === "git_cli" && check.ok === true,
         ) &&
-        readinessChecks.some((check) => check.id === "agents" && check.ok === true),
         readinessChecks.some(
-          (check) => check.id === "production_config" && check.ok === true,
+          (check) => check.id === "agents" && check.ok === true,
         ),
+      readinessChecks.some(
+        (check) => check.id === "production_config" && check.ok === true,
+      ),
       "Readiness endpoint did not report all production checks as ready.",
     );
     assert(
       !JSON.stringify(readiness.body).includes("{promptFile}"),
       "Readiness endpoint leaked a command template.",
     );
-    log("readiness endpoint reports production checks without leaking templates");
+    log(
+      "readiness endpoint reports production checks without leaking templates",
+    );
 
     const operationsSnapshot = await request(
       baseUrl,
@@ -252,10 +263,40 @@ async function main() {
       "Operations snapshot did not aggregate readiness, worker health, jobs, and audit events.",
     );
     assert(
-      Number((operationsSnapshot.body.summary as JsonObject)?.activeJobs ?? -1) >= 0,
+      Number(
+        (operationsSnapshot.body.summary as JsonObject)?.activeJobs ?? -1,
+      ) >= 0,
       "Operations snapshot did not include active job summary.",
     );
     log("operations snapshot aggregates deployment health and run history");
+
+    if (process.env.MAWO_VIEWER_API_TOKEN) {
+      const viewerOperationsSnapshot = await request(
+        baseUrl,
+        "GET",
+        "/operations/snapshot?limit=1",
+        undefined,
+        process.env.MAWO_VIEWER_API_TOKEN,
+      );
+      assert(
+        viewerOperationsSnapshot.status === 200,
+        `Viewer token GET /operations/snapshot returned ${viewerOperationsSnapshot.status}`,
+      );
+
+      const viewerWorkflowCreate = await request(
+        baseUrl,
+        "POST",
+        "/workflows/demo",
+        undefined,
+        process.env.MAWO_VIEWER_API_TOKEN,
+      );
+      assert(
+        viewerWorkflowCreate.status === 403 &&
+          viewerWorkflowCreate.body.error === "forbidden",
+        "Viewer token was able to mutate workflow state.",
+      );
+      log("viewer token can inspect operations but cannot mutate workflows");
+    }
 
     const recoveredWorkflow = await request(
       baseUrl,
@@ -271,23 +312,25 @@ async function main() {
       "Interrupted workflow was not recovered to aborted.",
     );
     const recoveredTasks = recoveredWorkflow.body.tasks as Array<JsonObject>;
-    const recoveredGates =
-      recoveredWorkflow.body.qualityGates as Array<JsonObject>;
+    const recoveredGates = recoveredWorkflow.body
+      .qualityGates as Array<JsonObject>;
     assert(
       recoveredTasks[0]?.status === "canceled" &&
         (recoveredTasks[0]?.result as JsonObject | undefined)?.status ===
           "canceled" &&
         (
-          (recoveredTasks[0]?.result as JsonObject | undefined)
-            ?.metadata as JsonObject | undefined
+          (recoveredTasks[0]?.result as JsonObject | undefined)?.metadata as
+            | JsonObject
+            | undefined
         )?.interrupted === "api_restart",
       "Interrupted workflow task was not marked canceled with restart metadata.",
     );
     assert(
       recoveredGates[0]?.status === "canceled" &&
         (
-          (recoveredGates[0]?.result as JsonObject | undefined)
-            ?.metadata as JsonObject | undefined
+          (recoveredGates[0]?.result as JsonObject | undefined)?.metadata as
+            | JsonObject
+            | undefined
         )?.interrupted === "api_restart",
       "Interrupted workflow gate was not marked canceled with restart metadata.",
     );
@@ -323,8 +366,7 @@ async function main() {
       "/workflows/smoke-recovered-workflow/retry",
     );
     assert(
-      recoveredRetry.status === 200 &&
-        recoveredRetry.body.status === "ready",
+      recoveredRetry.status === 200 && recoveredRetry.body.status === "ready",
       "Recovered interrupted workflow could not be retried.",
     );
     log("interrupted running workflow recovers to aborted and can be retried");
@@ -342,19 +384,24 @@ async function main() {
     ].join(" ");
     const gateCommand = `${node} -e "const fs=require('fs'); if(!fs.readFileSync('README.md','utf8').includes('smoke retry success')) process.exit(9);"`;
 
-    const registeredRepository = await request(baseUrl, "POST", "/repositories", {
-      name: "Smoke repository",
-      path: repositoryPath,
-      defaultBranch: "main",
-      qualityGates: [
-        {
-          id: "readme-gate",
-          title: "README contains smoke marker",
-          command: gateCommand,
-          timeoutMs: 30000,
-        },
-      ],
-    });
+    const registeredRepository = await request(
+      baseUrl,
+      "POST",
+      "/repositories",
+      {
+        name: "Smoke repository",
+        path: repositoryPath,
+        defaultBranch: "main",
+        qualityGates: [
+          {
+            id: "readme-gate",
+            title: "README contains smoke marker",
+            command: gateCommand,
+            timeoutMs: 30000,
+          },
+        ],
+      },
+    );
     assert(
       registeredRepository.status === 201,
       `Repository registration returned ${registeredRepository.status}`,
@@ -386,11 +433,14 @@ async function main() {
       "Duplicate repository registration changed the repository id.",
     );
     const repositories = await request(baseUrl, "GET", "/repositories");
-    assert(repositories.status === 200, `Repositories returned ${repositories.status}`);
+    assert(
+      repositories.status === 200,
+      `Repositories returned ${repositories.status}`,
+    );
     const repositoryRows = repositories.body as unknown as Array<JsonObject>;
     assert(
-      repositoryRows.filter((repository) => repository.id === repositoryId).length ===
-        1,
+      repositoryRows.filter((repository) => repository.id === repositoryId)
+        .length === 1,
       "Repository list did not contain exactly one registered repository row.",
     );
     assert(
@@ -584,7 +634,9 @@ async function main() {
         filteredRepositoryWorkflowRows[0]?.repositoryId === repositoryId,
       "Repository id workflow filter did not return the registered repository workflow.",
     );
-    log("workflow history filters isolate repository runs by status and repository id");
+    log(
+      "workflow history filters isolate repository runs by status and repository id",
+    );
 
     const report = await request(
       baseUrl,
@@ -618,7 +670,9 @@ async function main() {
     );
     assert(
       typeof reportArtifact.body.content === "string" &&
-        reportArtifact.body.content.includes('"recommendation": "ready_for_review"'),
+        reportArtifact.body.content.includes(
+          '"recommendation": "ready_for_review"',
+        ),
       "Report artifact content did not include the ready recommendation.",
     );
     log("report artifact is readable through the API");
@@ -661,7 +715,10 @@ async function main() {
         appliedMergeCandidate.body.gitStatus.includes("README.md"),
       "Apply merge candidate response did not include applied repository status.",
     );
-    const appliedReadme = await readFile(join(repositoryPath, "README.md"), "utf8");
+    const appliedReadme = await readFile(
+      join(repositoryPath, "README.md"),
+      "utf8",
+    );
     assert(
       appliedReadme.includes("smoke retry success"),
       "Applied merge candidate did not update the target README.",
@@ -701,12 +758,19 @@ async function main() {
         ),
       "Workspace preview did not block cleanup before review.",
     );
-    log("workspace preview blocks cleanup while review evidence is still needed");
+    log(
+      "workspace preview blocks cleanup while review evidence is still needed",
+    );
 
-    const review = await request(baseUrl, "POST", `/workflows/${workflowId}/review`, {
-      decision: "approve",
-      note: "Smoke reviewed",
-    });
+    const review = await request(
+      baseUrl,
+      "POST",
+      `/workflows/${workflowId}/review`,
+      {
+        decision: "approve",
+        note: "Smoke reviewed",
+      },
+    );
     assert(review.status === 200, `Review returned ${review.status}`);
     assert(
       review.body.status === "completed",
@@ -735,7 +799,10 @@ async function main() {
       "POST",
       `/workflows/${workflowId}/workspaces/cleanup`,
     );
-    assert(cleanup.status === 200, `Workspace cleanup returned ${cleanup.status}`);
+    assert(
+      cleanup.status === 200,
+      `Workspace cleanup returned ${cleanup.status}`,
+    );
     assert(
       cleanup.body.status === "cleaned",
       `Workspace cleanup status was ${String(cleanup.body.status)}`,
@@ -746,7 +813,8 @@ async function main() {
       "Workspace cleanup did not include the main workflow task.",
     );
     assert(
-      typeof workspacePath?.path === "string" && !existsSync(workspacePath.path),
+      typeof workspacePath?.path === "string" &&
+        !existsSync(workspacePath.path),
       "Workspace cleanup did not remove the task worktree path.",
     );
     const secondCleanup = await request(
@@ -784,7 +852,9 @@ async function main() {
         emptyWorkspacePreview.body.workspaces.length === 0,
       "Workspace preview did not show an empty cleanup target list after cleanup.",
     );
-    log("completed workflow workspaces were cleaned after review and cleanup is idempotent");
+    log(
+      "completed workflow workspaces were cleaned after review and cleanup is idempotent",
+    );
 
     const slowMarkerPath = join(smokeRoot, "slow-marker.txt").replace(
       /\\/g,
@@ -914,7 +984,10 @@ async function main() {
     log("running job cancellation aborts the command and remains canceled");
 
     const auditEvents = await request(baseUrl, "GET", "/audit-events");
-    assert(auditEvents.status === 200, `Audit events returned ${auditEvents.status}`);
+    assert(
+      auditEvents.status === 200,
+      `Audit events returned ${auditEvents.status}`,
+    );
     const events = auditEvents.body as unknown as Array<JsonObject>;
     const eventTypes = events.map((event) => event.type);
     for (const type of [
@@ -1018,7 +1091,8 @@ async function main() {
         (event) =>
           event.type === "workflow.gate_completed" &&
           event.workflowId === workflowId &&
-          (event.metadata as JsonObject | undefined)?.gateId === "readme-gate" &&
+          (event.metadata as JsonObject | undefined)?.gateId ===
+            "readme-gate" &&
           (event.metadata as JsonObject | undefined)?.status === "passed",
       ),
       "Audit log did not include passed gate lifecycle event for the main workflow.",
@@ -1029,9 +1103,7 @@ async function main() {
       ),
       "Audit log did not include cancel event for the canceled job.",
     );
-    log(
-      "audit events recorded operator actions plus task and gate lifecycle",
-    );
+    log("audit events recorded operator actions plus task and gate lifecycle");
 
     const filteredWorkflowCreatedAudit = await request(
       baseUrl,
@@ -1047,7 +1119,8 @@ async function main() {
         (event) =>
           event.type === "workflow.created" &&
           event.workflowId === workflowId &&
-          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+          (event.metadata as JsonObject | undefined)?.repositoryId ===
+            repositoryId,
       ),
       "Filtered workflow created audit did not include the registered repository id.",
     );
@@ -1061,12 +1134,13 @@ async function main() {
       `Filtered repository audit returned ${filteredRepositoryAudit.status}`,
     );
     assert(
-      (filteredRepositoryAudit.body as unknown as Array<JsonObject>).length === 1,
+      (filteredRepositoryAudit.body as unknown as Array<JsonObject>).length ===
+        1,
       "Filtered repository audit did not return exactly one event.",
     );
     assert(
-      (filteredRepositoryAudit.body as unknown as Array<JsonObject>)[0]?.type ===
-        "repository.updated",
+      (filteredRepositoryAudit.body as unknown as Array<JsonObject>)[0]
+        ?.type === "repository.updated",
       "Filtered repository audit did not return the repository update event.",
     );
     const filteredJobAudit = await request(
@@ -1083,7 +1157,8 @@ async function main() {
         (event) =>
           event.type === "job.canceled" &&
           event.jobId === cancelJobId &&
-          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+          (event.metadata as JsonObject | undefined)?.repositoryId ===
+            repositoryId,
       ),
       "Filtered job audit did not return the canceled job event.",
     );
@@ -1101,7 +1176,8 @@ async function main() {
         (event) =>
           event.type === "workflow.enqueued" &&
           event.jobId === cancelJobId &&
-          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+          (event.metadata as JsonObject | undefined)?.repositoryId ===
+            repositoryId,
       ),
       "Filtered enqueue audit did not return the repository job event.",
     );
@@ -1116,13 +1192,18 @@ async function main() {
       deletedRepository.status === 200,
       `Repository deletion returned ${deletedRepository.status}`,
     );
-    const repositoriesAfterDelete = await request(baseUrl, "GET", "/repositories");
+    const repositoriesAfterDelete = await request(
+      baseUrl,
+      "GET",
+      "/repositories",
+    );
     assert(
       repositoriesAfterDelete.status === 200,
       `Repositories after delete returned ${repositoriesAfterDelete.status}`,
     );
     assert(
-      (repositoriesAfterDelete.body as unknown as Array<JsonObject>).length === 0,
+      (repositoriesAfterDelete.body as unknown as Array<JsonObject>).length ===
+        0,
       "Repository deletion did not remove the registered repository.",
     );
     const auditAfterRepositoryDelete = await request(
@@ -1134,11 +1215,14 @@ async function main() {
       (auditAfterRepositoryDelete.body as unknown as Array<JsonObject>).some(
         (event) =>
           event.type === "repository.deleted" &&
-          (event.metadata as JsonObject | undefined)?.repositoryId === repositoryId,
+          (event.metadata as JsonObject | undefined)?.repositoryId ===
+            repositoryId,
       ),
       "Audit log did not include repository deletion metadata.",
     );
-    log("repository deletion removes the registry row and records audit metadata");
+    log(
+      "repository deletion removes the registry row and records audit metadata",
+    );
 
     const jobs = await request(baseUrl, "GET", "/jobs");
     assert(jobs.status === 200, `Jobs endpoint returned ${jobs.status}`);
@@ -1201,8 +1285,9 @@ async function main() {
     );
     assert(
       (
-        (jobTimeline.body.summary as JsonObject | undefined)
-          ?.failedTasks as Array<unknown> | undefined
+        (jobTimeline.body.summary as JsonObject | undefined)?.failedTasks as
+          | Array<unknown>
+          | undefined
       )?.includes("slow-task"),
       "Job timeline summary did not include the canceled task.",
     );
@@ -1214,7 +1299,11 @@ async function main() {
         timelineEventTypes.includes("job.canceled"),
       "Job timeline did not include enqueue and cancel lifecycle events.",
     );
-    const invalidJobStatus = await request(baseUrl, "GET", "/jobs?status=not-real");
+    const invalidJobStatus = await request(
+      baseUrl,
+      "GET",
+      "/jobs?status=not-real",
+    );
     assert(
       invalidJobStatus.status === 400 &&
         invalidJobStatus.body.error === "invalid_job_status",

@@ -14,7 +14,7 @@ import {
   Square,
   ShieldCheck,
   Trash2,
-  XCircle
+  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -38,71 +38,77 @@ import {
   type WorkflowJob,
   type WorkflowRun,
   type WorkspaceCleanupPreview,
-  type WorkspaceCleanupResult
+  type WorkspaceCleanupResult,
 } from "@mawo/shared";
 import {
   applyMergeCandidate,
   buildMergeCandidateApplyDisplay,
-  buildMergeCandidateApplyError
+  buildMergeCandidateApplyError,
 } from "@/components/merge-candidate-apply";
 import {
   buildMergeCandidateDisplay,
   buildMergeCandidateNotReadyDisplay,
   isMergeCandidateNotReadyResponse,
-  type MergeCandidateDisplay
+  type MergeCandidateDisplay,
 } from "@/components/merge-candidate-display";
 import {
   buildRepositoryWorkflowPayload,
   canCreateRepositoryWorkflow,
-  type RepositoryWorkflowFormState
+  type RepositoryWorkflowFormState,
 } from "@/components/repository-workflow-payload";
 import {
   buildRepositoryRegistrationPayload,
   canRegisterRepository,
-  type RepositoryRegistrationFormState
+  type RepositoryRegistrationFormState,
 } from "@/components/repository-registration-payload";
 import {
   buildRepositoryDisplay,
-  summarizeRepositories
+  summarizeRepositories,
 } from "@/components/repository-display";
 import { buildWorkflowReviewPayload } from "@/components/workflow-review-payload";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
-import { buildApiHeaders } from "@/components/api-auth";
+import {
+  buildApiHeaders,
+  canUseOperatorActions,
+  formatApiErrorMessage,
+  normalizeApiTokenRole,
+  type ApiTokenRole,
+} from "@/components/api-auth";
 import {
   buildAgentHealthDisplay,
-  summarizeAgentHealth
+  summarizeAgentHealth,
 } from "@/components/agent-health-display";
 import {
   buildReadinessCheckDisplay,
-  summarizeReadiness
+  summarizeReadiness,
 } from "@/components/readiness-display";
 import {
   buildAuditEventDisplay,
-  summarizeAuditEvents
+  summarizeAuditEvents,
 } from "@/components/audit-event-display";
 import {
   buildJobHistoryDisplay,
-  summarizeJobHistory
+  summarizeJobHistory,
 } from "@/components/job-history-display";
 import {
   buildJobTimelineDisplay,
   loadJobTimeline,
-  type JobTimelineResponse
+  type JobTimelineResponse,
 } from "@/components/job-timeline-display";
 import {
   buildArtifactPreviewDisplay,
   buildArtifactPreviewPath,
-  type ArtifactPreviewResponse
+  type ArtifactPreviewResponse,
 } from "@/components/artifact-preview";
 import { buildOperationsSummaryCards } from "@/components/operations-summary-display";
 import { loadOperationsSnapshot } from "@/components/operations-snapshot";
 import {
   buildWorkerHealthDisplay,
-  summarizeWorkerHealth
+  summarizeWorkerHealth,
 } from "@/components/worker-health-display";
 import {
   buildWorkflowListDisplay,
-  summarizeWorkflowList
+  summarizeWorkflowList,
 } from "@/components/workflow-list-display";
 import { loadWorkflowRuns } from "@/components/workflow-list-loader";
 import {
@@ -111,16 +117,19 @@ import {
   canRetryWorkflowStatus,
   formatJobStatus,
   parseWorkflowAlreadyRunningJob,
-  type WorkflowJobDisplayStatus
+  type WorkflowJobDisplayStatus,
 } from "@/components/workflow-actions";
 import {
   buildWorkspaceCleanupPreviewDisplay,
   cleanupWorkflowWorkspacesWithResult,
-  loadWorkflowWorkspacePreview
+  loadWorkflowWorkspacePreview,
 } from "@/components/workflow-workspaces";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
+const apiTokenRoleStorageKey = "mawo-api-token-role";
+const viewerModeMessage =
+  "Viewer mode is read-only. Switch to operator mode to run workflows or modify repositories.";
 const defaultRepositoryForm: RepositoryWorkflowFormState = {
   goal: "Run a real repository workflow",
   repositoryPath: process.env.NEXT_PUBLIC_REPOSITORY_PATH ?? "",
@@ -128,14 +137,14 @@ const defaultRepositoryForm: RepositoryWorkflowFormState = {
   taskCommand: "git status --short",
   taskTimeoutMs: "900000",
   qualityGateCommand: "",
-  qualityGateTimeoutMs: "300000"
+  qualityGateTimeoutMs: "300000",
 };
 const defaultRepositoryRegistrationForm: RepositoryRegistrationFormState = {
   name: "",
   path: process.env.NEXT_PUBLIC_REPOSITORY_PATH ?? "",
   defaultBranch: "main",
   qualityGateCommand: "npm run test",
-  qualityGateTimeoutMs: "600000"
+  qualityGateTimeoutMs: "600000",
 };
 
 type ConsoleWorkflowJob = Omit<WorkflowJob, "status"> & {
@@ -147,7 +156,7 @@ class ApiResponseError extends Error {
   readonly status: number;
 
   constructor(status: number, path: string, body: unknown) {
-    super(`API ${status}: ${path}`);
+    super(formatApiErrorMessage(status, path, body));
     this.name = "ApiResponseError";
     this.body = body;
     this.status = status;
@@ -162,10 +171,20 @@ function getStoredApiToken(): string | undefined {
   return window.localStorage.getItem(apiTokenStorageKey) ?? undefined;
 }
 
+function getStoredApiTokenRole(): ApiTokenRole {
+  if (typeof window === "undefined") {
+    return "operator";
+  }
+
+  return normalizeApiTokenRole(
+    window.localStorage.getItem(apiTokenRoleStorageKey),
+  );
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
-    headers: buildApiHeaders(getStoredApiToken(), init?.headers)
+    headers: buildApiHeaders(getStoredApiToken(), init?.headers),
   });
 
   if (response.status === 204) {
@@ -196,7 +215,7 @@ export function RunConsole() {
     useState<MergeCandidateApplyResult>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
   const [repositoryRegistrationForm, setRepositoryRegistrationForm] = useState(
-    defaultRepositoryRegistrationForm
+    defaultRepositoryRegistrationForm,
   );
   const [repositories, setRepositories] = useState<RepositoryRecord[]>([]);
   const [configuredAgents, setConfiguredAgents] = useState<AgentSummary[]>([]);
@@ -214,6 +233,9 @@ export function RunConsole() {
     useState<WorkspaceCleanupResult>();
   const [operationsRepositoryId, setOperationsRepositoryId] = useState("");
   const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
+  const [apiTokenRole, setApiTokenRole] = useState<ApiTokenRole>(() =>
+    getStoredApiTokenRole(),
+  );
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
@@ -221,26 +243,26 @@ export function RunConsole() {
 
   const agentHealthSummary = useMemo(
     () => summarizeAgentHealth(agentHealth),
-    [agentHealth]
+    [agentHealth],
   );
   const agentHealthDisplay = useMemo(
     () => buildAgentHealthDisplay(agentHealth),
-    [agentHealth]
+    [agentHealth],
   );
   const repositorySummary = useMemo(
     () => summarizeRepositories(repositories),
-    [repositories]
+    [repositories],
   );
   const repositoryDisplay = useMemo(
     () => buildRepositoryDisplay(repositories),
-    [repositories]
+    [repositories],
   );
   const selectedOperationsRepository = useMemo(
     () =>
       repositories.find(
-        (repository) => repository.id === operationsRepositoryId
+        (repository) => repository.id === operationsRepositoryId,
       ),
-    [operationsRepositoryId, repositories]
+    [operationsRepositoryId, repositories],
   );
   const operationsScopeLabel = selectedOperationsRepository
     ? selectedOperationsRepository.name
@@ -248,59 +270,58 @@ export function RunConsole() {
   const operationsSummaryCards = useMemo(
     () =>
       operationsSummary ? buildOperationsSummaryCards(operationsSummary) : [],
-    [operationsSummary]
+    [operationsSummary],
   );
   const auditEventSummary = useMemo(
     () => summarizeAuditEvents(auditEvents),
-    [auditEvents]
+    [auditEvents],
   );
   const auditEventDisplay = useMemo(
     () => buildAuditEventDisplay(auditEvents).slice(0, 8),
-    [auditEvents]
+    [auditEvents],
   );
   const jobHistorySummary = useMemo(
     () => summarizeJobHistory(jobHistory),
-    [jobHistory]
+    [jobHistory],
   );
   const jobHistoryDisplay = useMemo(
     () => buildJobHistoryDisplay(jobHistory).slice(0, 8),
-    [jobHistory]
+    [jobHistory],
   );
   const readinessSummary = useMemo(
     () => (readiness ? summarizeReadiness(readiness) : undefined),
-    [readiness]
+    [readiness],
   );
   const readinessCheckDisplay = useMemo(
-    () =>
-      readiness ? buildReadinessCheckDisplay(readiness.checks) : [],
-    [readiness]
+    () => (readiness ? buildReadinessCheckDisplay(readiness.checks) : []),
+    [readiness],
   );
   const workerHealthSummary = useMemo(
     () => (workerHealth ? summarizeWorkerHealth(workerHealth) : undefined),
-    [workerHealth]
+    [workerHealth],
   );
   const workerHealthDisplay = useMemo(
     () => (workerHealth ? buildWorkerHealthDisplay(workerHealth) : []),
-    [workerHealth]
+    [workerHealth],
   );
   const jobTimelineDisplay = useMemo(
     () => (jobTimeline ? buildJobTimelineDisplay(jobTimeline) : undefined),
-    [jobTimeline]
+    [jobTimeline],
   );
   const workflowListSummary = useMemo(
     () => summarizeWorkflowList(workflowList),
-    [workflowList]
+    [workflowList],
   );
   const workflowListDisplay = useMemo(
     () => buildWorkflowListDisplay(workflowList).slice(-8).reverse(),
-    [workflowList]
+    [workflowList],
   );
   const workspaceCleanupDisplay = useMemo(
     () =>
       workspaceCleanupPreview
         ? buildWorkspaceCleanupPreviewDisplay(workspaceCleanupPreview)
         : undefined,
-    [workspaceCleanupPreview]
+    [workspaceCleanupPreview],
   );
   const workspaceCleanupTargetCount =
     workspaceCleanupPreview?.existingCount ??
@@ -312,12 +333,12 @@ export function RunConsole() {
       {
         label: "Workflows",
         value: String(workflowListSummary.total),
-        icon: GitBranch
+        icon: GitBranch,
       },
       {
         label: "Repositories",
         value: String(repositorySummary.total),
-        icon: FolderGit2
+        icon: FolderGit2,
       },
       {
         label: "Agents",
@@ -325,44 +346,44 @@ export function RunConsole() {
           agentHealthSummary.total > 0
             ? `${agentHealthSummary.healthy}/${agentHealthSummary.total}`
             : String(
-                new Set(workflow?.tasks.map((task) => task.agent)).size || 0
+                new Set(workflow?.tasks.map((task) => task.agent)).size || 0,
               ),
-        icon: Activity
+        icon: Activity,
       },
       {
         label: "Workflow Nodes",
         value: String(
-          (workflow?.tasks.length ?? 0) + (workflow?.qualityGates.length ?? 0)
+          (workflow?.tasks.length ?? 0) + (workflow?.qualityGates.length ?? 0),
         ),
-        icon: GitBranch
+        icon: GitBranch,
       },
       {
         label: "Quality Gates",
         value: String(workflow?.qualityGates.length ?? 0),
-        icon: ShieldCheck
+        icon: ShieldCheck,
       },
       {
         label: "Audit Events",
         value: String(auditEventSummary.total),
-        icon: Activity
+        icon: Activity,
       },
       {
         label: "Jobs",
         value: String(jobHistorySummary.total),
-        icon: Play
+        icon: Play,
       },
       {
         label: "Workers",
         value: workerHealthSummary
           ? `${workerHealthSummary.healthy}/${workerHealthSummary.total}`
           : "0/0",
-        icon: Bot
+        icon: Bot,
       },
       {
         label: "Readiness",
         value: readinessSummary?.statusLabel ?? "Unknown",
-        icon: CheckCircle2
-      }
+        icon: CheckCircle2,
+      },
     ],
     [
       agentHealthSummary,
@@ -372,25 +393,27 @@ export function RunConsole() {
       repositorySummary,
       workerHealthSummary,
       workflow,
-      workflowListSummary
-    ]
+      workflowListSummary,
+    ],
   );
   const canCreateRepositoryRun = useMemo(
     () => canCreateRepositoryWorkflow(repositoryForm),
-    [repositoryForm]
+    [repositoryForm],
   );
   const canSubmitRepositoryRegistration = useMemo(
     () => canRegisterRepository(repositoryRegistrationForm),
-    [repositoryRegistrationForm]
+    [repositoryRegistrationForm],
   );
   const agentOptions = useMemo(
     () => [{ id: "shell", label: "Shell" }, ...configuredAgents],
-    [configuredAgents]
+    [configuredAgents],
   );
   const canRetryCurrentWorkflow = canRetryWorkflowStatus(workflow?.status);
   const canCleanupCurrentWorkflow =
-    canCleanupWorkflowStatus(workflow?.status) && workspaceCleanupTargetCount > 0;
+    canCleanupWorkflowStatus(workflow?.status) &&
+    workspaceCleanupTargetCount > 0;
   const canCancelCurrentJob = canCancelJobStatus(job?.status);
+  const canOperate = canUseOperatorActions(apiTokenRole);
 
   const updateApiToken = useCallback((value: string) => {
     setApiToken(value);
@@ -402,47 +425,76 @@ export function RunConsole() {
     window.localStorage.removeItem(apiTokenStorageKey);
   }, []);
 
+  const updateApiTokenRole = useCallback((value: string) => {
+    const role = normalizeApiTokenRole(value);
+    setApiTokenRole(role);
+    window.localStorage.setItem(apiTokenRoleStorageKey, role);
+  }, []);
+
+  const requireOperatorAction = useCallback(() => {
+    if (canOperate) {
+      return true;
+    }
+
+    setError(viewerModeMessage);
+    return false;
+  }, [canOperate]);
+
+  useEffect(() => {
+    // Sync browser-only token fields after hydration; the server render cannot read localStorage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setApiToken(getStoredApiToken() ?? "");
+    setApiTokenRole(getStoredApiTokenRole());
+  }, []);
+
   const updateRepositoryForm = useCallback(
     (field: keyof RepositoryWorkflowFormState, value: string) => {
       setRepositoryForm((current) => ({
         ...current,
-        [field]: value
+        [field]: value,
       }));
     },
-    []
+    [],
   );
 
   const updateRepositoryRegistrationForm = useCallback(
     (field: keyof RepositoryRegistrationFormState, value: string) => {
       setRepositoryRegistrationForm((current) => ({
         ...current,
-        [field]: value
+        [field]: value,
       }));
     },
-    []
+    [],
   );
 
   const selectRegisteredRepository = useCallback((repositoryPath: string) => {
     setRepositoryForm((current) => ({
       ...current,
-      repositoryPath
+      repositoryPath,
     }));
   }, []);
 
-  const updateOperationsRepositoryScope = useCallback((repositoryId: string) => {
-    setOperationsRepositoryId(repositoryId);
-    setJobTimeline(undefined);
-  }, []);
+  const updateOperationsRepositoryScope = useCallback(
+    (repositoryId: string) => {
+      setOperationsRepositoryId(repositoryId);
+      setJobTimeline(undefined);
+    },
+    [],
+  );
 
   const loadWorkflowList = useCallback(async () => {
     const parsed = await loadWorkflowRuns(api, {
-      repositoryId: operationsRepositoryId || undefined
+      repositoryId: operationsRepositoryId || undefined,
     });
     setWorkflowList(parsed);
     return parsed;
   }, [operationsRepositoryId]);
 
   const createDemo = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
@@ -456,7 +508,7 @@ export function RunConsole() {
     try {
       const next = await api<unknown>("/workflows/demo", {
         method: "POST",
-        body: "{}"
+        body: "{}",
       });
       setWorkflow(workflowRunSchema.parse(next));
       await loadWorkflowList();
@@ -465,9 +517,13 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [loadWorkflowList]);
+  }, [loadWorkflowList, requireOperatorAction]);
 
   const createWorktreeDemo = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
@@ -481,20 +537,26 @@ export function RunConsole() {
     try {
       const next = await api<unknown>("/workflows/worktree-demo", {
         method: "POST",
-        body: "{}"
+        body: "{}",
       });
       setWorkflow(workflowRunSchema.parse(next));
       await loadWorkflowList();
     } catch (apiError) {
       setError(
-        apiError instanceof Error ? apiError.message : "Create worktree run failed"
+        apiError instanceof Error
+          ? apiError.message
+          : "Create worktree run failed",
       );
     } finally {
       setIsBusy(false);
     }
-  }, [loadWorkflowList]);
+  }, [loadWorkflowList, requireOperatorAction]);
 
   const createAgentDemo = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
@@ -508,20 +570,26 @@ export function RunConsole() {
     try {
       const next = await api<unknown>("/workflows/agent-demo", {
         method: "POST",
-        body: "{}"
+        body: "{}",
       });
       setWorkflow(workflowRunSchema.parse(next));
       await loadWorkflowList();
     } catch (apiError) {
       setError(
-        apiError instanceof Error ? apiError.message : "Create agent run failed"
+        apiError instanceof Error
+          ? apiError.message
+          : "Create agent run failed",
       );
     } finally {
       setIsBusy(false);
     }
-  }, [loadWorkflowList]);
+  }, [loadWorkflowList, requireOperatorAction]);
 
   const createRepositoryWorkflow = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     setIsBusy(true);
     setError(undefined);
     setReport(undefined);
@@ -536,7 +604,7 @@ export function RunConsole() {
       const payload = buildRepositoryWorkflowPayload(repositoryForm);
       const next = await api<unknown>("/workflows/repository", {
         method: "POST",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
       setWorkflow(workflowRunSchema.parse(next));
       await loadWorkflowList();
@@ -544,12 +612,12 @@ export function RunConsole() {
       setError(
         apiError instanceof Error
           ? apiError.message
-          : "Create repository run failed"
+          : "Create repository run failed",
       );
     } finally {
       setIsBusy(false);
     }
-  }, [loadWorkflowList, repositoryForm]);
+  }, [loadWorkflowList, repositoryForm, requireOperatorAction]);
 
   const loadLatestWorkflow = useCallback(async () => {
     const parsed = await loadWorkflowRuns(api);
@@ -576,7 +644,9 @@ export function RunConsole() {
       const next = await api<unknown>(`/workflows/${workflowId}`);
       setWorkflow(workflowRunSchema.parse(next));
     } catch (apiError) {
-      setError(apiError instanceof Error ? apiError.message : "Load workflow failed");
+      setError(
+        apiError instanceof Error ? apiError.message : "Load workflow failed",
+      );
     } finally {
       setIsBusy(false);
     }
@@ -589,27 +659,33 @@ export function RunConsole() {
 
   const loadRepositories = useCallback(async () => {
     const records = await api<unknown[]>("/repositories");
-    setRepositories(records.map((record) => repositoryRecordSchema.parse(record)));
+    setRepositories(
+      records.map((record) => repositoryRecordSchema.parse(record)),
+    );
   }, []);
 
   const registerRepository = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     setIsBusy(true);
     setError(undefined);
 
     try {
       const payload = buildRepositoryRegistrationPayload(
-        repositoryRegistrationForm
+        repositoryRegistrationForm,
       );
       const created = repositoryRecordSchema.parse(
         await api<unknown>("/repositories", {
           method: "POST",
-          body: JSON.stringify(payload)
-        })
+          body: JSON.stringify(payload),
+        }),
       );
       setRepositoryRegistrationForm((current) => ({
         ...current,
         name: "",
-        path: created.path
+        path: created.path,
       }));
       selectRegisteredRepository(created.path);
       await loadRepositories();
@@ -617,7 +693,7 @@ export function RunConsole() {
       setError(
         apiError instanceof Error
           ? `Register repository failed: ${apiError.message}`
-          : "Register repository failed"
+          : "Register repository failed",
       );
     } finally {
       setIsBusy(false);
@@ -625,7 +701,8 @@ export function RunConsole() {
   }, [
     loadRepositories,
     repositoryRegistrationForm,
-    selectRegisteredRepository
+    requireOperatorAction,
+    selectRegisteredRepository,
   ]);
 
   const loadAgentHealth = useCallback(async () => {
@@ -635,7 +712,7 @@ export function RunConsole() {
 
   const refreshOperationsSnapshot = useCallback(async () => {
     const snapshot = await loadOperationsSnapshot(api, {
-      repositoryId: operationsRepositoryId || undefined
+      repositoryId: operationsRepositoryId || undefined,
     });
     setOperationsSummary(snapshot.summary);
     setAuditEvents(snapshot.auditEvents);
@@ -646,21 +723,27 @@ export function RunConsole() {
 
   const deleteRepository = useCallback(
     async (repository: RepositoryRecord) => {
+      if (!requireOperatorAction()) {
+        return;
+      }
+
       setIsBusy(true);
       setError(undefined);
 
       try {
         await api<unknown>(`/repositories/${repository.id}`, {
-          method: "DELETE"
+          method: "DELETE",
         });
         const nextOperationsRepositoryId =
-          operationsRepositoryId === repository.id ? "" : operationsRepositoryId;
+          operationsRepositoryId === repository.id
+            ? ""
+            : operationsRepositoryId;
         setRepositories((current) =>
-          current.filter((item) => item.id !== repository.id)
+          current.filter((item) => item.id !== repository.id),
         );
         setOperationsRepositoryId(nextOperationsRepositoryId);
         const snapshot = await loadOperationsSnapshot(api, {
-          repositoryId: nextOperationsRepositoryId || undefined
+          repositoryId: nextOperationsRepositoryId || undefined,
         });
         setOperationsSummary(snapshot.summary);
         setAuditEvents(snapshot.auditEvents);
@@ -671,19 +754,19 @@ export function RunConsole() {
         setError(
           apiError instanceof Error
             ? `Delete repository failed: ${apiError.message}`
-            : "Delete repository failed"
+            : "Delete repository failed",
         );
       } finally {
         setIsBusy(false);
       }
     },
-    [operationsRepositoryId]
+    [operationsRepositoryId, requireOperatorAction],
   );
 
   const loadMergeCandidate = useCallback(async (workflowId: string) => {
     try {
       const candidate = await api<unknown>(
-        `/workflows/${workflowId}/merge-candidate`
+        `/workflows/${workflowId}/merge-candidate`,
       );
       setMergeCandidate(mergeCandidateSchema.parse(candidate));
       setMergeCandidateNotice(undefined);
@@ -696,7 +779,7 @@ export function RunConsole() {
       ) {
         setMergeCandidate(undefined);
         setMergeCandidateNotice(
-          buildMergeCandidateNotReadyDisplay(apiError.body)
+          buildMergeCandidateNotReadyDisplay(apiError.body),
         );
         setMergeCandidateApplyResult(undefined);
         return;
@@ -707,6 +790,10 @@ export function RunConsole() {
   }, []);
 
   const applyCurrentMergeCandidate = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     if (!workflow || !mergeCandidate || mergeCandidate.status !== "ready") {
       return;
     }
@@ -726,12 +813,17 @@ export function RunConsole() {
         applyError ??
           (apiError instanceof Error
             ? `Apply merge candidate failed: ${apiError.message}`
-            : "Apply merge candidate failed")
+            : "Apply merge candidate failed"),
       );
     } finally {
       setIsBusy(false);
     }
-  }, [mergeCandidate, refreshOperationsSnapshot, workflow]);
+  }, [
+    mergeCandidate,
+    refreshOperationsSnapshot,
+    requireOperatorAction,
+    workflow,
+  ]);
 
   const loadTimelineForJob = useCallback(async (jobId: string) => {
     setIsLoadingTimeline(true);
@@ -743,7 +835,7 @@ export function RunConsole() {
       setError(
         apiError instanceof Error
           ? `Load job timeline failed: ${apiError.message}`
-          : "Load job timeline failed"
+          : "Load job timeline failed",
       );
     } finally {
       setIsLoadingTimeline(false);
@@ -762,15 +854,15 @@ export function RunConsole() {
       const preview = await api<ArtifactPreviewResponse>(
         buildArtifactPreviewPath({
           workflowId: workflow.id,
-          artifactPath: report.reportArtifactPath
-        })
+          artifactPath: report.reportArtifactPath,
+        }),
       );
       setArtifactPreview(preview);
     } catch (apiError) {
       setError(
         apiError instanceof Error
           ? `Load artifact failed: ${apiError.message}`
-          : "Load artifact failed"
+          : "Load artifact failed",
       );
     } finally {
       setIsBusy(false);
@@ -781,15 +873,19 @@ export function RunConsole() {
     async (jobId: string, workflowId: string) => {
       const [nextJob, nextWorkflow] = await Promise.all([
         api<unknown>(`/jobs/${jobId}`),
-        api<unknown>(`/workflows/${workflowId}`)
+        api<unknown>(`/workflows/${workflowId}`),
       ]);
       setJob(parseWorkflowJob(nextJob));
       setWorkflow(workflowRunSchema.parse(nextWorkflow));
     },
-    []
+    [],
   );
 
   const runWorkflow = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     if (!workflow) {
       return;
     }
@@ -808,7 +904,7 @@ export function RunConsole() {
       try {
         const queued = await api<unknown>(`/workflows/${workflow.id}/enqueue`, {
           method: "POST",
-          body: "{}"
+          body: "{}",
         });
         queuedJob = parseWorkflowJob(queued);
       } catch (apiError) {
@@ -829,11 +925,11 @@ export function RunConsole() {
       for (let attempt = 0; attempt < 80; attempt++) {
         await delay(250);
         const nextJob = parseWorkflowJob(
-          await api<unknown>(`/jobs/${queuedJob.id}`)
+          await api<unknown>(`/jobs/${queuedJob.id}`),
         );
         setJob(nextJob);
         const nextWorkflow = workflowRunSchema.parse(
-          await api<unknown>(`/workflows/${workflow.id}`)
+          await api<unknown>(`/workflows/${workflow.id}`),
         );
         setWorkflow(nextWorkflow);
 
@@ -844,7 +940,7 @@ export function RunConsole() {
         ) {
           if (nextJob.status !== "canceled") {
             const nextReport = await api<unknown>(
-              `/workflows/${workflow.id}/report`
+              `/workflows/${workflow.id}/report`,
             );
             setReport(runReportSchema.parse(nextReport));
             await loadMergeCandidate(workflow.id);
@@ -865,10 +961,15 @@ export function RunConsole() {
     loadTimelineForJob,
     loadWorkflowList,
     refreshOperationsSnapshot,
-    workflow
+    requireOperatorAction,
+    workflow,
   ]);
 
   const cancelJob = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     if (!job || !workflow || !canCancelJobStatus(job.status)) {
       return;
     }
@@ -879,7 +980,7 @@ export function RunConsole() {
     try {
       await api<unknown>(`/jobs/${job.id}/cancel`, {
         method: "POST",
-        body: "{}"
+        body: "{}",
       });
       await refreshJobAndWorkflow(job.id, workflow.id);
       await loadWorkflowList();
@@ -889,7 +990,7 @@ export function RunConsole() {
       setError(
         apiError instanceof Error
           ? `Cancel failed: ${apiError.message}`
-          : "Cancel failed"
+          : "Cancel failed",
       );
       await refreshJobAndWorkflow(job.id, workflow.id).catch(() => undefined);
     } finally {
@@ -901,10 +1002,15 @@ export function RunConsole() {
     loadWorkflowList,
     refreshJobAndWorkflow,
     refreshOperationsSnapshot,
-    workflow
+    requireOperatorAction,
+    workflow,
   ]);
 
   const retryWorkflow = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     if (!workflow || !canRetryWorkflowStatus(workflow.status)) {
       return;
     }
@@ -922,7 +1028,7 @@ export function RunConsole() {
     try {
       const retried = await api<unknown>(`/workflows/${workflow.id}/retry`, {
         method: "POST",
-        body: "{}"
+        body: "{}",
       });
       setWorkflow(workflowRunSchema.parse(retried));
       await loadWorkflowList();
@@ -932,10 +1038,19 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [loadWorkflowList, refreshOperationsSnapshot, workflow]);
+  }, [
+    loadWorkflowList,
+    refreshOperationsSnapshot,
+    requireOperatorAction,
+    workflow,
+  ]);
 
   const reviewWorkflow = useCallback(
     async (decision: "approve" | "reject") => {
+      if (!requireOperatorAction()) {
+        return;
+      }
+
       if (!workflow) {
         return;
       }
@@ -944,10 +1059,13 @@ export function RunConsole() {
       setError(undefined);
 
       try {
-        const reviewed = await api<unknown>(`/workflows/${workflow.id}/review`, {
-          method: "POST",
-          body: JSON.stringify(buildWorkflowReviewPayload(decision))
-        });
+        const reviewed = await api<unknown>(
+          `/workflows/${workflow.id}/review`,
+          {
+            method: "POST",
+            body: JSON.stringify(buildWorkflowReviewPayload(decision)),
+          },
+        );
         setWorkflow(workflowRunSchema.parse(reviewed));
         await loadWorkflowList();
         if (decision === "approve") {
@@ -955,15 +1073,27 @@ export function RunConsole() {
         }
         await refreshOperationsSnapshot();
       } catch (apiError) {
-        setError(apiError instanceof Error ? apiError.message : "Review failed");
+        setError(
+          apiError instanceof Error ? apiError.message : "Review failed",
+        );
       } finally {
         setIsBusy(false);
       }
     },
-    [loadMergeCandidate, loadWorkflowList, refreshOperationsSnapshot, workflow]
+    [
+      loadMergeCandidate,
+      loadWorkflowList,
+      refreshOperationsSnapshot,
+      requireOperatorAction,
+      workflow,
+    ],
   );
 
   const cleanupWorkspaces = useCallback(async () => {
+    if (!requireOperatorAction()) {
+      return;
+    }
+
     if (!workflow || !canCleanupWorkflowStatus(workflow.status)) {
       return;
     }
@@ -977,7 +1107,7 @@ export function RunConsole() {
       setWorkspaceCleanupResult(cleanup);
       setWorkflow(refreshed);
       setWorkspaceCleanupPreview(
-        await loadWorkflowWorkspacePreview(api, workflow.id)
+        await loadWorkflowWorkspacePreview(api, workflow.id),
       );
       await loadWorkflowList();
       await refreshOperationsSnapshot();
@@ -986,7 +1116,12 @@ export function RunConsole() {
     } finally {
       setIsBusy(false);
     }
-  }, [loadWorkflowList, refreshOperationsSnapshot, workflow]);
+  }, [
+    loadWorkflowList,
+    refreshOperationsSnapshot,
+    requireOperatorAction,
+    workflow,
+  ]);
 
   useEffect(() => {
     // Load the API-backed in-memory run after the browser can reach the API.
@@ -995,43 +1130,46 @@ export function RunConsole() {
       setError(apiError instanceof Error ? apiError.message : "Load failed");
     });
     loadConfiguredAgents().catch((apiError) => {
-      setError(apiError instanceof Error ? apiError.message : "Load agents failed");
+      setError(
+        apiError instanceof Error ? apiError.message : "Load agents failed",
+      );
     });
     loadRepositories().catch((apiError) => {
       setError(
-        apiError instanceof Error ? apiError.message : "Load repositories failed"
+        apiError instanceof Error
+          ? apiError.message
+          : "Load repositories failed",
       );
     });
     loadAgentHealth().catch((apiError) => {
       setError(
-        apiError instanceof Error ? apiError.message : "Load agent health failed"
+        apiError instanceof Error
+          ? apiError.message
+          : "Load agent health failed",
       );
     });
   }, [
     loadAgentHealth,
     loadConfiguredAgents,
     loadLatestWorkflow,
-    loadRepositories
+    loadRepositories,
   ]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadWorkflowList().catch((apiError) => {
       setError(
-        apiError instanceof Error ? apiError.message : "Load workflows failed"
+        apiError instanceof Error ? apiError.message : "Load workflows failed",
       );
     });
     refreshOperationsSnapshot().catch((apiError) => {
       setError(
         apiError instanceof Error
           ? apiError.message
-          : "Load operations snapshot failed"
+          : "Load operations snapshot failed",
       );
     });
-  }, [
-    loadWorkflowList,
-    refreshOperationsSnapshot
-  ]);
+  }, [loadWorkflowList, refreshOperationsSnapshot]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1096,13 +1234,28 @@ export function RunConsole() {
                 onChange={(event) => updateApiToken(event.target.value)}
               />
             </label>
-            <button className="secondaryButton" disabled={isBusy} onClick={createDemo}>
+            <label className="tokenField tokenRoleField">
+              <ShieldCheck aria-hidden="true" size={16} />
+              <select
+                aria-label="API token role"
+                value={apiTokenRole}
+                onChange={(event) => updateApiTokenRole(event.target.value)}
+              >
+                <option value="operator">Operator</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </label>
+            <button
+              className="secondaryButton"
+              disabled={isBusy || !canOperate}
+              onClick={createDemo}
+            >
               <Plus aria-hidden="true" size={16} />
               Shell Run
             </button>
             <button
               className="secondaryButton"
-              disabled={isBusy}
+              disabled={isBusy || !canOperate}
               onClick={createWorktreeDemo}
             >
               <GitBranch aria-hidden="true" size={16} />
@@ -1110,7 +1263,7 @@ export function RunConsole() {
             </button>
             <button
               className="secondaryButton"
-              disabled={isBusy}
+              disabled={isBusy || !canOperate}
               onClick={createAgentDemo}
             >
               <Bot aria-hidden="true" size={16} />
@@ -1118,7 +1271,7 @@ export function RunConsole() {
             </button>
             <button
               className="primaryButton"
-              disabled={isBusy || !workflow}
+              disabled={isBusy || !canOperate || !workflow}
               onClick={runWorkflow}
             >
               <Play aria-hidden="true" size={16} />
@@ -1126,7 +1279,7 @@ export function RunConsole() {
             </button>
             <button
               className="secondaryButton"
-              disabled={isBusy || !canRetryCurrentWorkflow}
+              disabled={isBusy || !canOperate || !canRetryCurrentWorkflow}
               onClick={retryWorkflow}
             >
               <RotateCcw aria-hidden="true" size={16} />
@@ -1205,7 +1358,8 @@ export function RunConsole() {
               <div>
                 <dt>Workers</dt>
                 <dd>
-                  {workerHealthSummary.healthy}/{workerHealthSummary.total} healthy
+                  {workerHealthSummary.healthy}/{workerHealthSummary.total}{" "}
+                  healthy
                 </dd>
               </div>
               <div>
@@ -1286,7 +1440,8 @@ export function RunConsole() {
               <div>
                 <dt>Checks</dt>
                 <dd>
-                  {readinessSummary.readyChecks}/{readinessSummary.totalChecks} ready
+                  {readinessSummary.readyChecks}/{readinessSummary.totalChecks}{" "}
+                  ready
                 </dd>
               </div>
             </dl>
@@ -1326,14 +1481,18 @@ export function RunConsole() {
             <span>Goal</span>
             <input
               value={repositoryForm.goal}
-              onChange={(event) => updateRepositoryForm("goal", event.target.value)}
+              onChange={(event) =>
+                updateRepositoryForm("goal", event.target.value)
+              }
             />
           </label>
           <label className="field">
             <span>Agent</span>
             <select
               value={repositoryForm.agent}
-              onChange={(event) => updateRepositoryForm("agent", event.target.value)}
+              onChange={(event) =>
+                updateRepositoryForm("agent", event.target.value)
+              }
             >
               {agentOptions.map((agent) => (
                 <option key={agent.id} value={agent.id}>
@@ -1384,7 +1543,7 @@ export function RunConsole() {
           </label>
           <button
             className="secondaryButton"
-            disabled={isBusy || !canCreateRepositoryRun}
+            disabled={isBusy || !canOperate || !canCreateRepositoryRun}
             type="submit"
           >
             <FolderGit2 aria-hidden="true" size={16} />
@@ -1424,7 +1583,7 @@ export function RunConsole() {
               onChange={(event) =>
                 updateRepositoryRegistrationForm(
                   "defaultBranch",
-                  event.target.value
+                  event.target.value,
                 )
               }
             />
@@ -1437,7 +1596,7 @@ export function RunConsole() {
               onChange={(event) =>
                 updateRepositoryRegistrationForm(
                   "qualityGateCommand",
-                  event.target.value
+                  event.target.value,
                 )
               }
             />
@@ -1450,14 +1609,14 @@ export function RunConsole() {
               onChange={(event) =>
                 updateRepositoryRegistrationForm(
                   "qualityGateTimeoutMs",
-                  event.target.value
+                  event.target.value,
                 )
               }
             />
           </label>
           <button
             className="primaryButton"
-            disabled={isBusy || !canSubmitRepositoryRegistration}
+            disabled={isBusy || !canOperate || !canSubmitRepositoryRegistration}
             type="submit"
           >
             <Plus aria-hidden="true" size={16} />
@@ -1469,7 +1628,8 @@ export function RunConsole() {
           <div className="sectionHeader">
             <h3>Repositories</h3>
             <span>
-              {repositorySummary.withQualityGates}/{repositorySummary.total} gated
+              {repositorySummary.withQualityGates}/{repositorySummary.total}{" "}
+              gated
             </span>
           </div>
           <div className="repositoryList">
@@ -1502,10 +1662,10 @@ export function RunConsole() {
                   <button
                     aria-label={`Delete ${repository.name}`}
                     className="secondaryButton dangerButton"
-                    disabled={isBusy}
+                    disabled={isBusy || !canOperate}
                     onClick={() => {
                       const record = repositories.find(
-                        (item) => item.id === repository.id
+                        (item) => item.id === repository.id,
                       );
                       if (record) {
                         void deleteRepository(record);
@@ -1546,7 +1706,7 @@ export function RunConsole() {
               {canCancelCurrentJob ? (
                 <button
                   className="secondaryButton"
-                  disabled={isCanceling}
+                  disabled={isCanceling || !canOperate}
                   onClick={() => void cancelJob()}
                   type="button"
                 >
@@ -1570,7 +1730,9 @@ export function RunConsole() {
             <div className="timelineSummary">
               <div>
                 <strong>{jobTimelineDisplay.jobLabel}</strong>
-                <span className={`healthBadge ${jobTimelineDisplay.statusSeverity}`}>
+                <span
+                  className={`healthBadge ${jobTimelineDisplay.statusSeverity}`}
+                >
                   {jobTimelineDisplay.recommendationLabel}
                 </span>
               </div>
@@ -1704,7 +1866,9 @@ export function RunConsole() {
             <section className="inspectorSection">
               <div className="sectionHeader">
                 <h3>Audit</h3>
-                <span>{auditEventSummary.operatorActions} operator actions</span>
+                <span>
+                  {auditEventSummary.operatorActions} operator actions
+                </span>
               </div>
               <div className="runList">
                 {auditEventDisplay.map((event) => (
@@ -1744,7 +1908,8 @@ export function RunConsole() {
               <div className="sectionHeader">
                 <h3>Jobs</h3>
                 <span>
-                  {jobHistorySummary.active} active / {jobHistorySummary.failed} failed
+                  {jobHistorySummary.active} active / {jobHistorySummary.failed}{" "}
+                  failed
                 </span>
               </div>
               <div className="runList">
@@ -1770,7 +1935,9 @@ export function RunConsole() {
                         <dd>{historyJob.updatedAt}</dd>
                       </div>
                     </dl>
-                    {historyJob.errorLabel ? <p>{historyJob.errorLabel}</p> : null}
+                    {historyJob.errorLabel ? (
+                      <p>{historyJob.errorLabel}</p>
+                    ) : null}
                     <button
                       className="secondaryButton"
                       disabled={isLoadingTimeline}
@@ -1822,8 +1989,12 @@ export function RunConsole() {
                         </div>
                       </dl>
                     ) : null}
-                    {task.result?.stdout ? <pre>{task.result.stdout}</pre> : null}
-                    {task.result?.stderr ? <pre>{task.result.stderr}</pre> : null}
+                    {task.result?.stdout ? (
+                      <pre>{task.result.stdout}</pre>
+                    ) : null}
+                    {task.result?.stderr ? (
+                      <pre>{task.result.stderr}</pre>
+                    ) : null}
                     {task.diff?.status ? (
                       <pre className="patchBox">{task.diff.status}</pre>
                     ) : null}
@@ -1842,8 +2013,12 @@ export function RunConsole() {
                   <article className="runItem" key={gate.id}>
                     <strong>{gate.title}</strong>
                     <span>{gate.status}</span>
-                    {gate.result?.stdout ? <pre>{gate.result.stdout}</pre> : null}
-                    {gate.result?.stderr ? <pre>{gate.result.stderr}</pre> : null}
+                    {gate.result?.stdout ? (
+                      <pre>{gate.result.stdout}</pre>
+                    ) : null}
+                    {gate.result?.stderr ? (
+                      <pre>{gate.result.stderr}</pre>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -1891,7 +2066,7 @@ export function RunConsole() {
                     <div className="reviewActions">
                       <button
                         className="primaryButton"
-                        disabled={isBusy}
+                        disabled={isBusy || !canOperate}
                         onClick={() => void reviewWorkflow("approve")}
                         type="button"
                       >
@@ -1900,7 +2075,7 @@ export function RunConsole() {
                       </button>
                       <button
                         className="secondaryButton"
-                        disabled={isBusy}
+                        disabled={isBusy || !canOperate}
                         onClick={() => void reviewWorkflow("reject")}
                         type="button"
                       >
@@ -1954,7 +2129,7 @@ export function RunConsole() {
                   {canCleanupCurrentWorkflow ? (
                     <button
                       className="secondaryButton"
-                      disabled={isBusy}
+                      disabled={isBusy || !canOperate}
                       onClick={() => void cleanupWorkspaces()}
                       type="button"
                     >
@@ -1967,12 +2142,12 @@ export function RunConsole() {
                       {buildMergeCandidateDisplay(mergeCandidate).lines.map(
                         (line) => (
                           <p key={line}>{line}</p>
-                        )
+                        ),
                       )}
                       {mergeCandidate.status === "ready" ? (
                         <button
                           className="secondaryButton"
-                          disabled={isBusy}
+                          disabled={isBusy || !canOperate}
                           onClick={() => void applyCurrentMergeCandidate()}
                           type="button"
                         >
@@ -1985,13 +2160,13 @@ export function RunConsole() {
                   {mergeCandidateApplyResult ? (
                     <div className="mergeCandidateBox ready">
                       {buildMergeCandidateApplyDisplay(
-                        mergeCandidateApplyResult
+                        mergeCandidateApplyResult,
                       ).map((line, index) =>
                         index === 0 ? (
                           <strong key={line}>{line}</strong>
                         ) : (
                           <p key={line}>{line}</p>
-                        )
+                        ),
                       )}
                     </div>
                   ) : null}
@@ -2006,7 +2181,7 @@ export function RunConsole() {
                           <strong key={line}>{line}</strong>
                         ) : (
                           <p key={line}>{line}</p>
-                        )
+                        ),
                       )}
                     </div>
                   ) : null}
