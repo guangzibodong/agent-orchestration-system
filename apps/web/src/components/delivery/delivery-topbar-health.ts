@@ -104,15 +104,16 @@ function buildLaunchDetail(
 
   if (launchEvidence) {
     const failures = launchEvidence.failureSummaries.length;
-    const blockers = launchEvidence.externalBlockers.length;
+    const blockerDetail = buildExternalBlockerDetail(launchEvidence);
+
+    if (blockerDetail) {
+      return `${blockerDetail} Generated ${launchEvidence.generatedAt}`;
+    }
 
     return `${failures} ${pluralize(
       failures,
       "failure",
-    )}, ${blockers} external ${pluralize(
-      blockers,
-      "blocker",
-    )} from ${launchEvidence.generatedAt}`;
+    )}, 0 external blockers from ${launchEvidence.generatedAt}`;
   }
 
   if (readiness.blockedChecks > 0) {
@@ -130,6 +131,76 @@ function buildLaunchDetail(
   }
 
   return `${readiness.deploymentLabel} readiness has no blockers`;
+}
+
+function buildExternalBlockerDetail(
+  launchEvidence: LaunchGateEvidence,
+): string | undefined {
+  const blockers = launchEvidence.externalBlockers.map(parseExternalBlocker);
+  const [firstBlocker] = blockers;
+
+  if (!firstBlocker) {
+    return undefined;
+  }
+
+  const label = buildExternalBlockerLabel(blockers, launchEvidence);
+  const remaining = blockers.length - 1;
+  const remainingDetail =
+    remaining > 0
+      ? ` ${remaining} more external ${pluralize(remaining, "blocker")}.`
+      : "";
+
+  return `${label} blocked: ${firstBlocker.reason}${remainingDetail}`;
+}
+
+function buildExternalBlockerLabel(
+  blockers: Array<{ id: string; reason: string }>,
+  launchEvidence: LaunchGateEvidence,
+): string {
+  if (
+    blockers.every((blocker) =>
+      ["db_validate", "db_migrate_deploy", "smoke_api_postgres"].includes(
+        blocker.id,
+      ),
+    )
+  ) {
+    return "Postgres launch verification";
+  }
+
+  const [firstBlocker] = blockers;
+  const check = launchEvidence.checks.find(
+    (candidate) => candidate.id === firstBlocker?.id,
+  );
+
+  return check?.label ?? humanizeLaunchGateCheckId(firstBlocker?.id ?? "");
+}
+
+function parseExternalBlocker(value: string): { id: string; reason: string } {
+  const [id, ...reasonParts] = value.split(":");
+  const reason = reasonParts.join(":").trim();
+
+  return {
+    id: id.trim(),
+    reason: reason || "External dependency unavailable.",
+  };
+}
+
+function humanizeLaunchGateCheckId(id: string): string {
+  const knownLabels: Record<string, string> = {
+    db_validate: "Postgres schema validation",
+    db_migrate_deploy: "Postgres migration deploy",
+    smoke_api_postgres: "Postgres API smoke",
+  };
+
+  if (knownLabels[id]) {
+    return knownLabels[id];
+  }
+
+  return id
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 function buildLaunchSeverity(

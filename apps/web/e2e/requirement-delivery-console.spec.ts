@@ -139,6 +139,44 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
   });
 
+  test("surfaces launch gate external blockers in delivery health", async ({
+    page,
+  }) => {
+    await mockApi(page, [], {
+      launchGateEvidence: {
+        generatedAt: "2026-06-06T17:56:06.605Z",
+        root: "C:/work/mawo",
+        branch: "main",
+        commit: "8c48bb6",
+        dirtyFiles: [],
+        checks: [],
+        docs: ["docs/product/REQUIREMENTS_FREEZE.md"],
+        localDecision: "passed",
+        productionDecision: "blocked",
+        failureSummaries: [],
+        externalBlockers: [
+          "db_validate: DATABASE_URL is not configured for Postgres launch verification.",
+          "db_migrate_deploy: DATABASE_URL is not configured for Postgres launch verification.",
+          "smoke_api_postgres: DATABASE_URL is not configured for Postgres launch verification.",
+        ],
+      },
+    });
+
+    await page.goto("/");
+
+    const deliveryHealth = page
+      .locator("main.deliveryShell")
+      .getByLabel("Delivery health");
+    await expect(deliveryHealth).toContainText(
+      "Launch Local passed / Prod blocked",
+    );
+    await expect(
+      deliveryHealth.getByLabel(
+        "Launch Local passed / Prod blocked: Postgres launch verification blocked: DATABASE_URL is not configured for Postgres launch verification. 2 more external blockers. Generated 2026-06-06T17:56:06.605Z",
+      ),
+    ).toBeVisible();
+  });
+
   test("keeps viewer mode read-only while evidence stays readable", async ({
     page,
   }) => {

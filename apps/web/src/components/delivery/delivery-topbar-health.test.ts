@@ -136,7 +136,9 @@ describe("delivery topbar health", () => {
       productionDecision: "blocked",
       failureSummaries: [],
       externalBlockers: [
-        "smoke_api_postgres: DATABASE_URL is not configured.",
+        "db_validate: DATABASE_URL is not configured for Postgres launch verification.",
+        "db_migrate_deploy: DATABASE_URL is not configured for Postgres launch verification.",
+        "smoke_api_postgres: DATABASE_URL is not configured for Postgres launch verification.",
       ],
       sourcePath: "C:/work/output/launch-readiness/latest.json",
     });
@@ -144,7 +146,8 @@ describe("delivery topbar health", () => {
     expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
       expect.objectContaining({
         value: "Local passed / Prod blocked",
-        detail: "0 failures, 1 external blocker from 2026-06-06T16:35:25.938Z",
+        detail:
+          "Postgres launch verification blocked: DATABASE_URL is not configured for Postgres launch verification. 2 more external blockers. Generated 2026-06-06T16:35:25.938Z",
         severity: "warning",
       }),
     );
