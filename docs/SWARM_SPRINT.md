@@ -37,11 +37,32 @@ category. The launch wedge is:
 | Document | Purpose |
 | --- | --- |
 | `docs/product/PRD.md` | Product positioning, target users, scope, metrics, launch acceptance |
+| `docs/product/REQUIREMENTS_FREEZE.md` | Frozen P0 decisions, UI-stage entry, staffing plan, launch gate |
 | `docs/product/ROLE_WORKFLOW.md` | Role responsibilities, stage gates, Definition of Ready/Done |
 | `docs/product/USER_JOURNEYS.md` | Success, failure, retry, review, and unsafe-repo journeys |
 | `docs/product/UI_INFORMATION_ARCHITECTURE.md` | First-screen IA, requirement detail pages, components, UI acceptance |
 | `docs/product/FEATURE_BRIEF_TEMPLATE.md` | Template required before engineering slices |
 | `docs/product/DECISION_LOG.md` | Product decisions and rationale |
+
+## Requirements Freeze Decision
+
+Requirements are frozen as of 2026-06-06. The next phase is UI, not feature
+implementation. Engineering work is allowed only after the UI/API contract for
+the frozen slice is accepted.
+
+Frozen product object:
+
+```text
+RequirementDeliveryTicket 1 -> N WorkflowRun
+WorkflowRun = execution evidence, not the product object
+```
+
+Frozen first implementation slice:
+
+> Real repo success -> gate failure -> retry success -> merge candidate.
+
+Old code remains valuable as the execution/evidence layer: runner, worktree,
+gate, report, artifact, retry, cancel, audit, auth, and merge candidate all stay.
 
 ## Highest-Value Approved Candidate Slice
 

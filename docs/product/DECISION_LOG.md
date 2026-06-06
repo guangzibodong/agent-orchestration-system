@@ -11,3 +11,6 @@ Status: active
 | 2026-06-06 | Gate failure must block merge-ready conclusions | False confidence is the highest trust risk | QA must cover gate failure, disabled review, retry, and report messaging |
 | 2026-06-06 | No automatic main-branch modification in MVP | Users need control and safety | Merge candidate provides patch and `git apply`, not silent merge |
 | 2026-06-06 | Development requires PRD/brief, UI behavior, acceptance, and test plan | User explicitly rejected building by feeling | `docs/product/ROLE_WORKFLOW.md` becomes the working agreement |
+| 2026-06-06 | Freeze P0 as Requirement Delivery Ticket plus real repo safety acceptance loop | Product, PM, user, UI, tech, frontend, backend, and QA/Ops reviews converged on this scope | `docs/product/REQUIREMENTS_FREEZE.md` is the source of truth before UI work |
+| 2026-06-06 | Treat `RequirementDeliveryTicket` as a first-class product entity and `WorkflowRun` as execution evidence | Requirement lifecycle and execution attempts have different semantics | Old workflow/runner code is reused as execution layer, not discarded |
+| 2026-06-06 | Cancel the old auto-continue heartbeat until requirements and UI are accepted | The team must stop implementation-by-momentum | Work resumes through explicit UI/API contract and slice gates |
