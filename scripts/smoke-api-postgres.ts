@@ -9,6 +9,12 @@ import {
   requireDatabaseUrl,
   type SmokeJsonObject
 } from "../apps/api/src/postgres-smoke-helpers.js";
+import { FileArtifactStore } from "../apps/api/src/runner/file-artifact-store.js";
+import { LocalRunner } from "../apps/api/src/runner/local-runner.js";
+import { PostgresWorkflowWorker } from "../apps/api/src/runner/postgres-workflow-worker.js";
+import { PrismaAuditStore } from "../apps/api/src/runner/prisma-audit-store.js";
+import { PrismaJobStore } from "../apps/api/src/runner/prisma-job-store.js";
+import { PrismaRunStore } from "../apps/api/src/runner/prisma-run-store.js";
 import { buildApp } from "../apps/api/src/server.js";
 
 type JsonObject = SmokeJsonObject;
@@ -136,10 +142,51 @@ async function cleanupDatabase(ids: {
   }
 }
 
+function createPostgresSmokeWorker(root: string): PostgresWorkflowWorker {
+  const auditStore = new PrismaAuditStore(prisma);
+  const runner = new LocalRunner(undefined, {
+    runStore: new PrismaRunStore(prisma),
+    artifactStore: new FileArtifactStore({
+      root: join(root, ".mawo", "artifacts")
+    }),
+    eventSink: (event) => {
+      void auditStore
+        .append({
+          type: event.type,
+          actor: "runner",
+          workflowId: event.workflowId,
+          metadata: {
+            ...(event.taskId ? { taskId: event.taskId } : {}),
+            ...(event.gateId ? { gateId: event.gateId } : {}),
+            ...(event.status ? { status: event.status } : {}),
+            ...(event.exitCode !== undefined
+              ? { exitCode: String(event.exitCode) }
+              : {}),
+            ...(event.durationMs !== undefined
+              ? { durationMs: String(event.durationMs) }
+              : {})
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("[smoke:api:postgres] failed to append runner audit event");
+          console.error(error);
+        });
+    }
+  });
+
+  return new PostgresWorkflowWorker({
+    runner,
+    jobStore: new PrismaJobStore(prisma),
+    workerId: "postgres-smoke-worker",
+    leaseMs: 5 * 60 * 1000,
+    renewIntervalMs: 60 * 1000
+  });
+}
+
 export async function main() {
   requireDatabaseUrl();
   process.env.MAWO_STATE_BACKEND = "postgres";
-  process.env.MAWO_QUEUE_BACKEND = "in_process";
+  process.env.MAWO_QUEUE_BACKEND = "postgres";
 
   const smokeRoot = await mkdtemp(join(tmpdir(), "mawo-postgres-smoke-api-"));
   tempRoots.push(smokeRoot);
@@ -150,7 +197,7 @@ export async function main() {
     env: {
       ...process.env,
       MAWO_STATE_BACKEND: "postgres",
-      MAWO_QUEUE_BACKEND: "in_process"
+      MAWO_QUEUE_BACKEND: "postgres"
     }
   });
   const createdIds: {
@@ -172,7 +219,7 @@ export async function main() {
     const readiness = await request(baseUrl, "GET", "/readiness");
     assert(readiness.status === 200, `GET /readiness returned ${readiness.status}`);
     assertPostgresRuntimeReady(readiness.body.checks as JsonObject[]);
-    log("readiness reports active Postgres state backend");
+    log("readiness reports active Postgres state and queue backends");
 
     const repositoryResponse = await request(baseUrl, "POST", "/repositories", {
       name: "Postgres smoke repository",
@@ -236,6 +283,22 @@ export async function main() {
       `POST /workflows/${createdIds.workflowId}/enqueue returned ${enqueueResponse.status}`
     );
     const jobId = enqueueResponse.body.id as string;
+    const queuedJobRow = await prisma.workflowJob.findUnique({
+      where: {
+        id: jobId
+      }
+    });
+    assert(queuedJobRow?.status === "queued", "Queued job was not persisted to Postgres.");
+    log(`queued job ${jobId} in Postgres`);
+
+    const worker = createPostgresSmokeWorker(smokeRoot);
+    const workerResult = await worker.runOnce();
+    assert(
+      workerResult.status === "completed",
+      `Postgres worker returned ${workerResult.status}.`
+    );
+    log(`Postgres worker completed job ${jobId}`);
+
     const settledJob = await waitForJob(baseUrl, jobId);
     assert(settledJob.status === "completed", `Postgres smoke job ended as ${settledJob.status}`);
 

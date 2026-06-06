@@ -26,4 +26,10 @@ export function assertPostgresRuntimeReady(checks: SmokeJsonObject[]): void {
       "Readiness must report runtime_backend ok=true and activeStateBackend=postgres."
     );
   }
+
+  if (runtimeCheck.activeQueueBackend !== "postgres") {
+    throw new Error(
+      "Readiness must report runtime_backend ok=true and activeQueueBackend=postgres."
+    );
+  }
 }

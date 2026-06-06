@@ -257,10 +257,11 @@ $env:MAWO_QUEUE_BACKEND = "postgres"
 .\.tools\node\npm.cmd run smoke:api:postgres
 ```
 
-The smoke verifies `/readiness` reports Postgres as the active state backend,
-then creates a repository workflow, enqueues it, and checks the workflow/job
-rows through Prisma. Keep a Postgres worker running for end-to-end execution
-after enqueue.
+The smoke verifies `/readiness` reports Postgres as the active state and queue
+backends, creates a repository workflow, enqueues it, runs a one-shot Postgres
+worker claim/execution cycle, and checks the workflow/job rows through Prisma.
+For normal operation, keep one or more Postgres workers running after traffic is
+switched.
 
 Postgres worker process:
 
@@ -571,8 +572,9 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `npm run lint` passes or approved lint exceptions are documented.
 - [ ] `npm run build` passes.
 - [ ] `docker compose config` succeeds on the target host.
-- [ ] `npm run smoke:api:postgres` passes if `MAWO_STATE_BACKEND=postgres` is
-      part of the rollout.
+- [ ] `npm run smoke:api:postgres` passes if `MAWO_STATE_BACKEND=postgres` or
+      `MAWO_QUEUE_BACKEND=postgres` is part of the rollout; it exercises
+      Postgres API enqueue plus a one-shot worker claim/execute cycle.
 - [ ] `MAWO_WORKER_ONCE=1 npm run worker:postgres` can start against the target
       Postgres database if the external worker path is part of the rollout.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.

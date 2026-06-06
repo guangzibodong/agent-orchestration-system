@@ -14,7 +14,7 @@ describe("postgres API smoke helpers", () => {
     ).toBe("postgresql://mawo:mawo@localhost:5432/mawo?schema=public");
   });
 
-  it("requires readiness to report postgres as the active state backend", () => {
+  it("requires readiness to report postgres as the active state and queue backends", () => {
     expect(() =>
       assertPostgresRuntimeReady([
         {
@@ -33,6 +33,17 @@ describe("postgres API smoke helpers", () => {
           ok: true,
           activeStateBackend: "postgres",
           activeQueueBackend: "in_process"
+        }
+      ])
+    ).toThrow("activeQueueBackend=postgres");
+
+    expect(() =>
+      assertPostgresRuntimeReady([
+        {
+          id: "runtime_backend",
+          ok: true,
+          activeStateBackend: "postgres",
+          activeQueueBackend: "postgres"
         }
       ])
     ).not.toThrow();

@@ -120,8 +120,12 @@ describe("deployment manifests", () => {
 
     expect(wrapper).toContain("scripts/smoke-api-postgres.ts");
     expect(smoke).toContain("MAWO_STATE_BACKEND");
+    expect(smoke).toContain('MAWO_QUEUE_BACKEND: "postgres"');
+    expect(smoke).toContain("PostgresWorkflowWorker");
     expect(smoke).toContain("assertPostgresRuntimeReady");
+    expect(smoke).toContain("worker.runOnce");
     expect(helper).toContain("activeStateBackend=postgres");
+    expect(helper).toContain("activeQueueBackend=postgres");
     expect(smoke).toContain("prisma.workflowRun.findUnique");
     expect(smoke).toContain("prisma.workflowJob.findUnique");
   });
