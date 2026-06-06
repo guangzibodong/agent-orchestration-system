@@ -232,10 +232,8 @@ export function RunConsole() {
   const [workspaceCleanupResult, setWorkspaceCleanupResult] =
     useState<WorkspaceCleanupResult>();
   const [operationsRepositoryId, setOperationsRepositoryId] = useState("");
-  const [apiToken, setApiToken] = useState(() => getStoredApiToken() ?? "");
-  const [apiTokenRole, setApiTokenRole] = useState<ApiTokenRole>(() =>
-    getStoredApiTokenRole(),
-  );
+  const [apiToken, setApiToken] = useState("");
+  const [apiTokenRole, setApiTokenRole] = useState<ApiTokenRole>("viewer");
   const [isBusy, setIsBusy] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);

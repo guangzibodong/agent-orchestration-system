@@ -66,6 +66,7 @@ test.describe("Requirement Delivery Console smoke", () => {
   test("keeps viewer mode read-only while evidence stays readable", async ({
     page,
   }) => {
+    const mutatingRequests: string[] = [];
     const workflowAuthorizations: Array<string | undefined> = [];
 
     await page.addInitScript(
@@ -77,6 +78,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await mockApi(page, mixedWorkflows, {
       requirements: requirementTickets,
+      onMutatingRequest: ({ method, pathname }) => {
+        mutatingRequests.push(`${method} ${pathname}`);
+      },
       onWorkflowRequest: (authorization) => {
         workflowAuthorizations.push(authorization);
       },
@@ -97,6 +101,54 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(page.locator(".decisionQueuePanel")).toContainText(
       "Review merge candidate",
     );
+
+    await page.locator(".requirementDetailDisclosure > summary").click();
+    const detail = page.locator(".requirementDetailShell");
+    const lifecycleActions = detail.getByLabel("Requirement lifecycle actions");
+    const reviewActions = detail.getByLabel("Review actions");
+    await expect(
+      lifecycleActions.getByRole("button", { name: "Confirm plan" }),
+    ).toBeDisabled();
+    await expect(
+      lifecycleActions.getByRole("button", { name: "Enqueue" }),
+    ).toBeDisabled();
+    await expect(
+      lifecycleActions.getByRole("button", { name: "Retry" }),
+    ).toBeDisabled();
+    await expect(
+      reviewActions.getByRole("button", { name: "Approve" }),
+    ).toBeDisabled();
+    await expect(
+      reviewActions.getByRole("button", { name: "Reject" }),
+    ).toBeDisabled();
+    await expect(
+      reviewActions.getByRole("button", { name: "Retry" }),
+    ).toBeDisabled();
+
+    await page.locator("#legacy-run-console > summary").click();
+    const legacyConsole = page.locator("#legacy-run-console");
+    await expect(
+      legacyConsole.getByRole("button", { name: "Shell Run" }),
+    ).toBeDisabled();
+    await expect(
+      legacyConsole.getByRole("button", { name: "Worktree Run" }),
+    ).toBeDisabled();
+    await expect(
+      legacyConsole.getByRole("button", { name: "Agent Run" }),
+    ).toBeDisabled();
+    await expect(
+      legacyConsole.getByRole("button", { name: "Run Workflow" }),
+    ).toBeDisabled();
+    await expect(
+      legacyConsole.getByRole("button", { name: "Retry" }),
+    ).toBeDisabled();
+    await expect(
+      legacyConsole.getByRole("button", { name: "Repository Run" }),
+    ).toBeDisabled();
+    await expect(
+      legacyConsole.getByRole("button", { name: "Register Repository" }),
+    ).toBeDisabled();
+    expect(mutatingRequests).toEqual([]);
 
     await expect
       .poll(() => workflowAuthorizations.length, {
@@ -187,7 +239,13 @@ test.describe("Requirement Delivery Console smoke", () => {
   });
 
   test("keeps gate failed and review evidence visible", async ({ page }) => {
-    await mockApi(page, mixedWorkflows);
+    const mutatingRequests: string[] = [];
+
+    await mockApi(page, mixedWorkflows, {
+      onMutatingRequest: ({ method, pathname }) => {
+        mutatingRequests.push(`${method} ${pathname}`);
+      },
+    });
 
     await page.goto("/");
 
@@ -202,6 +260,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(evidence).toContainText(
       "Required gate failed; merge approval is blocked while evidence remains inspectable.",
     );
+
+    await page.locator(".requirementDetailDisclosure > summary").click();
+    const detail = page.locator(".requirementDetailShell");
+    await expect(detail.getByRole("button", { name: "Approve" })).toBeDisabled();
+    await expect(detail.getByRole("button", { name: "Reject" })).toBeDisabled();
+    expect(mutatingRequests).toEqual([]);
 
     await mockApi(page, [
       mixedWorkflows[1] as WorkflowRun,
@@ -539,6 +603,10 @@ async function mockApi(
       authorization: string | undefined;
       id: string;
     }) => Promise<unknown> | unknown;
+    onMutatingRequest?: (request: {
+      method: string;
+      pathname: string;
+    }) => void;
     reports?: Record<string, unknown>;
     requirements?: RequirementDeliveryTicket[];
   } = {},
@@ -548,6 +616,13 @@ async function mockApi(
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+
+    if (request.method() !== "GET") {
+      options.onMutatingRequest?.({
+        method: request.method(),
+        pathname: url.pathname,
+      });
+    }
 
     if (request.method() === "GET" && url.pathname === "/workflows") {
       options.onWorkflowRequest?.(request.headers().authorization);
