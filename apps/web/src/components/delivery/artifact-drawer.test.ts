@@ -60,7 +60,7 @@ const reviewReadyRequirement: RequirementSummary = {
     headLabel: "abc1234",
     cleanStateLabel: "Apply clean check required",
     allowedRootLabel: "Allowed root accepted by API",
-    mergePolicyLabel: "Manual git apply only",
+    mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
     recoveryAction: "Run repository preflight before mutating actions"
   },
   requirementStage: "needs_review",
@@ -179,7 +179,9 @@ describe("RequirementEvidencePanel artifact links", () => {
     expect(html).toContain(
       "href=\"/requirements/requirement-auth/merge-candidate\""
     );
-    expect(html).toContain("Patch path and manual apply command");
+    expect(html).toContain("Patch path and git apply command for reviewer");
+    expect(html).toContain("Patch available for human review");
+    expect(html).not.toContain("Ready for manual apply");
     expect(html).not.toContain("Apply Candidate");
     expect(html).not.toContain("<button");
   });
@@ -217,7 +219,7 @@ describe("RequirementEvidencePanel artifact links", () => {
           repositorySafety: {
             ...reviewReadyRequirement.repositorySafety,
             blockedReason:
-              "Required gate failed; merge-ready conclusion is blocked."
+              "Required gate failed; merge approval is blocked while evidence remains inspectable."
           },
           workflowRunStatus: "gate_failed",
           workflowRunStatusLabel: "Gate failed"
@@ -227,8 +229,13 @@ describe("RequirementEvidencePanel artifact links", () => {
 
     expect(html).toContain("Gate blocked by required gate");
     expect(html).toContain("Gate blocked");
+    expect(html).toContain(
+      "Merge approval is blocked, but evidence remains inspectable for rework."
+    );
+    expect(html).toContain("Merge approval blocked");
     expect(html).toContain("Merge candidate blocked until required gates pass");
     expect(html).toContain("Requirement report");
     expect(html).not.toContain("Merge candidate evidence");
+    expect(html).not.toContain("merge-ready conclusion");
   });
 });

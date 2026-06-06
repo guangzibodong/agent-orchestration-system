@@ -16,7 +16,7 @@ const requirement: RequirementSummary = {
     headLabel: "abc1234",
     cleanStateLabel: "Apply clean check required",
     allowedRootLabel: "Allowed root accepted by API",
-    mergePolicyLabel: "Manual git apply only",
+    mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
     recoveryAction: "Run repository preflight before mutating actions"
   },
   requirementStage: "needs_review",
@@ -95,12 +95,13 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Needs Review");
     expect(html).toContain("C:/work/api");
     expect(html).toContain("Isolated worktree");
-    expect(html).toContain("Manual git apply only");
+    expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
     expect(html).toContain("Review merge candidate");
     expect(html).toContain("medium risk");
     expect(html).toContain("2 tasks / 2 gates");
     expect(html).toContain("Quality gates passed");
-    expect(html).toContain("Merge candidate ready for manual apply");
+    expect(html).toContain("Patch available for human review");
+    expect(html).not.toContain("Merge candidate ready for manual apply");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
   });
 

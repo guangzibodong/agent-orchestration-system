@@ -75,7 +75,7 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("C:/work/api");
     expect(html).toContain("Apply clean check required");
     expect(html).toContain("Allowed root accepted by API");
-    expect(html).toContain("Manual git apply only");
+    expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
     expect(html).not.toContain("Branch, HEAD, clean/dirty state");
     expect(html).toContain("Stage Stepper");
     expect(html).toContain("Decision Queue");
@@ -113,7 +113,7 @@ describe("RequirementDeliveryConsole", () => {
 
     expect(html).toContain("Gate Result / Review Evidence");
     expect(html).toContain("Required gate failed");
-    expect(html).toContain("Merge-ready blocked");
+    expect(html).toContain("Merge approval blocked");
     expect(html).toContain("Retry failed gate");
     expect(html).not.toContain("raw-gate-log");
     expect(html).not.toContain("stacktrace");

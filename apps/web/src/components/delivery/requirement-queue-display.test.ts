@@ -53,7 +53,7 @@ function safety(repositoryLabel: string): RepositorySafetySummary {
     cleanStateLabel: "Clean state pending preflight",
     executionModeLabel: "Direct repository",
     headLabel: "HEAD SHA not reported",
-    mergePolicyLabel: "Manual git apply only",
+    mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
     recoveryAction: "Run repository preflight before mutating actions",
     repositoryLabel
   };

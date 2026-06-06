@@ -92,6 +92,9 @@ export type DeliveryConsoleModelContext = {
   jobStatusByRequirementId?: Record<string, WorkflowJobStatus | undefined>;
 };
 
+const noAutoMergePolicyLabel =
+  "No MAWO auto-merge; manual git apply outside MAWO";
+
 const statusStageMap: Record<WorkflowRun["status"], RequirementStage> = {
   draft: "draft",
   ready: "ready_to_run",
@@ -265,7 +268,7 @@ function buildTicketRepositorySafety(
     allowedRootLabel: hasRepository
       ? "Allowed root accepted by API"
       : "Allowed root not checked",
-    mergePolicyLabel: "Manual git apply only",
+    mergePolicyLabel: noAutoMergePolicyLabel,
     blockedReason: buildTicketBlockedReason(
       requirement,
       hasRepository,
@@ -285,11 +288,11 @@ function buildTicketBlockedReason(
   }
 
   if (executionStatus === "gate_failed") {
-    return "Required gate failed; merge-ready conclusion is blocked.";
+    return "Required gate failed; merge approval is blocked while evidence remains inspectable.";
   }
 
   if (executionStatus === "failed") {
-    return "Workflow failed before merge-ready evidence was produced.";
+    return "Workflow failed before merge approval evidence was produced.";
   }
 
   if (executionStatus === "aborted") {
@@ -346,7 +349,7 @@ function buildRepositorySafety(workflow: WorkflowRun): RepositorySafetySummary {
     allowedRootLabel: hasRepository
       ? "Allowed root accepted by API"
       : "Allowed root not checked",
-    mergePolicyLabel: "Manual git apply only",
+    mergePolicyLabel: noAutoMergePolicyLabel,
     blockedReason,
     recoveryAction: buildRepositoryRecoveryAction(workflow, hasRepository)
   };
@@ -361,11 +364,11 @@ function buildRepositoryBlockedReason(
   }
 
   if (workflow.status === "gate_failed") {
-    return "Required gate failed; merge-ready conclusion is blocked.";
+    return "Required gate failed; merge approval is blocked while evidence remains inspectable.";
   }
 
   if (workflow.status === "failed") {
-    return "Workflow failed before merge-ready evidence was produced.";
+    return "Workflow failed before merge approval evidence was produced.";
   }
 
   if (workflow.status === "aborted") {

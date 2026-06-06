@@ -45,7 +45,7 @@ export function buildRequirementStageStepper(
       return {
         ...step,
         state: "failed",
-        reason: "Merge-ready conclusion blocked"
+        reason: "Merge approval blocked"
       };
     }
 

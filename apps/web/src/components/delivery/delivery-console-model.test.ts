@@ -43,7 +43,7 @@ describe("delivery console model", () => {
         cleanStateLabel: "Clean state pending preflight",
         executionModeLabel: "Direct repository",
         headLabel: "HEAD SHA not reported",
-        mergePolicyLabel: "Manual git apply only",
+        mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
         recoveryAction: "Run repository preflight before mutating actions",
         repositoryLabel: "C:/work/shop"
       },
@@ -94,7 +94,7 @@ describe("delivery console model", () => {
       repositoryPath: "C:/work/shop",
       goal: "Ship checkout evidence",
       acceptanceCriteria: ["Gate evidence is reviewable"],
-      constraints: ["Manual git apply only"],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
       nonGoals: ["Automatic PR creation"],
       riskLevel: "medium",
       contextPaths: [],
@@ -176,12 +176,13 @@ describe("delivery console model", () => {
 
     expect(summary.repositorySafety).toEqual({
       allowedRootLabel: "Allowed root accepted by API",
-      blockedReason: "Required gate failed; merge-ready conclusion is blocked.",
+      blockedReason:
+        "Required gate failed; merge approval is blocked while evidence remains inspectable.",
       branchLabel: "mawo/workflow-123/task-1",
       cleanStateLabel: "Apply clean check required",
       executionModeLabel: "Isolated worktree",
       headLabel: "HEAD SHA not reported",
-      mergePolicyLabel: "Manual git apply only",
+      mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
       recoveryAction: "Retry failed gate",
       repositoryLabel: "C:/work/shop"
     });

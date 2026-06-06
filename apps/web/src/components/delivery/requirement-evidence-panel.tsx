@@ -87,7 +87,7 @@ export function buildRequirementEvidenceDisplay(
       title: "Gate blocked by required gate",
       statusLabel: "Gate blocked",
       summary:
-        "Required gate failed. Merge candidate approval is blocked until rework produces passing evidence.",
+        "Required gate failed. Merge approval is blocked, but evidence remains inspectable for rework.",
       items: [
         {
           label: "Gate result",
@@ -95,7 +95,7 @@ export function buildRequirementEvidenceDisplay(
         },
         {
           label: "Merge conclusion",
-          value: "Merge-ready blocked",
+          value: "Merge approval blocked",
         },
         {
           label: "Next decision",
@@ -140,7 +140,7 @@ export function buildRequirementEvidenceDisplay(
         },
         {
           label: "Merge candidate",
-          value: "Ready for manual apply",
+          value: "Patch available for human review",
         },
         {
           label: "Merge policy",
@@ -261,7 +261,7 @@ export function buildRequirementEvidenceArtifactLinks(
         : `/requirements/${encodeURIComponent(
             requirement.id,
           )}/merge-candidate`,
-      meta: "Patch path and manual apply command",
+      meta: "Patch path and git apply command for reviewer",
     });
   }
 

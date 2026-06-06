@@ -414,10 +414,10 @@ function buildGateSummary(requirement: RequirementSummary): string {
 
 function buildGateBlockingRule(requirement: RequirementSummary): string {
   if (requirement.executionStatus === "gate_failed") {
-    return "Failed required gate blocks merge-ready conclusion";
+    return "Failed required gate blocks merge approval";
   }
 
-  return "Required gates must pass before merge-ready conclusion";
+  return "Required gates must pass before merge approval";
 }
 
 function buildMergeCandidateStatus(requirement: RequirementSummary): string {
@@ -425,7 +425,7 @@ function buildMergeCandidateStatus(requirement: RequirementSummary): string {
     requirement.executionStatus === "needs_review" ||
     requirement.executionStatus === "completed"
   ) {
-    return "Merge candidate ready for manual apply";
+    return "Patch available for human review";
   }
 
   if (requirement.executionStatus === "gate_failed") {

@@ -24,7 +24,7 @@ describe("requirement stage stepper", () => {
         id: "gates",
         label: "Gates",
         state: "failed",
-        reason: "Merge-ready conclusion blocked"
+        reason: "Merge approval blocked"
       },
       { id: "review", label: "Review", state: "upcoming" },
       { id: "delivered", label: "Delivered", state: "upcoming" }

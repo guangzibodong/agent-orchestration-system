@@ -92,7 +92,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       consoleShell.getByRole("button", { name: "New Requirement" }),
     ).toBeDisabled();
     await expect(consoleShell.getByLabel("Repository Safety")).toContainText(
-      "Manual git apply only",
+      "No MAWO auto-merge; manual git apply outside MAWO",
     );
     await expect(page.locator(".decisionQueuePanel")).toContainText(
       "Review merge candidate",
@@ -194,13 +194,13 @@ test.describe("Requirement Delivery Console smoke", () => {
     const evidence = page.getByLabel("Gate Result / Review Evidence");
     await expect(evidence).toContainText("Gate blocked");
     await expect(evidence).toContainText("Required gate failed");
-    await expect(evidence).toContainText("Merge-ready blocked");
+    await expect(evidence).toContainText("Merge approval blocked");
     await expect(evidence).toContainText(
       "Merge candidate blocked until required gates pass",
     );
     await expect(evidence).toContainText("Retry failed gate");
     await expect(evidence).toContainText(
-      "Required gate failed; merge-ready conclusion is blocked.",
+      "Required gate failed; merge approval is blocked while evidence remains inspectable.",
     );
 
     await mockApi(page, [
@@ -215,7 +215,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await expect(reviewEvidence).toContainText("Review ready");
     await expect(reviewEvidence).toContainText("Quality gates passed");
-    await expect(reviewEvidence).toContainText("Manual git apply only");
+    await expect(reviewEvidence).toContainText(
+      "No MAWO auto-merge; manual git apply outside MAWO",
+    );
 
     const evidenceDrawer = reviewEvidence.getByLabel("Read-only evidence links");
     await expect(
@@ -892,7 +894,7 @@ const lifecyclePlanRequirement: RequirementDeliveryTicket = {
   repositoryPath: "C:/work/shop",
   goal: "Run a confirmed checkout plan with isolated evidence.",
   acceptanceCriteria: ["Plan is confirmed before execution."],
-  constraints: ["Manual git apply only"],
+  constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
   nonGoals: ["Automatic PR creation"],
   riskLevel: "medium",
   contextPaths: ["apps/web/src/app/page.tsx"],
@@ -924,7 +926,7 @@ const lifecycleRetryRequirement: RequirementDeliveryTicket = {
   repositoryPath: "C:/work/shop",
   goal: "Retry a failed gate without stale evidence.",
   acceptanceCriteria: ["Retry resets the current execution attempt."],
-  constraints: ["Manual git apply only"],
+  constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
   nonGoals: ["Automatic PR creation"],
   riskLevel: "high",
   contextPaths: ["apps/web/src/app/page.tsx"],
@@ -967,7 +969,7 @@ const requirementTickets: RequirementDeliveryTicket[] = [
       "Viewer can read the requirement list.",
       "Viewer cannot create or modify requirements.",
     ],
-    constraints: ["Manual git apply only"],
+    constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
     nonGoals: ["Automatic PR creation"],
     riskLevel: "medium",
     contextPaths: ["apps/web/src/app/page.tsx"],
