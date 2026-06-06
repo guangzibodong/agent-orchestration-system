@@ -41,6 +41,7 @@ category. The launch wedge is:
 | `docs/product/ROLE_WORKFLOW.md` | Role responsibilities, stage gates, Definition of Ready/Done |
 | `docs/product/USER_JOURNEYS.md` | Success, failure, retry, review, and unsafe-repo journeys |
 | `docs/product/UI_INFORMATION_ARCHITECTURE.md` | First-screen IA, requirement detail pages, components, UI acceptance |
+| `docs/product/UI_STAGE_BRIEF.md` | Active UI-stage contract for first screen and New Requirement flow |
 | `docs/product/FEATURE_BRIEF_TEMPLATE.md` | Template required before engineering slices |
 | `docs/product/DECISION_LOG.md` | Product decisions and rationale |
 
