@@ -240,9 +240,11 @@ function buildDecisionQueue(workflows: WorkflowRun[]): DeliveryDecisionItem[] {
 }
 
 export function buildDeliveryConsoleModel(
-  workflows: WorkflowRun[]
+  workflows: WorkflowRun[],
+  now: Date = new Date()
 ): DeliveryConsoleModel {
   const requirements = workflows.map(mapWorkflowToRequirementSummary);
+  const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
 
   return {
     requirements,
@@ -263,9 +265,22 @@ export function buildDeliveryConsoleModel(
       deliveredLastSevenDays: workflows.filter(
         (workflow) =>
           workflow.status === "completed" &&
-          workflow.review?.decision === "approved"
+          workflow.review?.decision === "approved" &&
+          updatedAtMs(workflow) >= sevenDaysAgo &&
+          updatedAtMs(workflow) <= now.getTime()
       ).length
     },
     decisionQueue: buildDecisionQueue(workflows)
   };
+}
+
+function updatedAtMs(workflow: WorkflowRun): number {
+  const value = workflow.updatedAt ?? workflow.createdAt;
+
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }

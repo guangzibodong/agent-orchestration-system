@@ -172,4 +172,37 @@ describe("delivery console model", () => {
       }
     ]);
   });
+
+  it("counts only approved deliveries updated inside the last seven days", () => {
+    const recentApproved = {
+      ...baseWorkflow,
+      id: "workflow-recent-approved",
+      status: "completed" as const,
+      updatedAt: "2026-06-04T09:00:00.000Z",
+      review: {
+        decision: "approved" as const,
+        reviewedAt: "2026-06-04T09:30:00.000Z"
+      }
+    };
+    const oldApproved = {
+      ...recentApproved,
+      id: "workflow-old-approved",
+      updatedAt: "2026-05-20T09:00:00.000Z"
+    };
+    const recentRejected = {
+      ...recentApproved,
+      id: "workflow-recent-rejected",
+      review: {
+        decision: "rejected" as const,
+        reviewedAt: "2026-06-04T09:30:00.000Z"
+      }
+    };
+
+    const model = buildDeliveryConsoleModel(
+      [recentApproved, oldApproved, recentRejected],
+      new Date("2026-06-06T00:00:00.000Z")
+    );
+
+    expect(model.kpis.deliveredLastSevenDays).toBe(1);
+  });
 });
