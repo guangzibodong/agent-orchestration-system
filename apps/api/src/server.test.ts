@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import type { AuditEvent, RepositoryRegistrationRequest } from "@mawo/shared";
@@ -3236,6 +3236,118 @@ describe("runner API", () => {
     expect(candidate.patchArtifactPath).toContain("merge-candidate.patch");
     expect(candidate.manifestArtifactPath).toContain("merge-candidate.json");
     expect(candidate.applyCommand).toContain("git -C");
+  });
+
+  it("applies a ready merge candidate to a clean repository and audits it", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-apply-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "Apply a reviewed patch",
+        repositoryPath: repoPath,
+        tasks: [
+          {
+            id: "edit-readme",
+            title: "Edit README",
+            agent: "shell",
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'applied merge candidate\\\\n')"`
+          }
+        ],
+        qualityGates: [
+          {
+            id: "readme",
+            title: "README changed",
+            command: `${node} -e "const fs = require('fs'); if (!fs.readFileSync('README.md', 'utf8').includes('applied merge candidate')) process.exit(1)"`
+          }
+        ]
+      }
+    });
+    const created = createResponse.json();
+    const runResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+
+    const applyResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/merge-candidate/apply`
+    });
+    const applyResult = applyResponse.json();
+    const readme = await readFile(join(repoPath, "README.md"), "utf8");
+    const auditResponse = await app.inject({
+      method: "GET",
+      url: `/audit-events?type=workflow.merge_candidate_applied&workflowId=${created.id}`
+    });
+    const auditEvents = auditResponse.json();
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(runResponse.json().status).toBe("needs_review");
+    expect(applyResponse.statusCode).toBe(200);
+    expect(applyResult).toMatchObject({
+      workflowId: created.id,
+      status: "applied",
+      repositoryPath: repoPath,
+      sourceBranches: expect.arrayContaining([expect.stringContaining("mawo/")])
+    });
+    expect(applyResult.gitStatus).toContain("README.md");
+    expect(readme).toContain("applied merge candidate");
+    expect(auditEvents).toHaveLength(1);
+    expect(auditEvents[0]).toMatchObject({
+      type: "workflow.merge_candidate_applied",
+      actor: "operator",
+      workflowId: created.id,
+      metadata: expect.objectContaining({
+        status: "applied",
+        repositoryPath: repoPath
+      })
+    });
+  });
+
+  it("blocks applying a merge candidate when the target repository is dirty", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-api-apply-dirty-test-"));
+    const repoPath = await createCommittedRepo();
+    tempRoots.push(demoRoot);
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/workflows/repository",
+      payload: {
+        goal: "Reject applying over local changes",
+        repositoryPath: repoPath,
+        tasks: [
+          {
+            id: "edit-readme",
+            title: "Edit README",
+            agent: "shell",
+            command: `${node} -e "const fs = require('fs'); fs.appendFileSync('README.md', 'dirty apply candidate\\\\n')"`
+          }
+        ],
+        qualityGates: []
+      }
+    });
+    const created = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/run`
+    });
+    await writeFile(join(repoPath, "LOCAL.txt"), "operator change\n", "utf8");
+
+    const applyResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${created.id}/merge-candidate/apply`
+    });
+
+    expect(applyResponse.statusCode).toBe(409);
+    expect(applyResponse.json()).toMatchObject({
+      error: "merge_candidate_apply_blocked",
+      reason: "repository_not_clean"
+    });
   });
 
   it("blocks merge candidates for workflows that failed quality gates", async () => {

@@ -8,6 +8,7 @@ import {
   readinessResponseSchema,
   workerHealthResponseSchema,
   mergeCandidateSchema,
+  mergeCandidateApplyResultSchema,
   runReportSchema,
   workflowReviewRequestSchema,
   workflowJobSchema,
@@ -414,6 +415,21 @@ describe("workflowRunSchema", () => {
     expect(candidate.sourceBranches[0]).toBe("mawo/run/task");
   });
 
+  it("accepts merge candidate apply results", () => {
+    const result = mergeCandidateApplyResultSchema.parse({
+      workflowId: "run_6",
+      status: "applied",
+      repositoryPath: "C:/repo",
+      sourceBranches: ["mawo/run/task"],
+      patchArtifactPath: "C:/artifacts/run_6/merge-candidate.patch",
+      gitStatus: " M README.md\n",
+      appliedAt: "2026-06-06T02:33:06.171Z"
+    });
+
+    expect(result.status).toBe("applied");
+    expect(result.gitStatus).toContain("README.md");
+  });
+
   it("accepts workspace cleanup preview responses", () => {
     const preview = workspaceCleanupPreviewSchema.parse({
       workflowId: "run_7",
@@ -441,19 +457,19 @@ describe("workflowRunSchema", () => {
   it("accepts workflow audit events", () => {
     const event = auditEventSchema.parse({
       id: "audit_1",
-      type: "workflow.workspaces_cleaned",
+      type: "workflow.merge_candidate_applied",
       createdAt: "2026-06-05T00:00:00.000Z",
       workflowId: "run_1",
       actor: "operator",
       metadata: {
-        status: "cleaned",
-        cleanedCount: "1"
+        status: "applied",
+        repositoryPath: "C:/repo"
       }
     });
 
-    expect(event.type).toBe("workflow.workspaces_cleaned");
+    expect(event.type).toBe("workflow.merge_candidate_applied");
     expect(event.workflowId).toBe("run_1");
-    expect(event.metadata?.cleanedCount).toBe("1");
+    expect(event.metadata?.repositoryPath).toBe("C:/repo");
   });
 
   it("accepts worker job lifecycle audit events", () => {

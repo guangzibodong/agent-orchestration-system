@@ -79,7 +79,7 @@ export class FileArtifactStore implements ArtifactStore {
 
     if (candidate.patch.length > 0) {
       const patchPath = join(runRoot, "merge-candidate.patch");
-      writeFileSync(patchPath, candidate.patch, "utf8");
+      writeFileSync(patchPath, ensureTrailingNewline(candidate.patch), "utf8");
       enriched.patchArtifactPath = patchPath;
 
       if (run.repositoryPath) {
@@ -113,4 +113,8 @@ function writeArtifact(
 
 function quote(value: string): string {
   return JSON.stringify(value);
+}
+
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
 }

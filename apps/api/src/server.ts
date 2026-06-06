@@ -58,6 +58,7 @@ import {
 import {
   createDemoWorkflowDefinition,
   LocalRunner,
+  WorkflowMergeCandidateApplyBlockedError,
   WorkflowMergeCandidateNotReadyError,
   WorkflowNotRetryableError,
   WorkflowNotReviewReadyError,
@@ -1101,6 +1102,48 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
           error: "merge_candidate_not_ready",
           message: error.message,
           status: error.status
+        });
+      }
+
+      return reply.code(404).send({ error: "workflow_not_found" });
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+  }>("/workflows/:id/merge-candidate/apply", async (request, reply) => {
+    try {
+      const result = await activeRunner.applyMergeCandidate(request.params.id);
+
+      await appendAuditEvent({
+        type: "workflow.merge_candidate_applied",
+        actor: "operator",
+        workflowId: result.workflowId,
+        metadata: {
+          status: result.status,
+          repositoryPath: result.repositoryPath,
+          sourceBranches: result.sourceBranches.join(","),
+          patchArtifactPath: result.patchArtifactPath ?? "",
+          gitStatus: result.gitStatus
+        }
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof WorkflowMergeCandidateNotReadyError) {
+        return reply.code(409).send({
+          error: "merge_candidate_not_ready",
+          message: error.message,
+          status: error.status
+        });
+      }
+
+      if (error instanceof WorkflowMergeCandidateApplyBlockedError) {
+        return reply.code(409).send({
+          error: "merge_candidate_apply_blocked",
+          reason: error.reason,
+          message: error.message,
+          detail: error.detail
         });
       }
 

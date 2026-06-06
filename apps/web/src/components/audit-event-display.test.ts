@@ -76,6 +76,17 @@ const events: AuditEvent[] = [
       maxBytes: "65536",
       truncated: "false"
     }
+  },
+  {
+    id: "event-8",
+    type: "workflow.merge_candidate_applied",
+    createdAt: "2026-06-05T10:35:10.513Z",
+    actor: "operator",
+    workflowId: "workflow-merge",
+    metadata: {
+      status: "applied",
+      repositoryPath: "C:/repo"
+    }
   }
 ];
 
@@ -146,14 +157,23 @@ describe("audit event display", () => {
         jobLabel: undefined,
         metadataLabel:
           "artifactPath=C:/mawo/artifacts/workflow-artifact/report.json, maxBytes=65536, truncated=false"
+      },
+      {
+        id: "event-8",
+        label: "Merge Candidate Applied",
+        actor: "operator",
+        createdAt: "2026-06-05T10:35:10.513Z",
+        workflowLabel: "workflow-",
+        jobLabel: undefined,
+        metadataLabel: "status=applied, repositoryPath=C:/repo"
       }
     ]);
   });
 
   it("summarizes audit activity for the console header", () => {
     expect(summarizeAuditEvents(events)).toEqual({
-      total: 7,
-      operatorActions: 5
+      total: 8,
+      operatorActions: 6
     });
   });
 

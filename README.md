@@ -261,6 +261,7 @@ GET  /workflows/:id/workspaces
 POST /workflows/:id/workspaces/cleanup
 GET  /workflows/:id/report
 GET  /workflows/:id/merge-candidate
+POST /workflows/:id/merge-candidate/apply
 GET  /jobs
 GET  /jobs?status=<status>&workflowId=<workflowId>&repositoryId=<repositoryId>&limit=<n>
 GET  /jobs/:id

@@ -29,6 +29,7 @@ import {
   type AgentHealth,
   type AgentSummary,
   type MergeCandidate,
+  type MergeCandidateApplyResult,
   type ReadinessResponse,
   type RepositoryRecord,
   type RunReport,
@@ -38,6 +39,11 @@ import {
   type WorkspaceCleanupPreview,
   type WorkspaceCleanupResult
 } from "@mawo/shared";
+import {
+  applyMergeCandidate,
+  buildMergeCandidateApplyDisplay,
+  buildMergeCandidateApplyError
+} from "@/components/merge-candidate-apply";
 import {
   buildMergeCandidateDisplay,
   buildMergeCandidateNotReadyDisplay,
@@ -184,6 +190,8 @@ export function RunConsole() {
   const [mergeCandidate, setMergeCandidate] = useState<MergeCandidate>();
   const [mergeCandidateNotice, setMergeCandidateNotice] =
     useState<MergeCandidateDisplay>();
+  const [mergeCandidateApplyResult, setMergeCandidateApplyResult] =
+    useState<MergeCandidateApplyResult>();
   const [repositoryForm, setRepositoryForm] = useState(defaultRepositoryForm);
   const [repositoryRegistrationForm, setRepositoryRegistrationForm] = useState(
     defaultRepositoryRegistrationForm
@@ -434,6 +442,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       const next = await api<unknown>("/workflows/demo", {
@@ -458,6 +467,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       const next = await api<unknown>("/workflows/worktree-demo", {
@@ -484,6 +494,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       const next = await api<unknown>("/workflows/agent-demo", {
@@ -510,6 +521,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       const payload = buildRepositoryWorkflowPayload(repositoryForm);
@@ -549,6 +561,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       const next = await api<unknown>(`/workflows/${workflowId}`);
@@ -663,6 +676,7 @@ export function RunConsole() {
       );
       setMergeCandidate(mergeCandidateSchema.parse(candidate));
       setMergeCandidateNotice(undefined);
+      setMergeCandidateApplyResult(undefined);
     } catch (apiError) {
       if (
         apiError instanceof ApiResponseError &&
@@ -673,12 +687,40 @@ export function RunConsole() {
         setMergeCandidateNotice(
           buildMergeCandidateNotReadyDisplay(apiError.body)
         );
+        setMergeCandidateApplyResult(undefined);
         return;
       }
 
       throw apiError;
     }
   }, []);
+
+  const applyCurrentMergeCandidate = useCallback(async () => {
+    if (!workflow || !mergeCandidate || mergeCandidate.status !== "ready") {
+      return;
+    }
+
+    setIsBusy(true);
+    setError(undefined);
+
+    try {
+      setMergeCandidateApplyResult(await applyMergeCandidate(api, workflow.id));
+      await refreshOperationsSnapshot();
+    } catch (apiError) {
+      const applyError =
+        apiError instanceof ApiResponseError
+          ? buildMergeCandidateApplyError(apiError.body)
+          : undefined;
+      setError(
+        applyError ??
+          (apiError instanceof Error
+            ? `Apply merge candidate failed: ${apiError.message}`
+            : "Apply merge candidate failed")
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, [mergeCandidate, refreshOperationsSnapshot, workflow]);
 
   const loadTimelineForJob = useCallback(async (jobId: string) => {
     setIsLoadingTimeline(true);
@@ -747,6 +789,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       let queuedJob: ConsoleWorkflowJob;
@@ -863,6 +906,7 @@ export function RunConsole() {
     setJobTimeline(undefined);
     setMergeCandidate(undefined);
     setMergeCandidateNotice(undefined);
+    setMergeCandidateApplyResult(undefined);
 
     try {
       const retried = await api<unknown>(`/workflows/${workflow.id}/retry`, {
@@ -1886,6 +1930,30 @@ export function RunConsole() {
                     <div className="mergeCandidateBox">
                       {buildMergeCandidateDisplay(mergeCandidate).lines.map(
                         (line) => (
+                          <p key={line}>{line}</p>
+                        )
+                      )}
+                      {mergeCandidate.status === "ready" ? (
+                        <button
+                          className="secondaryButton"
+                          disabled={isBusy}
+                          onClick={() => void applyCurrentMergeCandidate()}
+                          type="button"
+                        >
+                          <GitBranch aria-hidden="true" size={16} />
+                          Apply Candidate
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {mergeCandidateApplyResult ? (
+                    <div className="mergeCandidateBox ready">
+                      {buildMergeCandidateApplyDisplay(
+                        mergeCandidateApplyResult
+                      ).map((line, index) =>
+                        index === 0 ? (
+                          <strong key={line}>{line}</strong>
+                        ) : (
                           <p key={line}>{line}</p>
                         )
                       )}

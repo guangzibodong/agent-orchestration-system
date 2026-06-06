@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { buildApp } from "../apps/api/src/server.js";
@@ -22,6 +22,14 @@ function assert(condition: unknown, message: string): asserts condition {
 function runGit(args: string[], cwd: string) {
   execFileSync("git", args, {
     cwd,
+    stdio: "pipe",
+  });
+}
+
+function readGit(args: string[], cwd: string): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
     stdio: "pipe",
   });
 }
@@ -612,6 +620,46 @@ async function main() {
       "Merge candidate did not include an apply command.",
     );
     log("report and merge candidate are ready");
+
+    const appliedMergeCandidate = await request(
+      baseUrl,
+      "POST",
+      `/workflows/${workflowId}/merge-candidate/apply`,
+    );
+    assert(
+      appliedMergeCandidate.status === 200,
+      `Apply merge candidate returned ${appliedMergeCandidate.status}: ${JSON.stringify(
+        appliedMergeCandidate.body,
+      )}`,
+    );
+    assert(
+      appliedMergeCandidate.body.status === "applied" &&
+        appliedMergeCandidate.body.repositoryPath === repositoryPath &&
+        typeof appliedMergeCandidate.body.gitStatus === "string" &&
+        appliedMergeCandidate.body.gitStatus.includes("README.md"),
+      "Apply merge candidate response did not include applied repository status.",
+    );
+    const appliedReadme = await readFile(join(repositoryPath, "README.md"), "utf8");
+    assert(
+      appliedReadme.includes("smoke retry success"),
+      "Applied merge candidate did not update the target README.",
+    );
+    assert(
+      readGit(["status", "--short"], repositoryPath).includes("README.md"),
+      "Applied merge candidate did not leave an operator-reviewable git diff.",
+    );
+    const mergeApplyAudit = await request(
+      baseUrl,
+      "GET",
+      `/audit-events?type=workflow.merge_candidate_applied&workflowId=${workflowId}`,
+    );
+    assert(
+      mergeApplyAudit.status === 200 &&
+        Array.isArray(mergeApplyAudit.body) &&
+        mergeApplyAudit.body.length === 1,
+      "Merge candidate apply audit event was not recorded.",
+    );
+    log("merge candidate can be applied to the registered repository");
 
     const blockedWorkspacePreview = await request(
       baseUrl,

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CliAgentAdapter,
@@ -148,6 +150,16 @@ export type MergeCandidate = {
   createdAt: string;
 };
 
+export type MergeCandidateApplyResult = {
+  workflowId: string;
+  status: "applied";
+  repositoryPath: string;
+  sourceBranches: string[];
+  patchArtifactPath?: string;
+  gitStatus: string;
+  appliedAt: string;
+};
+
 export type WorkspaceCleanupItem = {
   taskId: string;
   path: string;
@@ -248,6 +260,24 @@ export class WorkflowMergeCandidateNotReadyError extends Error {
     super(`Workflow is ${status}; merge candidate requires review-ready work.`);
     this.name = "WorkflowMergeCandidateNotReadyError";
     this.status = status;
+  }
+}
+
+export type MergeCandidateApplyBlockedReason =
+  | "repository_path_required"
+  | "empty_patch"
+  | "repository_not_clean"
+  | "apply_failed";
+
+export class WorkflowMergeCandidateApplyBlockedError extends Error {
+  readonly reason: MergeCandidateApplyBlockedReason;
+  readonly detail?: string;
+
+  constructor(reason: MergeCandidateApplyBlockedReason, detail?: string) {
+    super(mergeCandidateApplyBlockedMessage(reason, detail));
+    this.name = "WorkflowMergeCandidateApplyBlockedError";
+    this.reason = reason;
+    this.detail = detail;
   }
 }
 
@@ -374,6 +404,64 @@ export class LocalRunner {
     };
 
     return this.artifactStore?.persistMergeCandidate(run, candidate) ?? candidate;
+  }
+
+  async applyMergeCandidate(id: string): Promise<MergeCandidateApplyResult> {
+    const run = this.mustGetWorkflow(id);
+    const candidate = this.getMergeCandidate(id);
+
+    if (candidate.status !== "ready" || candidate.patch.trim().length === 0) {
+      throw new WorkflowMergeCandidateApplyBlockedError("empty_patch");
+    }
+
+    if (!run.repositoryPath) {
+      throw new WorkflowMergeCandidateApplyBlockedError("repository_path_required");
+    }
+
+    const beforeStatus = await this.git("status --short", run.repositoryPath);
+    const blockingStatus = filterOperatorRepositoryStatus(beforeStatus.stdout);
+    if (blockingStatus.length > 0) {
+      throw new WorkflowMergeCandidateApplyBlockedError(
+        "repository_not_clean",
+        blockingStatus
+      );
+    }
+
+    const tempRoot = candidate.patchArtifactPath
+      ? undefined
+      : await mkdtemp(join(tmpdir(), "mawo-merge-candidate-"));
+    const patchPath =
+      candidate.patchArtifactPath ?? join(tempRoot!, "merge-candidate.patch");
+
+    if (!candidate.patchArtifactPath) {
+      await writeFile(patchPath, ensureTrailingNewline(candidate.patch), "utf8");
+    }
+
+    try {
+      const apply = await this.git(`apply ${quote(patchPath)}`, run.repositoryPath);
+      if (apply.status !== "passed") {
+        throw new WorkflowMergeCandidateApplyBlockedError(
+          "apply_failed",
+          apply.stderr || apply.stdout
+        );
+      }
+
+      const afterStatus = await this.git("status --short", run.repositoryPath);
+
+      return {
+        workflowId: run.id,
+        status: "applied",
+        repositoryPath: run.repositoryPath,
+        sourceBranches: candidate.sourceBranches,
+        patchArtifactPath: candidate.patchArtifactPath,
+        gitStatus: filterOperatorRepositoryStatus(afterStatus.stdout),
+        appliedAt: new Date().toISOString()
+      };
+    } finally {
+      if (tempRoot) {
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    }
   }
 
   async cleanupWorkflowWorkspaces(id: string): Promise<WorkspaceCleanupResult> {
@@ -853,6 +941,13 @@ export class LocalRunner {
   private lastTaskWorkspacePath(run: LocalWorkflowRun): string | undefined {
     return [...run.tasks].reverse().find((task) => task.workspace)?.workspace?.path;
   }
+
+  private async git(command: string, cwd: string): Promise<ShellRunResult> {
+    return this.shell.run({
+      command: `git ${command}`,
+      cwd
+    });
+  }
 }
 
 function isPromiseLike<T>(value: T | Promise<T> | undefined): value is Promise<T> {
@@ -875,6 +970,43 @@ function workspaceCleanupBlockedReason(status: RunnerWorkflowStatus): string {
 
 function isMergeCandidateAllowed(status: RunnerWorkflowStatus): boolean {
   return ["needs_review", "completed"].includes(status);
+}
+
+function mergeCandidateApplyBlockedMessage(
+  reason: MergeCandidateApplyBlockedReason,
+  detail?: string
+): string {
+  if (reason === "repository_path_required") {
+    return "Merge candidate apply requires a target repository path.";
+  }
+
+  if (reason === "empty_patch") {
+    return "Merge candidate has no patch to apply.";
+  }
+
+  if (reason === "repository_not_clean") {
+    return `Target repository must be clean before applying a merge candidate.${
+      detail ? `\n${detail}` : ""
+    }`;
+  }
+
+  return `Git failed to apply the merge candidate patch.${detail ? `\n${detail}` : ""}`;
+}
+
+function quote(value: string): string {
+  return JSON.stringify(value);
+}
+
+function filterOperatorRepositoryStatus(status: string): string {
+  return status
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .filter((line) => !/^\?\?\s+\.mawo(?:[\\/]|$)/.test(line))
+    .join("\n");
+}
+
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
 }
 
 function createCanceledResult(command: string): ShellRunResult {
