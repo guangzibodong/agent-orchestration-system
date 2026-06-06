@@ -301,6 +301,7 @@ describe("requirement delivery loader", () => {
               id: "gate-1",
               title: "Unit tests",
               status: "passed",
+              exitCode: 0,
               stdoutArtifactPath:
                 "C:/mawo/artifacts/workflow-linked/gates/gate-1/stdout.txt"
             }
@@ -364,6 +365,9 @@ describe("requirement delivery loader", () => {
       ],
       gateResults: [
         {
+          command: "npm test",
+          required: true,
+          exitCode: 0,
           id: "gate-1",
           status: "passed",
           title: "Unit tests"

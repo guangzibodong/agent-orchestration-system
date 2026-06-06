@@ -57,6 +57,13 @@ describe("delivery console model", () => {
       workflowRunId: "workflow-123456789",
       workflowRunStatus: "ready",
       workflowRunStatusLabel: "Ready",
+      qualityGateDefinitions: [
+        {
+          id: "gate-1",
+          title: "Unit tests",
+          required: true
+        }
+      ],
       availableActions: ["enqueue"]
     });
 
@@ -157,6 +164,104 @@ describe("delivery console model", () => {
       workflowRunStatus: "ready",
       workflowRunStatusLabel: "Ready"
     });
+  });
+
+  it("keeps quality gate definitions available for evidence panels", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-gates",
+      title: "Review failed gate evidence",
+      repositoryPath: "C:/work/shop",
+      goal: "Show gate commands and blocking rules",
+      acceptanceCriteria: ["Gate command is visible"],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "high",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          agent: "shell",
+          instructions: "Patch checkout"
+        }
+      ],
+      qualityGates: [
+        {
+          id: "gate-unit",
+          title: "Unit tests",
+          command: "npm test",
+          required: true
+        },
+        {
+          id: "gate-format",
+          title: "Format check",
+          command: "npm run format:check",
+          required: false
+        },
+        {
+          command: "npm run smoke:ui",
+          required: true
+        }
+      ],
+      status: "needs_rework",
+      currentWorkflowRunId: "workflow-gates",
+      runLinks: [
+        {
+          workflowRunId: "workflow-gates",
+          status: "gate_failed",
+          linkedAt: "2026-06-06T11:10:00.000Z"
+        }
+      ],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:10:00.000Z"
+    };
+
+    expect(mapRequirementTicketToSummary(requirement).qualityGateDefinitions).toEqual([
+      {
+        id: "gate-unit",
+        title: "Unit tests",
+        command: "npm test",
+        required: true
+      },
+      {
+        id: "gate-format",
+        title: "Format check",
+        command: "npm run format:check",
+        required: false
+      },
+      {
+        id: "gate-3",
+        title: "Gate 3",
+        command: "npm run smoke:ui",
+        required: true
+      }
+    ]);
+
+    expect(
+      mapWorkflowToRequirementSummary({
+        ...baseWorkflow,
+        qualityGates: [
+          {
+            id: "gate-smoke",
+            title: "Smoke tests",
+            command: "npm run smoke:ui",
+            status: "failed",
+            result: {
+              command: "npm run smoke:ui",
+              exitCode: 1,
+              stderr: "RAW_STDERR_SHOULD_NOT_RENDER"
+            }
+          }
+        ]
+      }).qualityGateDefinitions
+    ).toEqual([
+      {
+        id: "gate-smoke",
+        title: "Smoke tests",
+        command: "npm run smoke:ui",
+        required: true
+      }
+    ]);
   });
 
   it("builds repository safety from real workflow repository and workspace evidence", () => {

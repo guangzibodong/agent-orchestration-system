@@ -239,7 +239,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(evidence).toContainText(
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
-    await expect(evidence).toContainText("Evidence visible passed");
+    await expect(evidence).toContainText(
+      "Evidence visible required passed: npm test",
+    );
     await expect(evidence).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(evidence).not.toContainText("diff --git");
 
@@ -300,6 +302,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       onMutatingRequest: ({ method, pathname }) => {
         mutatingRequests.push(`${method} ${pathname}`);
       },
+      reports: {
+        "requirement-gate-failed": gateFailedEvidenceReport,
+      },
+      requirements: gateFailedRequirementTickets,
     });
 
     await page.goto("/");
@@ -315,6 +321,23 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(evidence).toContainText(
       "Required gate failed; merge approval is blocked while evidence remains inspectable.",
     );
+    await expect(evidence).toContainText(
+      "Copy checks required failed (exit 1): npm run copy:check",
+    );
+    await expect(evidence).not.toContainText("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
+    await expect(evidence).not.toContainText("RAW_GATE_STDERR_SHOULD_NOT_RENDER");
+
+    const blockedDrawer = evidence.getByLabel("Read-only evidence links");
+    await blockedDrawer.getByText("Evidence links", { exact: true }).click();
+    await expect(
+      blockedDrawer.getByRole("link", { name: "Copy checks stdout" }),
+    ).toBeVisible();
+    await expect(
+      blockedDrawer.getByRole("link", { name: "Copy checks stderr" }),
+    ).toBeVisible();
+    await expect(
+      evidence.getByRole("button", { name: /apply candidate/i }),
+    ).toHaveCount(0);
 
     await page.locator(".requirementDetailDisclosure > summary").click();
     const detail = page.locator(".requirementDetailShell");
@@ -1160,6 +1183,47 @@ const mixedWorkflows: WorkflowRun[] = [
   },
 ];
 
+const gateFailedRequirementTickets: RequirementDeliveryTicket[] = [
+  {
+    id: "requirement-gate-failed",
+    title: "Update billing copy",
+    repositoryPath: "C:/work/shop",
+    goal: "Make billing copy changes reviewable after required gates.",
+    acceptanceCriteria: ["Failed required gate blocks merge approval."],
+    constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+    nonGoals: ["Automatic PR creation"],
+    riskLevel: "high",
+    contextPaths: ["apps/web/src/app/page.tsx"],
+    tasks: [
+      {
+        id: "task-copy",
+        title: "Patch billing copy",
+        agent: "shell",
+        instructions: "Patch billing copy.",
+      },
+    ],
+    qualityGates: [
+      {
+        id: "gate-1",
+        title: "Copy checks",
+        command: "npm run copy:check",
+        required: true,
+      },
+    ],
+    status: "needs_rework",
+    currentWorkflowRunId: "workflow-gate-failed",
+    runLinks: [
+      {
+        workflowRunId: "workflow-gate-failed",
+        status: "gate_failed",
+        linkedAt: "2026-06-06T10:00:00.000Z",
+      },
+    ],
+    createdAt: "2026-06-06T09:55:00.000Z",
+    updatedAt: "2026-06-06T10:00:00.000Z",
+  },
+];
+
 const mobileStressWorkflows: WorkflowRun[] = [
   {
     ...baseWorkflow,
@@ -1358,6 +1422,36 @@ const requirementEvidenceReport = {
       status: "passed",
       stdoutArtifactPath:
         "C:/mawo/artifacts/workflow-needs-review/gates/gate-view/stdout.txt",
+    },
+  ],
+};
+
+const gateFailedEvidenceReport = {
+  workflowId: "workflow-gate-failed",
+  reportArtifactPath: "C:/mawo/artifacts/workflow-gate-failed/report.json",
+  summary: "1/1 tasks passed; 0/1 gates passed",
+  recommendation: "fix_failed_gates",
+  failedTasks: [],
+  failedGates: ["gate-1"],
+  taskResults: [
+    {
+      id: "task-copy",
+      title: "Patch billing copy",
+      status: "passed",
+    },
+  ],
+  gateResults: [
+    {
+      id: "gate-1",
+      title: "Copy checks",
+      status: "failed",
+      exitCode: 1,
+      stdout: "RAW_GATE_STDOUT_SHOULD_NOT_RENDER",
+      stderr: "RAW_GATE_STDERR_SHOULD_NOT_RENDER",
+      stdoutArtifactPath:
+        "C:/mawo/artifacts/workflow-gate-failed/gates/gate-1/stdout.txt",
+      stderrArtifactPath:
+        "C:/mawo/artifacts/workflow-gate-failed/gates/gate-1/stderr.txt",
     },
   ],
 };

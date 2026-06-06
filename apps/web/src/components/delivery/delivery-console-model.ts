@@ -42,6 +42,13 @@ export type RequirementArtifactLink = {
   path?: string;
 };
 
+export type RequirementQualityGateDefinition = {
+  id: string;
+  title: string;
+  command?: string;
+  required: boolean;
+};
+
 export type RequirementReviewEvidence = {
   evidenceSourceWorkflowId?: string;
   reportSummary?: string;
@@ -52,6 +59,8 @@ export type RequirementReviewEvidence = {
     id: string;
     title: string;
     status: string;
+    command?: string;
+    required: boolean;
     exitCode?: number;
   }>;
   mergeCandidate?: {
@@ -84,6 +93,7 @@ export type RequirementSummary = {
   workflowRunStatusLabel: string;
   reviewDecision?: "approved" | "rejected";
   artifactLinks?: RequirementArtifactLink[];
+  qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
   availableActions: RequirementLifecycleAction[];
 };
@@ -474,6 +484,12 @@ export function mapWorkflowToRequirementSummary(
     workflowRunId: workflow.id,
     workflowRunStatus: workflow.status,
     workflowRunStatusLabel,
+    qualityGateDefinitions: workflow.qualityGates.map((gate) => ({
+      id: gate.id,
+      title: gate.title,
+      ...(gate.command ? { command: gate.command } : {}),
+      required: true
+    })),
     ...(workflow.review?.decision
       ? { reviewDecision: workflow.review.decision }
       : {}),
@@ -526,6 +542,12 @@ export function mapRequirementTicketToSummary(
     workflowRunStatusLabel: workflowStatus
       ? formatWorkflowStatus(workflowStatus)
       : "No workflow run linked",
+    qualityGateDefinitions: requirement.qualityGates.map((gate, index) => ({
+      id: gate.id ?? `gate-${index + 1}`,
+      title: gate.title ?? `Gate ${index + 1}`,
+      command: gate.command,
+      required: gate.required
+    })),
     ...(workflow?.review?.decision
       ? { reviewDecision: workflow.review.decision }
       : {}),

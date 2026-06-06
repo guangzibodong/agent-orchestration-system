@@ -39,7 +39,10 @@ const requirement: RequirementSummary = {
       {
         id: "gate-1",
         title: "Unit tests",
-        status: "passed"
+        status: "passed",
+        command: "npm test",
+        required: true,
+        exitCode: 0
       }
     ],
     mergeCandidate: {
@@ -125,6 +128,7 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("medium risk");
     expect(html).toContain("2 tasks / 2 gates");
     expect(html).toContain("Quality gates passed");
+    expect(html).toContain("Unit tests required passed (exit 0): npm test");
     expect(html).toContain("Merge candidate ready with 1 changed file");
     expect(html).toContain("apps/web/src/app/page.tsx");
     expect(html).toContain(

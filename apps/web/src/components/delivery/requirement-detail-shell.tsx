@@ -430,8 +430,8 @@ function buildSectionRows(
       return [
         { label: "Required gate status", value: buildGateSummary(requirement) },
         { label: "Blocking rule", value: buildGateBlockingRule(requirement) },
-        { label: "Command evidence", value: "Linked through artifacts when reported" },
-        { label: "Exit code", value: "Summarized in report artifact when available" }
+        { label: "Command evidence", value: buildGateEvidenceDetail(requirement) },
+        { label: "Exit code", value: buildGateExitDetail(requirement) }
       ];
     case "Review":
       return [
@@ -516,6 +516,41 @@ function buildGateBlockingRule(requirement: RequirementSummary): string {
   }
 
   return "Required gates must pass before merge approval";
+}
+
+function buildGateEvidenceDetail(requirement: RequirementSummary): string {
+  const gateResults = requirement.reviewEvidence?.gateResults ?? [];
+
+  if (!gateResults.length) {
+    return "Linked through artifacts when reported";
+  }
+
+  return gateResults.map(formatGateEvidenceDetail).join(", ");
+}
+
+function buildGateExitDetail(requirement: RequirementSummary): string {
+  const gatesWithExit = (requirement.reviewEvidence?.gateResults ?? []).filter(
+    (gate) => gate.exitCode !== undefined
+  );
+
+  if (!gatesWithExit.length) {
+    return "Summarized in report artifact when available";
+  }
+
+  return gatesWithExit
+    .map((gate) => `${gate.title} exit ${gate.exitCode}`)
+    .join(", ");
+}
+
+function formatGateEvidenceDetail(
+  gate: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"][number]
+): string {
+  const requirementLabel = gate.required ? "required" : "optional";
+  const exitLabel =
+    gate.exitCode === undefined ? "" : ` (exit ${gate.exitCode})`;
+  const commandLabel = gate.command ? `: ${gate.command}` : "";
+
+  return `${gate.title} ${requirementLabel} ${gate.status}${exitLabel}${commandLabel}`;
 }
 
 function buildMergeCandidateStatus(requirement: RequirementSummary): string {

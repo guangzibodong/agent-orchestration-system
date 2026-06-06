@@ -272,6 +272,9 @@ function buildRequirementReviewEvidence(
 ): RequirementReviewEvidence {
   const evidenceSourceWorkflowId =
     mergeCandidate?.workflowId ?? report?.workflowId ?? requirement.workflowRunId;
+  const gateDefinitionsById = new Map(
+    (requirement.qualityGateDefinitions ?? []).map((gate) => [gate.id, gate])
+  );
   const patchArtifactPaths = distinctStrings([
     ...(report?.taskResults.map((task) => task.patchArtifactPath) ?? []),
     mergeCandidate?.patchArtifactPath
@@ -292,12 +295,18 @@ function buildRequirementReviewEvidence(
     changedFiles,
     patchArtifactPaths,
     gateResults:
-      report?.gateResults.map((gate) => ({
-        id: gate.id,
-        title: gate.title,
-        status: gate.status,
-        ...(gate.exitCode === undefined ? {} : { exitCode: gate.exitCode })
-      })) ?? [],
+      report?.gateResults.map((gate) => {
+        const definition = gateDefinitionsById.get(gate.id);
+
+        return {
+          id: gate.id,
+          title: gate.title,
+          status: gate.status,
+          ...(definition?.command ? { command: definition.command } : {}),
+          required: definition?.required ?? true,
+          ...(gate.exitCode === undefined ? {} : { exitCode: gate.exitCode })
+        };
+      }) ?? [],
     ...(mergeCandidate
       ? {
           mergeCandidate: {

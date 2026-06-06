@@ -44,6 +44,9 @@ const reviewReadyRequirement: RequirementSummary = {
         id: "gate-1",
         title: "Unit tests",
         status: "passed",
+        command: "npm test",
+        required: true,
+        exitCode: 0,
       },
     ],
     mergeCandidate: {
@@ -85,7 +88,7 @@ describe("RequirementEvidencePanel display model", () => {
         },
         {
           label: "Gate evidence",
-          value: "Unit tests passed",
+          value: "Unit tests required passed (exit 0): npm test",
         },
         {
           label: "Evidence source",

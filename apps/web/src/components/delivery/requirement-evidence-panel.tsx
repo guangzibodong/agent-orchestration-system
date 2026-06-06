@@ -293,11 +293,14 @@ function formatGateEvidence(
   gates: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"],
 ): string {
   return gates
-    .map((gate) =>
-      gate.exitCode === undefined
-        ? `${gate.title} ${gate.status}`
-        : `${gate.title} ${gate.status} (exit ${gate.exitCode})`,
-    )
+    .map((gate) => {
+      const requirementLabel = gate.required ? "required" : "optional";
+      const exitLabel =
+        gate.exitCode === undefined ? "" : ` (exit ${gate.exitCode})`;
+      const commandLabel = gate.command ? `: ${gate.command}` : "";
+
+      return `${gate.title} ${requirementLabel} ${gate.status}${exitLabel}${commandLabel}`;
+    })
     .join(", ");
 }
 
