@@ -191,6 +191,7 @@ describe("WorkflowJobQueue", () => {
       jobStore: new FileJobStore({ stateFile })
     });
     const resumed = await queue.waitForJob("queued-job", 5000);
+    await queue.flush();
 
     expect(resumed.status).toBe("completed");
     expect(runner.getWorkflow(run.id)?.status).toBe("needs_review");
