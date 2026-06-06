@@ -407,6 +407,31 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       })) ?? requirement
     );
   };
+  const syncRequirementsForCanceledJob = async (
+    job: WorkflowJob,
+    workflow: WorkflowRun | undefined,
+  ): Promise<void> => {
+    if (!workflow || workflow.status !== "ready") {
+      return;
+    }
+
+    const requirements = await requirementStore.list();
+    await Promise.all(
+      requirements
+        .filter(
+          (requirement) =>
+            requirement.currentWorkflowRunId === job.workflowId &&
+            requirement.status === "running",
+        )
+        .map((requirement) =>
+          requirementStore.syncWorkflowRunStatus(requirement.id, {
+            workflowRunId: workflow.id,
+            workflowStatus: workflow.status,
+            requirementStatus: "ready_to_run",
+          }),
+        ),
+    );
+  };
 
   app.register(cors, {
     origin: true,
@@ -1740,6 +1765,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
     await queue.flush();
     const workflow = activeRunner.getWorkflow(job.workflowId);
+    await syncRequirementsForCanceledJob(job, workflow);
     await appendAuditEvent({
       type: "job.canceled",
       actor: "operator",

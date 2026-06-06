@@ -4548,6 +4548,108 @@ describe("runner API", () => {
     expect(workflowResponse.json().status).toBe("ready");
   });
 
+  it("returns queued requirement jobs to ready_to_run when canceled before execution", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-cancel-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const { prismaClient } = createMutablePrismaStateClient();
+    const runner = new LocalRunner();
+    const runWorkflow = vi
+      .spyOn(runner, "runWorkflow")
+      .mockImplementation(
+        async (workflowId) => runner.getWorkflow(workflowId)!,
+      );
+    const app = buildApp(runner, {
+      demoRoot,
+      env: {
+        MAWO_STATE_BACKEND: "postgres",
+        MAWO_QUEUE_BACKEND: "postgres",
+        DATABASE_URL: "postgresql://mawo:secret@localhost:5432/mawo",
+      },
+      prismaClient,
+      repositorySafetyInspector: async ({ repository }) => ({
+        repositoryId: repository.id,
+        path: repository.path,
+        clean: true,
+        dirty: false,
+        allowedRoot: true,
+        noAutoMerge: true,
+        manualApplyPolicy: "Manual git apply only",
+      }),
+    });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Cancel queued requirement",
+        repositoryPath: repoPath,
+        goal: "Cancel a queued requirement without leaving stale running state",
+        acceptanceCriteria: ["Canceled queued jobs return to ready to run"],
+        tasks: [
+          {
+            id: "task-1",
+            title: "Patch README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','cancel\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "gate-1",
+            title: "Unit tests",
+            command: `${node} -e "process.exit(0)"`,
+            required: true,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    expect(enqueueResponse.statusCode).toBe(202);
+    const enqueueBody = enqueueResponse.json();
+
+    const cancelResponse = await app.inject({
+      method: "POST",
+      url: `/jobs/${enqueueBody.job.id}/cancel`,
+    });
+    const requirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(enqueueBody.requirement).toMatchObject({
+      id: requirement.id,
+      status: "running",
+    });
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(cancelResponse.json()).toMatchObject({
+      status: "canceled",
+      workflowId: enqueueBody.workflow.id,
+    });
+    expect(requirementResponse.json()).toMatchObject({
+      id: requirement.id,
+      status: "ready_to_run",
+      currentWorkflowRunId: enqueueBody.workflow.id,
+      runLinks: [
+        expect.objectContaining({
+          workflowRunId: enqueueBody.workflow.id,
+          status: "ready",
+        }),
+      ],
+    });
+  });
+
   it("approves a review-ready workflow", async () => {
     const app = buildApp();
     const createResponse = await app.inject({
