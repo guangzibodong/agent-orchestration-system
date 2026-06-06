@@ -133,8 +133,6 @@ export function RequirementDeliveryConsoleClient() {
       delete nextActiveJobsByRequirementId[requirementId];
     }
 
-    setJobStatusByRequirementId(nextJobStatusByRequirementId);
-    setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
     const nextWorkflowOverridesById = lifecycleResult.workflow
       ? {
           ...workflowOverridesById,
@@ -157,6 +155,8 @@ export function RequirementDeliveryConsoleClient() {
     setModel(nextModel);
     setLoadState("ready");
     setMessage(buildLifecycleMessage(action, lifecycleResult.requirement));
+    setJobStatusByRequirementId(nextJobStatusByRequirementId);
+    setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
   }
 
   async function handleRequirementReviewAction(
@@ -213,6 +213,7 @@ export function RequirementDeliveryConsoleClient() {
       inFlight = true;
       const nextActiveJobsByRequirementId = { ...activeJobsByRequirementId };
       const nextJobStatusByRequirementId = { ...jobStatusByRequirementId };
+      const settledRequirementIds: string[] = [];
       let shouldReloadModel = false;
       let shouldUpdateJobState = false;
 
@@ -237,6 +238,7 @@ export function RequirementDeliveryConsoleClient() {
 
             delete nextActiveJobsByRequirementId[requirementId];
             delete nextJobStatusByRequirementId[requirementId];
+            settledRequirementIds.push(requirementId);
             shouldUpdateJobState = true;
             shouldReloadModel = true;
           })
@@ -244,11 +246,6 @@ export function RequirementDeliveryConsoleClient() {
 
         if (canceled) {
           return;
-        }
-
-        if (shouldUpdateJobState) {
-          setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
-          setJobStatusByRequirementId(nextJobStatusByRequirementId);
         }
 
         if (shouldReloadModel) {
@@ -267,7 +264,14 @@ export function RequirementDeliveryConsoleClient() {
 
           setModel(nextModel);
           setLoadState("ready");
-          setMessage("Requirement execution settled; evidence refreshed");
+          setMessage(
+            buildSettledExecutionMessage(settledRequirementIds, nextModel)
+          );
+        }
+
+        if (shouldUpdateJobState) {
+          setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
+          setJobStatusByRequirementId(nextJobStatusByRequirementId);
         }
       } catch (error: unknown) {
         if (canceled) {
@@ -399,6 +403,27 @@ class ApiResponseError extends Error {
     super(formatApiErrorMessage(status, path, body));
     this.name = "ApiResponseError";
   }
+}
+
+function buildSettledExecutionMessage(
+  requirementIds: string[],
+  model: DeliveryConsoleModel
+): string {
+  const titles = [
+    ...new Set(
+      requirementIds.flatMap((requirementId) => {
+        const title = model.requirements.find(
+          (requirement) => requirement.id === requirementId
+        )?.title;
+
+        return title ? [title] : [];
+      })
+    )
+  ];
+
+  return titles.length
+    ? `Requirement execution settled; evidence refreshed: ${titles.join(", ")}`
+    : "Requirement execution settled; evidence refreshed";
 }
 
 function parseRequirementLifecycleResult(value: unknown): {

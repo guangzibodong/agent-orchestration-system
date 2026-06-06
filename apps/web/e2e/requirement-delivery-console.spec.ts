@@ -1136,6 +1136,276 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toBeVisible();
   });
 
+  test("new requirement can continue into review-ready evidence in one focused journey", async ({
+    page,
+  }) => {
+    const workflows: WorkflowRun[] = [];
+    const requirements: RequirementDeliveryTicket[] = [];
+    const reports: Record<string, unknown> = {};
+    const mergeCandidates: Record<string, unknown> = {};
+    const actions: string[] = [];
+    let jobPolls = 0;
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, workflows, {
+      mergeCandidates,
+      reports,
+      repositorySafetyByRepositoryId: {
+        "repo-journey": {
+          repositoryId: "repo-journey",
+          path: "C:/work/journey",
+          defaultBranch: "main",
+          currentBranch: "feature/checkout-journey",
+          headShortSha: "fed9876",
+          clean: true,
+          dirty: false,
+          allowedRoot: true,
+          noAutoMerge: true,
+          manualApplyPolicy:
+            "Manual review is required; MAWO never automatically merges repository changes.",
+        },
+      },
+      requirements,
+      onRequirementCreate: () => {
+        const createdRequirement: RequirementDeliveryTicket = {
+          id: "requirement-created-journey",
+          title: "Journey checkout requirement",
+          repositoryId: "repo-journey",
+          goal: "Run the created requirement through review-ready evidence.",
+          acceptanceCriteria: [
+            "Operator confirms the plan.",
+            "Queued job refreshes into review evidence.",
+          ],
+          constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+          nonGoals: ["Automatic PR creation"],
+          riskLevel: "medium",
+          contextPaths: ["apps/web/src/app/page.tsx"],
+          tasks: [
+            {
+              id: "task-journey",
+              title: "Patch checkout copy",
+              agent: "shell",
+              command: "npm run patch:checkout",
+            },
+          ],
+          qualityGates: [
+            {
+              id: "gate-journey",
+              title: "Unit tests",
+              command: "npm test",
+              required: true,
+            },
+          ],
+          status: "plan_review",
+          runLinks: [],
+          createdAt: "2026-06-06T12:00:00.000Z",
+          updatedAt: "2026-06-06T12:00:00.000Z",
+        };
+
+        requirements.push(createdRequirement);
+        return createdRequirement;
+      },
+      onRequirementAction: ({ action, id }) => {
+        actions.push(`${action}:${id}`);
+
+        if (id === "requirement-created-journey" && action === "confirm-plan") {
+          return updateRequirement(requirements, id, {
+            status: "ready_to_run",
+            updatedAt: "2026-06-06T12:01:00.000Z",
+          });
+        }
+
+        if (id === "requirement-created-journey" && action === "enqueue") {
+          const workflow: WorkflowRun = {
+            ...baseWorkflow,
+            id: "workflow-created-journey",
+            goal: "Journey checkout requirement",
+            repositoryPath: "C:/work/journey",
+            status: "ready",
+            createdAt: "2026-06-06T12:02:00.000Z",
+            updatedAt: "2026-06-06T12:02:00.000Z",
+          };
+          workflows.push(workflow);
+
+          return {
+            requirement: updateRequirement(requirements, id, {
+              status: "running",
+              currentWorkflowRunId: "workflow-created-journey",
+              runLinks: [
+                {
+                  workflowRunId: "workflow-created-journey",
+                  status: "ready",
+                  linkedAt: "2026-06-06T12:02:00.000Z",
+                },
+              ],
+              updatedAt: "2026-06-06T12:02:00.000Z",
+            }),
+            workflow,
+            job: {
+              id: "job-created-journey",
+              workflowId: "workflow-created-journey",
+              status: "queued",
+              createdAt: "2026-06-06T12:02:00.000Z",
+              updatedAt: "2026-06-06T12:02:00.000Z",
+            },
+          };
+        }
+
+        throw new Error(`Unexpected requirement action ${action}:${id}`);
+      },
+      onJobRequest: ({ id }) => {
+        if (id !== "job-created-journey") {
+          throw new Error(`Unexpected job poll ${id}`);
+        }
+
+        jobPolls += 1;
+
+        if (jobPolls < 2) {
+          return {
+            id,
+            workflowId: "workflow-created-journey",
+            status: "running",
+            createdAt: "2026-06-06T12:02:00.000Z",
+            updatedAt: "2026-06-06T12:02:01.000Z",
+          };
+        }
+
+        workflows[0] = {
+          ...workflows[0]!,
+          status: "needs_review",
+          updatedAt: "2026-06-06T12:03:00.000Z",
+        };
+        updateRequirement(requirements, "requirement-created-journey", {
+          status: "needs_review",
+          currentWorkflowRunId: "workflow-created-journey",
+          runLinks: [
+            {
+              workflowRunId: "workflow-created-journey",
+              status: "needs_review",
+              linkedAt: "2026-06-06T12:03:00.000Z",
+            },
+          ],
+          updatedAt: "2026-06-06T12:03:00.000Z",
+        });
+        reports["requirement-created-journey"] = {
+          ...requirementEvidenceReport,
+          workflowId: "workflow-created-journey",
+          reportArtifactPath:
+            "C:/mawo/artifacts/workflow-created-journey/report.json",
+          summary: "Journey task passed; required gate passed",
+        };
+        mergeCandidates["requirement-created-journey"] = {
+          ...requirementMergeCandidate,
+          workflowId: "workflow-created-journey",
+          summary: "Journey merge candidate ready with 2 changed files",
+          sourceBranches: ["mawo/workflow-created-journey/task-journey"],
+          patchArtifactPath:
+            "C:/mawo/artifacts/workflow-created-journey/merge-candidate.patch",
+          manifestArtifactPath:
+            "C:/mawo/artifacts/workflow-created-journey/merge-candidate.json",
+          applyCommand:
+            'git -C "C:/work/journey" apply "C:/mawo/artifacts/workflow-created-journey/merge-candidate.patch"',
+          createdAt: "2026-06-06T12:03:00.000Z",
+        };
+
+        return {
+          id,
+          workflowId: "workflow-created-journey",
+          status: "completed",
+          createdAt: "2026-06-06T12:02:00.000Z",
+          updatedAt: "2026-06-06T12:03:00.000Z",
+          finishedAt: "2026-06-06T12:03:00.000Z",
+        };
+      },
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "New Requirement" }).click();
+
+    const flow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await fillField(flow, /title|requirement title/i, "Journey checkout requirement");
+    await fillField(flow, /repository id/i, "repo-journey");
+    await fillField(
+      flow,
+      /goal/i,
+      "Run the created requirement through review-ready evidence.",
+    );
+    await fillField(
+      flow,
+      /acceptance criteria/i,
+      "Operator confirms the plan.\nQueued job refreshes into review evidence.",
+    );
+    await fillField(flow, /constraints/i, "No MAWO auto-merge.");
+    await fillField(flow, /non-?goals/i, "Automatic PR creation.");
+    await fillField(flow, /context paths/i, "apps/web/src/app/page.tsx");
+    await fillField(flow, /task 1 title/i, "Patch checkout copy");
+    await fillField(flow, /task 1 command/i, "npm run patch:checkout");
+    await fillField(flow, /gate 1 command/i, "npm test");
+
+    await flow
+      .getByRole("button", {
+        name: /create requirement|save requirement|create/i,
+      })
+      .click();
+
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Journey checkout requirement" });
+    const focusPanel = page.locator(".deliveryFocusPanel");
+    await expect(queueItem).toContainText("Plan review");
+    await expect(
+      focusPanel.getByRole("heading", {
+        name: "Journey checkout requirement",
+      }),
+    ).toBeVisible();
+
+    await queueItem
+      .getByRole("button", { exact: true, name: "Confirm plan" })
+      .click();
+    await expect(queueItem).toContainText("Ready to run");
+    await expect(page.getByLabel("Stage Stepper")).toContainText("Run");
+
+    await queueItem
+      .getByRole("button", { exact: true, name: "Enqueue" })
+      .click();
+    await expect(queueItem).toContainText("Running");
+    await expect(queueItem).toContainText("Queued");
+    await expect
+      .poll(() => jobPolls, {
+        message: "wait for the created requirement job to poll",
+      })
+      .toBeGreaterThan(0);
+
+    await expect(queueItem).toContainText("Needs review");
+    await expect(queueItem).toContainText("Review merge candidate");
+    await expect(page.getByLabel("Workflow sync")).toContainText(
+      "Requirement execution settled; evidence refreshed: Journey checkout requirement",
+    );
+    await expect(page.getByLabel("Stage Stepper")).toContainText("Review");
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Review-ready merge candidate",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Journey merge candidate ready with 2 changed files",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      'git -C "C:/work/journey" apply "C:/mawo/artifacts/workflow-created-journey/merge-candidate.patch"',
+    );
+    await expect(focusPanel).not.toContainText("Apply Candidate");
+    expect(actions).toEqual([
+      "confirm-plan:requirement-created-journey",
+      "enqueue:requirement-created-journey",
+    ]);
+  });
+
   test("operator can confirm, enqueue, and retry requirement lifecycle actions", async ({
     page,
   }) => {
