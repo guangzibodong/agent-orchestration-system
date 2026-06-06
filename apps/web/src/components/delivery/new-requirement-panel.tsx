@@ -16,7 +16,7 @@ type NewRequirementPanelProps = {
 
 const taskSlots = [1, 2, 3, 4, 5];
 const gateSlots = [1, 2, 3];
-const defaultGateCommands = ["delivery vitest", "web typecheck", ""];
+const defaultGateCommands = ["npm test", "npm run typecheck", ""];
 
 export function NewRequirementPanel({
   viewerMode = false,

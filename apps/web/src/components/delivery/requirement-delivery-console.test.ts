@@ -363,6 +363,10 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Gate 2 command");
     expect(html).toContain("Gate 2 requirement");
     expect(html).toContain("Gate 2 timeout");
+    expect(html).toContain('value="npm test"');
+    expect(html).toContain('value="npm run typecheck"');
+    expect(html).not.toContain("delivery vitest");
+    expect(html).not.toContain("web typecheck");
     expect(html).toContain("Create requirement draft");
     expect(html).not.toContain("raw JSON");
   });
