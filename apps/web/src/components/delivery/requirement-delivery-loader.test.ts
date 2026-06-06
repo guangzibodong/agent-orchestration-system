@@ -29,7 +29,8 @@ describe("requirement delivery loader", () => {
     expect(requests).toEqual([
       "/workflows",
       "/requirements",
-      "/workflows/workflow-review/report"
+      "/workflows/workflow-review/report",
+      "/workflows/workflow-review/merge-candidate"
     ]);
     expect(model.requirements).toHaveLength(1);
     expect(model.requirements[0]).toMatchObject({
@@ -208,7 +209,7 @@ describe("requirement delivery loader", () => {
     expect(model.requirements[0]?.artifactLinks).toBeUndefined();
   });
 
-  it("loads report artifact paths into read-only drawer links for linked requirements", async () => {
+  it("loads report and merge candidate evidence into readable review summary", async () => {
     const requests: string[] = [];
 
     const model = await loadRequirementDeliveryModel(async (path) => {
@@ -307,10 +308,68 @@ describe("requirement delivery loader", () => {
         };
       }
 
+      if (path === "/requirements/requirement-linked/merge-candidate") {
+        return {
+          workflowId: "workflow-linked",
+          status: "ready",
+          summary: "Merge candidate ready with 2 changed files",
+          sourceBranches: ["mawo/workflow-linked/task-1"],
+          patch: [
+            "diff --git a/apps/web/src/app/page.tsx b/apps/web/src/app/page.tsx",
+            "index 1111111..2222222 100644",
+            "--- a/apps/web/src/app/page.tsx",
+            "+++ b/apps/web/src/app/page.tsx",
+            "@@ -1 +1 @@",
+            "-old",
+            "+new",
+            "diff --git a/packages/shared/src/index.ts b/packages/shared/src/index.ts",
+            "index 3333333..4444444 100644",
+            "--- a/packages/shared/src/index.ts",
+            "+++ b/packages/shared/src/index.ts"
+          ].join("\n"),
+          patchArtifactPath:
+            "C:/mawo/artifacts/workflow-linked/merge-candidate.patch",
+          manifestArtifactPath:
+            "C:/mawo/artifacts/workflow-linked/merge-candidate.json",
+          applyCommand:
+            'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-linked/merge-candidate.patch"',
+          createdAt: "2026-06-06T11:06:00.000Z"
+        };
+      }
+
       return [];
     });
 
     expect(requests).toContain("/requirements/requirement-linked/report");
+    expect(requests).toContain(
+      "/requirements/requirement-linked/merge-candidate"
+    );
+    expect(model.requirements[0]?.reviewEvidence).toMatchObject({
+      reportSummary: "1/1 tasks passed; 1/1 gates passed",
+      mergeCandidate: {
+        status: "ready",
+        summary: "Merge candidate ready with 2 changed files",
+        patchArtifactPath:
+          "C:/mawo/artifacts/workflow-linked/merge-candidate.patch",
+        applyCommand:
+          'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-linked/merge-candidate.patch"'
+      },
+      changedFiles: [
+        "apps/web/src/app/page.tsx",
+        "packages/shared/src/index.ts"
+      ],
+      patchArtifactPaths: [
+        "C:/mawo/artifacts/workflow-linked/tasks/task-1/patch.diff",
+        "C:/mawo/artifacts/workflow-linked/merge-candidate.patch"
+      ],
+      gateResults: [
+        {
+          id: "gate-1",
+          status: "passed",
+          title: "Unit tests"
+        }
+      ]
+    });
     expect(model.requirements[0]?.artifactLinks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -342,6 +401,18 @@ describe("requirement delivery loader", () => {
             "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Fgates%2Fgate-1%2Fstdout.txt",
           kind: "stdout",
           label: "Unit tests stdout"
+        }),
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Fmerge-candidate.patch",
+          kind: "patch",
+          label: "Merge candidate patch artifact"
+        }),
+        expect.objectContaining({
+          href:
+            "/workflows/workflow-linked/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-linked%2Fmerge-candidate.json",
+          kind: "report",
+          label: "Merge candidate manifest"
         })
       ])
     );

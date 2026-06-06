@@ -213,9 +213,10 @@ function RequirementReviewAcceptance({
   const patchPath = artifacts.find(
     (artifact) => artifact.kind === "patch" && artifact.path,
   )?.path;
-  const applyCommand = patchPath
+  const applyCommand = requirement?.reviewEvidence?.mergeCandidate?.applyCommand
+    ?? (patchPath
     ? `git apply "${patchPath}"`
-    : "git apply <merge-candidate.patch>";
+    : "git apply <merge-candidate.patch>");
 
   return (
     <div className="requirementReviewAcceptance">
@@ -435,15 +436,15 @@ function buildSectionRows(
     case "Review":
       return [
         { label: "Delivery summary", value: buildReviewSummary(requirement) },
-        { label: "Changed files", value: "Changed file summary appears in report evidence" },
-        { label: "Patch artifacts", value: buildMergeCandidateStatus(requirement) },
+        { label: "Changed files", value: buildReviewChangedFiles(requirement) },
+        { label: "Patch artifacts", value: buildReviewPatchArtifacts(requirement) },
         { label: "Risks", value: `${requirement.riskLevel} risk` },
         { label: "Merge candidate", value: requirement.repositorySafety.mergePolicyLabel }
       ];
     case "Value Report":
       return [
         { label: "Goal status", value: buildValueStatus(requirement) },
-        { label: "What changed", value: "Reported in delivery report evidence" },
+        { label: "What changed", value: buildReviewChangedFiles(requirement) },
         { label: "Time spent", value: "Pending run evidence" },
         { label: "Gates run", value: buildGateSummary(requirement) },
         { label: "Residual risks", value: `${requirement.riskLevel} risk` },
@@ -533,6 +534,14 @@ function buildMergeCandidateStatus(requirement: RequirementSummary): string {
 }
 
 function buildReviewSummary(requirement: RequirementSummary): string {
+  if (requirement.reviewEvidence?.mergeCandidate?.summary) {
+    return requirement.reviewEvidence.mergeCandidate.summary;
+  }
+
+  if (requirement.reviewEvidence?.reportSummary) {
+    return requirement.reviewEvidence.reportSummary;
+  }
+
   if (requirement.executionStatus === "needs_review") {
     return "Review evidence is ready for a human decision";
   }
@@ -546,6 +555,24 @@ function buildReviewSummary(requirement: RequirementSummary): string {
   }
 
   return "Review evidence is pending";
+}
+
+function buildReviewChangedFiles(requirement: RequirementSummary): string {
+  const changedFiles = requirement.reviewEvidence?.changedFiles ?? [];
+
+  if (!changedFiles.length) {
+    return "Changed file summary appears in report evidence";
+  }
+
+  return formatDetailList(changedFiles);
+}
+
+function buildReviewPatchArtifacts(requirement: RequirementSummary): string {
+  const patchPath =
+    requirement.reviewEvidence?.mergeCandidate?.patchArtifactPath ??
+    requirement.reviewEvidence?.patchArtifactPaths[0];
+
+  return patchPath ?? buildMergeCandidateStatus(requirement);
 }
 
 function buildReviewDecisionState(
@@ -594,4 +621,12 @@ function buildValueStatus(requirement: RequirementSummary): string {
   }
 
   return "Goal outcome pending";
+}
+
+function formatDetailList(values: string[]): string {
+  if (values.length <= 3) {
+    return values.join(", ");
+  }
+
+  return `${values.slice(0, 3).join(", ")} and ${values.length - 3} more`;
 }

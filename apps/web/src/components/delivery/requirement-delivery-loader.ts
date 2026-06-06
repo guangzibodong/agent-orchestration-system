@@ -1,8 +1,13 @@
-import { requirementDeliveryTicketSchema, runReportSchema } from "@mawo/shared";
-import type { RunReport, WorkflowRun } from "@mawo/shared";
+import {
+  mergeCandidateSchema,
+  requirementDeliveryTicketSchema,
+  runReportSchema
+} from "@mawo/shared";
+import type { MergeCandidate, RunReport, WorkflowRun } from "@mawo/shared";
 import type {
   DeliveryConsoleModel,
   RequirementArtifactLink,
+  RequirementReviewEvidence,
   RequirementSummary
 } from "./delivery-console-model";
 import {
@@ -113,11 +118,15 @@ async function loadRequirementArtifactEvidence(
 ): Promise<DeliveryConsoleModel> {
   const evidenceResults = await Promise.allSettled(
     model.requirements.map(async (requirement) => ({
-      artifactLinks: await loadRequirementReportArtifactLinks(api, requirement),
+      ...(await loadRequirementReviewEvidence(api, requirement)),
       id: requirement.id
     }))
   );
   const linksByRequirementId = new Map<string, RequirementArtifactLink[]>();
+  const reviewEvidenceByRequirementId = new Map<
+    string,
+    RequirementReviewEvidence
+  >();
 
   for (const result of evidenceResults) {
     if (
@@ -126,9 +135,16 @@ async function loadRequirementArtifactEvidence(
     ) {
       linksByRequirementId.set(result.value.id, result.value.artifactLinks);
     }
+
+    if (result.status === "fulfilled" && result.value.reviewEvidence) {
+      reviewEvidenceByRequirementId.set(
+        result.value.id,
+        result.value.reviewEvidence
+      );
+    }
   }
 
-  if (!linksByRequirementId.size) {
+  if (!linksByRequirementId.size && !reviewEvidenceByRequirementId.size) {
     return model;
   }
 
@@ -136,31 +152,77 @@ async function loadRequirementArtifactEvidence(
     ...model,
     requirements: model.requirements.map((requirement) => {
       const artifactLinks = linksByRequirementId.get(requirement.id);
+      const reviewEvidence = reviewEvidenceByRequirementId.get(requirement.id);
 
-      return artifactLinks
+      return artifactLinks || reviewEvidence
         ? {
             ...requirement,
-            artifactLinks
+            ...(artifactLinks ? { artifactLinks } : {}),
+            ...(reviewEvidence ? { reviewEvidence } : {})
           }
         : requirement;
     })
   };
 }
 
-async function loadRequirementReportArtifactLinks(
+async function loadRequirementReviewEvidence(
   api: ApiClient,
   requirement: RequirementSummary
-): Promise<RequirementArtifactLink[]> {
-  if (!shouldLoadReportArtifacts(requirement)) {
-    return [];
+): Promise<{
+  artifactLinks: RequirementArtifactLink[];
+  reviewEvidence?: RequirementReviewEvidence;
+}> {
+  const [reportResult, mergeCandidateResult] = await Promise.allSettled([
+    shouldLoadReportArtifacts(requirement)
+      ? loadRequirementReport(api, requirement)
+      : Promise.resolve(undefined),
+    shouldLoadMergeCandidate(requirement)
+      ? loadRequirementMergeCandidate(api, requirement)
+      : Promise.resolve(undefined)
+  ]);
+
+  const report =
+    reportResult.status === "fulfilled" ? reportResult.value : undefined;
+  const mergeCandidate =
+    mergeCandidateResult.status === "fulfilled"
+      ? mergeCandidateResult.value
+      : undefined;
+
+  if (!report && !mergeCandidate) {
+    return { artifactLinks: [] };
   }
 
-  try {
-    const report = runReportSchema.parse(await api(buildReportPath(requirement)));
-    return buildReportArtifactLinks(requirement, report);
-  } catch {
-    return [];
-  }
+  const artifactLinks = [
+    ...(report ? buildReportArtifactLinks(requirement, report) : []),
+    ...(mergeCandidate
+      ? buildMergeCandidateArtifactLinks(requirement, mergeCandidate)
+      : [])
+  ];
+
+  return {
+    artifactLinks,
+    reviewEvidence: buildRequirementReviewEvidence(
+      requirement,
+      report,
+      mergeCandidate
+    )
+  };
+}
+
+async function loadRequirementReport(
+  api: ApiClient,
+  requirement: RequirementSummary
+): Promise<RunReport> {
+  return runReportSchema.parse(await api(buildReportPath(requirement)));
+}
+
+async function loadRequirementMergeCandidate(
+  api: ApiClient,
+  requirement: RequirementSummary
+): Promise<MergeCandidate> {
+  return mergeCandidateSchema.parse(
+    await api(buildMergeCandidatePath(requirement))
+  );
 }
 
 function shouldLoadReportArtifacts(requirement: RequirementSummary): boolean {
@@ -173,6 +235,14 @@ function shouldLoadReportArtifacts(requirement: RequirementSummary): boolean {
   );
 }
 
+function shouldLoadMergeCandidate(requirement: RequirementSummary): boolean {
+  return Boolean(
+    requirement.workflowRunId &&
+      (requirement.executionStatus === "needs_review" ||
+        requirement.executionStatus === "completed")
+  );
+}
+
 function buildReportPath(requirement: RequirementSummary): string {
   if (requirement.source === "workflow") {
     return `/workflows/${encodeURIComponent(
@@ -181,6 +251,114 @@ function buildReportPath(requirement: RequirementSummary): string {
   }
 
   return `/requirements/${encodeURIComponent(requirement.id)}/report`;
+}
+
+function buildMergeCandidatePath(requirement: RequirementSummary): string {
+  if (requirement.source === "workflow") {
+    return `/workflows/${encodeURIComponent(
+      requirement.workflowRunId ?? requirement.id
+    )}/merge-candidate`;
+  }
+
+  return `/requirements/${encodeURIComponent(
+    requirement.id
+  )}/merge-candidate`;
+}
+
+function buildRequirementReviewEvidence(
+  requirement: RequirementSummary,
+  report: RunReport | undefined,
+  mergeCandidate: MergeCandidate | undefined
+): RequirementReviewEvidence {
+  const evidenceSourceWorkflowId =
+    mergeCandidate?.workflowId ?? report?.workflowId ?? requirement.workflowRunId;
+  const patchArtifactPaths = distinctStrings([
+    ...(report?.taskResults.map((task) => task.patchArtifactPath) ?? []),
+    mergeCandidate?.patchArtifactPath
+  ]);
+  const changedFiles = distinctStrings(
+    extractChangedFiles([
+      ...(report?.taskResults.map((task) => task.patch) ?? []),
+      mergeCandidate?.patch
+    ])
+  );
+
+  return {
+    ...(evidenceSourceWorkflowId ? { evidenceSourceWorkflowId } : {}),
+    ...(report?.summary ? { reportSummary: report.summary } : {}),
+    ...(report?.recommendation
+      ? { reportRecommendation: report.recommendation }
+      : {}),
+    changedFiles,
+    patchArtifactPaths,
+    gateResults:
+      report?.gateResults.map((gate) => ({
+        id: gate.id,
+        title: gate.title,
+        status: gate.status,
+        ...(gate.exitCode === undefined ? {} : { exitCode: gate.exitCode })
+      })) ?? [],
+    ...(mergeCandidate
+      ? {
+          mergeCandidate: {
+            status: mergeCandidate.status,
+            summary: mergeCandidate.summary,
+            sourceBranches: mergeCandidate.sourceBranches,
+            ...(mergeCandidate.patchArtifactPath
+              ? { patchArtifactPath: mergeCandidate.patchArtifactPath }
+              : {}),
+            ...(mergeCandidate.manifestArtifactPath
+              ? { manifestArtifactPath: mergeCandidate.manifestArtifactPath }
+              : {}),
+            ...(mergeCandidate.applyCommand
+              ? { applyCommand: mergeCandidate.applyCommand }
+              : {}),
+            createdAt: mergeCandidate.createdAt
+          }
+        }
+      : {})
+  };
+}
+
+function buildMergeCandidateArtifactLinks(
+  requirement: RequirementSummary,
+  mergeCandidate: MergeCandidate
+): RequirementArtifactLink[] {
+  const workflowId = mergeCandidate.workflowId || requirement.workflowRunId;
+
+  if (!workflowId) {
+    return [];
+  }
+
+  const links: RequirementArtifactLink[] = [];
+
+  if (mergeCandidate.patchArtifactPath) {
+    links.push(
+      buildArtifactLink({
+        id: `${requirement.id}:merge-candidate:patch`,
+        kind: "patch",
+        label: "Merge candidate patch artifact",
+        meta: "Manual git apply patch",
+        path: mergeCandidate.patchArtifactPath,
+        workflowId
+      })
+    );
+  }
+
+  if (mergeCandidate.manifestArtifactPath) {
+    links.push(
+      buildArtifactLink({
+        id: `${requirement.id}:merge-candidate:manifest`,
+        kind: "report",
+        label: "Merge candidate manifest",
+        meta: mergeCandidate.summary,
+        path: mergeCandidate.manifestArtifactPath,
+        workflowId
+      })
+    );
+  }
+
+  return links;
 }
 
 function buildReportArtifactLinks(
@@ -305,4 +483,37 @@ function buildArtifactLink({
     meta,
     path
   };
+}
+
+function extractChangedFiles(patches: Array<string | undefined>): string[] {
+  const files: string[] = [];
+
+  for (const patch of patches) {
+    if (!patch) {
+      continue;
+    }
+
+    for (const line of patch.split(/\r?\n/)) {
+      const diffMatch = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+      if (diffMatch) {
+        files.push(normalizePatchPath(diffMatch[2] ?? diffMatch[1]));
+        continue;
+      }
+
+      const newFileMatch = line.match(/^\+\+\+ b\/(.+)$/);
+      if (newFileMatch) {
+        files.push(normalizePatchPath(newFileMatch[1]));
+      }
+    }
+  }
+
+  return files.filter((file) => file && file !== "/dev/null");
+}
+
+function normalizePatchPath(path: string | undefined): string {
+  return (path ?? "").replace(/^"|"$/g, "");
+}
+
+function distinctStrings(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }

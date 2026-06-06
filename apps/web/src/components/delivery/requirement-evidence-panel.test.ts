@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import type { RequirementSummary } from "./delivery-console-model";
+import { buildRequirementEvidenceDisplay } from "./requirement-evidence-panel";
+
+const reviewReadyRequirement: RequirementSummary = {
+  id: "requirement-review",
+  source: "requirement",
+  title: "Review checkout evidence",
+  repositoryLabel: "C:/work/shop",
+  repositorySafety: {
+    repositoryLabel: "C:/work/shop",
+    executionModeLabel: "Isolated worktree",
+    branchLabel: "mawo/workflow-review/task-1",
+    headLabel: "abc1234",
+    cleanStateLabel: "Apply clean check required",
+    allowedRootLabel: "Allowed root accepted by API",
+    mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
+    recoveryAction: "Run repository preflight before mutating actions",
+  },
+  requirementStage: "needs_review",
+  executionStatus: "needs_review",
+  riskLevel: "medium",
+  nextAction: "Review merge candidate",
+  nodeLabel: "1 task / 1 gate",
+  updatedAt: "2026-06-06T11:05:00.000Z",
+  workflowRunHref: "/workflows/workflow-review",
+  workflowRunId: "workflow-review",
+  workflowRunStatus: "needs_review",
+  workflowRunStatusLabel: "Needs review",
+  availableActions: [],
+  reviewEvidence: {
+    evidenceSourceWorkflowId: "workflow-review",
+    reportSummary: "1/1 tasks passed; 1/1 gates passed",
+    reportRecommendation: "ready_for_review",
+    changedFiles: [
+      "apps/web/src/app/page.tsx",
+      "packages/shared/src/index.ts",
+    ],
+    patchArtifactPaths: [
+      "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+    ],
+    gateResults: [
+      {
+        id: "gate-1",
+        title: "Unit tests",
+        status: "passed",
+      },
+    ],
+    mergeCandidate: {
+      status: "ready",
+      summary: "Merge candidate ready with 2 changed files",
+      sourceBranches: ["mawo/workflow-review/task-1"],
+      patchArtifactPath:
+        "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+      applyCommand:
+        'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+      createdAt: "2026-06-06T11:06:00.000Z",
+    },
+  },
+};
+
+describe("RequirementEvidencePanel display model", () => {
+  it("summarizes review evidence without forcing reviewers into raw artifacts", () => {
+    const display = buildRequirementEvidenceDisplay(reviewReadyRequirement);
+
+    expect(display.summary).toBe("Merge candidate ready with 2 changed files");
+    expect(display.items).toEqual(
+      expect.arrayContaining([
+        {
+          label: "Delivery report",
+          value: "1/1 tasks passed; 1/1 gates passed",
+        },
+        {
+          label: "Changed files",
+          value: "apps/web/src/app/page.tsx, packages/shared/src/index.ts",
+        },
+        {
+          label: "Patch artifact",
+          value: "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+        },
+        {
+          label: "Manual apply command",
+          value:
+            'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+        },
+        {
+          label: "Gate evidence",
+          value: "Unit tests passed",
+        },
+        {
+          label: "Evidence source",
+          value: "Current workflow workflow-review",
+        },
+      ]),
+    );
+    expect(display.items.some((item) => item.value.includes("{"))).toBe(false);
+  });
+});

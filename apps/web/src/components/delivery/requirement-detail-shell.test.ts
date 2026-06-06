@@ -29,6 +29,30 @@ const requirement: RequirementSummary = {
   workflowRunId: "workflow-review",
   workflowRunStatus: "needs_review",
   workflowRunStatusLabel: "Needs review",
+  reviewEvidence: {
+    evidenceSourceWorkflowId: "workflow-review",
+    changedFiles: ["apps/web/src/app/page.tsx"],
+    patchArtifactPaths: [
+      "C:/mawo/artifacts/workflow-review/merge-candidate.patch"
+    ],
+    gateResults: [
+      {
+        id: "gate-1",
+        title: "Unit tests",
+        status: "passed"
+      }
+    ],
+    mergeCandidate: {
+      status: "ready",
+      summary: "Merge candidate ready with 1 changed file",
+      sourceBranches: ["mawo/workflow-review/task-1"],
+      patchArtifactPath:
+        "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+      applyCommand:
+        'git -C "C:/work/api" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+      createdAt: "2026-06-06T11:06:00.000Z"
+    }
+  },
   availableActions: []
 };
 
@@ -101,7 +125,14 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("medium risk");
     expect(html).toContain("2 tasks / 2 gates");
     expect(html).toContain("Quality gates passed");
-    expect(html).toContain("Patch available for human review");
+    expect(html).toContain("Merge candidate ready with 1 changed file");
+    expect(html).toContain("apps/web/src/app/page.tsx");
+    expect(html).toContain(
+      "C:/mawo/artifacts/workflow-review/merge-candidate.patch"
+    );
+    expect(html).not.toContain(
+      "Changed file summary appears in report evidence"
+    );
     expect(html).not.toContain("Merge candidate ready for manual apply");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
   });
@@ -113,8 +144,12 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Human acceptance decision");
     expect(html).toContain("Ready for approve or reject");
     expect(html).toContain("Manual apply command");
-    expect(html).toContain("git apply");
-    expect(html).toContain("workflow-review");
+    expect(html).toContain(
+      "git -C &quot;C:/work/api&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;"
+    );
+    expect(html).not.toContain(
+      "git apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;"
+    );
     expect(html).toContain("Approve");
     expect(html).toContain("Reject");
   });

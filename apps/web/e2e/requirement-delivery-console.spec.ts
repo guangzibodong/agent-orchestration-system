@@ -211,10 +211,13 @@ test.describe("Requirement Delivery Console smoke", () => {
     });
   });
 
-  test("surfaces report artifact paths for requirement ticket evidence", async ({
+  test("surfaces readable review evidence and artifact paths for requirement tickets", async ({
     page,
   }) => {
     await mockApi(page, mixedWorkflows, {
+      mergeCandidates: {
+        "requirement-viewer-readable": requirementMergeCandidate,
+      },
       reports: {
         "requirement-viewer-readable": requirementEvidenceReport,
       },
@@ -224,6 +227,22 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.goto("/");
 
     const evidence = page.getByLabel("Gate Result / Review Evidence");
+    await expect(evidence).toContainText(
+      "Merge candidate ready with 2 changed files",
+    );
+    await expect(evidence).toContainText("1/1 tasks passed; 1/1 gates passed");
+    await expect(evidence).toContainText("apps/web/src/app/page.tsx");
+    await expect(evidence).toContainText("packages/shared/src/index.ts");
+    await expect(evidence).toContainText(
+      "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch",
+    );
+    await expect(evidence).toContainText(
+      'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
+    );
+    await expect(evidence).toContainText("Evidence visible passed");
+    await expect(evidence).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
+    await expect(evidence).not.toContainText("diff --git");
+
     const evidenceDrawer = evidence.getByLabel("Read-only evidence links");
     await evidenceDrawer.getByText("Evidence links", { exact: true }).click();
 
@@ -242,10 +261,23 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       evidenceDrawer.getByRole("link", { name: "Evidence visible stdout" }),
     ).toBeVisible();
+    await expect(
+      evidenceDrawer.getByRole("link", {
+        name: "Merge candidate patch artifact",
+      }),
+    ).toBeVisible();
+    await expect(
+      evidenceDrawer.getByRole("link", { name: "Merge candidate manifest" }),
+    ).toBeVisible();
 
     await page.locator(".requirementDetailDisclosure > summary").click();
-    const detail = page.getByLabel("Requirement detail sections");
+    const detail = page.locator(".requirementDetailShell");
     await expect(detail).toBeVisible();
+    await expect(detail).toContainText(
+      'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
+    );
+    await expect(detail).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
+    await expect(detail).not.toContainText("diff --git");
     const detailDrawer = page.locator(".requirementDetailShell .artifactDrawer");
     await detailDrawer.getByText("Artifacts", { exact: true }).click();
     await expect(
@@ -253,6 +285,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toBeVisible();
     await expect(
       detailDrawer.getByRole("link", { name: "Report artifact" }),
+    ).toBeVisible();
+    await expect(
+      detailDrawer.getByRole("link", {
+        name: "Merge candidate patch artifact",
+      }),
     ).toBeVisible();
   });
 
@@ -752,6 +789,7 @@ async function mockApi(
       method: string;
       pathname: string;
     }) => void;
+    mergeCandidates?: Record<string, unknown>;
     reports?: Record<string, unknown>;
     requirements?: RequirementDeliveryTicket[];
   } = {},
@@ -823,6 +861,21 @@ async function mockApi(
       return;
     }
 
+    const requirementMergeCandidateMatch = url.pathname.match(
+      /^\/requirements\/([^/]+)\/merge-candidate$/,
+    );
+    if (request.method() === "GET" && requirementMergeCandidateMatch) {
+      const mergeCandidate =
+        options.mergeCandidates?.[requirementMergeCandidateMatch[1] ?? ""];
+
+      await route.fulfill(
+        mergeCandidate
+          ? { json: mergeCandidate }
+          : { status: 409, json: { error: "merge_candidate_not_ready" } },
+      );
+      return;
+    }
+
     const requirementActionMatch = url.pathname.match(
       /^\/requirements\/([^/]+)\/(confirm-plan|enqueue|retry)$/,
     );
@@ -868,6 +921,21 @@ async function mockApi(
         report
           ? { json: report }
           : { status: 409, json: { error: "report_not_ready" } },
+      );
+      return;
+    }
+
+    if (
+      request.method() === "GET" &&
+      workflow &&
+      url.pathname === `/workflows/${workflow.id}/merge-candidate`
+    ) {
+      const mergeCandidate = options.mergeCandidates?.[workflow.id];
+
+      await route.fulfill(
+        mergeCandidate
+          ? { json: mergeCandidate }
+          : { status: 409, json: { error: "merge_candidate_not_ready" } },
       );
       return;
     }
@@ -1274,6 +1342,7 @@ const requirementEvidenceReport = {
       id: "task-view",
       title: "Inspect evidence",
       status: "passed",
+      stdout: "RAW_STDOUT_SHOULD_NOT_RENDER",
       stdoutArtifactPath:
         "C:/mawo/artifacts/workflow-needs-review/tasks/task-view/stdout.txt",
       stderrArtifactPath:
@@ -1291,6 +1360,33 @@ const requirementEvidenceReport = {
         "C:/mawo/artifacts/workflow-needs-review/gates/gate-view/stdout.txt",
     },
   ],
+};
+
+const requirementMergeCandidate = {
+  workflowId: "workflow-needs-review",
+  status: "ready",
+  summary: "Merge candidate ready with 2 changed files",
+  sourceBranches: ["mawo/workflow-needs-review/task-view"],
+  patch: [
+    "diff --git a/apps/web/src/app/page.tsx b/apps/web/src/app/page.tsx",
+    "index 1111111..2222222 100644",
+    "--- a/apps/web/src/app/page.tsx",
+    "+++ b/apps/web/src/app/page.tsx",
+    "@@ -1 +1 @@",
+    "-old",
+    "+new",
+    "diff --git a/packages/shared/src/index.ts b/packages/shared/src/index.ts",
+    "index 3333333..4444444 100644",
+    "--- a/packages/shared/src/index.ts",
+    "+++ b/packages/shared/src/index.ts",
+  ].join("\n"),
+  patchArtifactPath:
+    "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch",
+  manifestArtifactPath:
+    "C:/mawo/artifacts/workflow-needs-review/merge-candidate.json",
+  applyCommand:
+    'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
+  createdAt: "2026-06-06T10:26:00.000Z",
 };
 
 const readiness = {

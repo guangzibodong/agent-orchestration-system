@@ -42,6 +42,29 @@ export type RequirementArtifactLink = {
   path?: string;
 };
 
+export type RequirementReviewEvidence = {
+  evidenceSourceWorkflowId?: string;
+  reportSummary?: string;
+  reportRecommendation?: string;
+  changedFiles: string[];
+  patchArtifactPaths: string[];
+  gateResults: Array<{
+    id: string;
+    title: string;
+    status: string;
+    exitCode?: number;
+  }>;
+  mergeCandidate?: {
+    status: "ready" | "empty";
+    summary: string;
+    sourceBranches: string[];
+    patchArtifactPath?: string;
+    manifestArtifactPath?: string;
+    applyCommand?: string;
+    createdAt: string;
+  };
+};
+
 export type RequirementSummary = {
   id: string;
   source?: "requirement" | "workflow";
@@ -61,6 +84,7 @@ export type RequirementSummary = {
   workflowRunStatusLabel: string;
   reviewDecision?: "approved" | "rejected";
   artifactLinks?: RequirementArtifactLink[];
+  reviewEvidence?: RequirementReviewEvidence;
   availableActions: RequirementLifecycleAction[];
 };
 

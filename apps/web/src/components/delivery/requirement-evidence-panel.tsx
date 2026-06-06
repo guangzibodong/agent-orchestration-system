@@ -111,6 +111,7 @@ export function buildRequirementEvidenceDisplay(
             requirement.repositorySafety.blockedReason ??
             "Quality gate failure requires rework before review",
         },
+        ...buildReviewEvidenceSummaryItems(requirement),
       ],
       artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
         includeMergeCandidate: false,
@@ -124,6 +125,7 @@ export function buildRequirementEvidenceDisplay(
       title: "Review-ready merge candidate",
       statusLabel: "Review ready",
       summary:
+        requirement.reviewEvidence?.mergeCandidate?.summary ??
         "Quality gates passed and the merge candidate is ready for a human review decision. Manual review required.",
       items: [
         {
@@ -150,6 +152,7 @@ export function buildRequirementEvidenceDisplay(
           label: "Last evidence update",
           value: requirement.updatedAt,
         },
+        ...buildReviewEvidenceSummaryItems(requirement),
       ],
       artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
         includeMergeCandidate: true,
@@ -186,6 +189,7 @@ export function buildRequirementEvidenceDisplay(
           label: "Last evidence update",
           value: requirement.updatedAt,
         },
+        ...buildReviewEvidenceSummaryItems(requirement),
       ],
       artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
         includeMergeCandidate: true,
@@ -213,6 +217,88 @@ export function buildRequirementEvidenceDisplay(
       includeMergeCandidate: false,
     }),
   };
+}
+
+function buildReviewEvidenceSummaryItems(
+  requirement: RequirementSummary,
+): RequirementEvidenceItem[] {
+  const evidence = requirement.reviewEvidence;
+
+  if (!evidence) {
+    return [];
+  }
+
+  const patchArtifactPath =
+    evidence.mergeCandidate?.patchArtifactPath ?? evidence.patchArtifactPaths[0];
+  const items: RequirementEvidenceItem[] = [];
+
+  if (evidence.reportSummary) {
+    items.push({
+      label: "Delivery report",
+      value: evidence.reportSummary,
+    });
+  }
+
+  if (evidence.changedFiles.length) {
+    items.push({
+      label: "Changed files",
+      value: formatEvidenceList(evidence.changedFiles),
+    });
+  }
+
+  if (patchArtifactPath) {
+    items.push({
+      label: "Patch artifact",
+      value: patchArtifactPath,
+    });
+  }
+
+  const applyCommand =
+    evidence.mergeCandidate?.applyCommand ??
+    (patchArtifactPath ? `git apply "${patchArtifactPath}"` : undefined);
+
+  if (applyCommand) {
+    items.push({
+      label: "Manual apply command",
+      value: applyCommand,
+    });
+  }
+
+  if (evidence.gateResults.length) {
+    items.push({
+      label: "Gate evidence",
+      value: formatGateEvidence(evidence.gateResults),
+    });
+  }
+
+  if (evidence.evidenceSourceWorkflowId) {
+    items.push({
+      label: "Evidence source",
+      value: `Current workflow ${evidence.evidenceSourceWorkflowId}`,
+    });
+  }
+
+  return items;
+}
+
+function formatEvidenceList(values: string[]): string {
+  if (values.length <= 3) {
+    return values.join(", ");
+  }
+
+  return `${values.slice(0, 3).join(", ")} and ${values.length - 3} more`;
+}
+
+function formatGateEvidence(
+  gates: NonNullable<RequirementSummary["reviewEvidence"]>["gateResults"],
+): string {
+  return gates
+    .map((gate) =>
+      gate.exitCode === undefined
+        ? `${gate.title} ${gate.status}`
+        : `${gate.title} ${gate.status} (exit ${gate.exitCode})`,
+    )
+    .join(", ");
 }
 
 export function buildRequirementEvidenceArtifactLinks(
