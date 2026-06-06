@@ -395,6 +395,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 
 - [Operations Runbook](docs/OPERATIONS.md)：启动、部署、备份、回滚、健康检查、已知限制。
 - [Launch Scope](docs/LAUNCH_SCOPE.md)：上线范围和验收标准。
+- [Launch Readiness Evidence](docs/LAUNCH_READINESS_EVIDENCE.md)：最新上线验证证据、剩余 release gates 和 accepted known limits。
 - [Swarm Sprint](docs/SWARM_SPRINT.md)：多角色协作推进记录。
 - [Project Plan](PROJECT_PLAN.md)：早期产品规划草案。
 - [Real System Plan](REAL_SYSTEM_PLAN.md)：生产化计划。
