@@ -129,6 +129,13 @@ describe("RequirementDeliveryConsole", () => {
             severity: "healthy",
           },
           {
+            id: "launch",
+            label: "Launch",
+            value: "Development ready",
+            detail: "Development readiness has no blockers",
+            severity: "healthy",
+          },
+          {
             id: "worker",
             label: "Worker",
             value: "1/1",
@@ -149,6 +156,8 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain('aria-label="Delivery health"');
     expect(html).toContain("API");
     expect(html).toContain("Ready");
+    expect(html).toContain("Launch");
+    expect(html).toContain("Development ready");
     expect(html).toContain("Worker");
     expect(html).toContain("1/1");
     expect(html).toContain("Queue");

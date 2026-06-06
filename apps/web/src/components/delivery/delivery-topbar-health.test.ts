@@ -67,6 +67,13 @@ describe("delivery topbar health", () => {
         severity: "healthy",
       }),
       expect.objectContaining({
+        id: "launch",
+        label: "Launch",
+        value: "Development ready",
+        detail: "Development readiness has no blockers",
+        severity: "healthy",
+      }),
+      expect.objectContaining({
         id: "worker",
         label: "Worker",
         value: "1/1",
@@ -79,6 +86,41 @@ describe("delivery topbar health", () => {
         severity: "warning",
       }),
     ]);
+  });
+
+  it("shows production readiness blockers as a launch danger signal", () => {
+    const indicators = buildDeliveryTopbarHealthIndicators({
+      ...baseSnapshot,
+      readiness: {
+        ...baseSnapshot.readiness,
+        ok: false,
+        deploymentMode: "production",
+        checks: [
+          {
+            id: "production_config",
+            label: "Production configuration",
+            ok: false,
+            status: "blocked",
+            message:
+              "MAWO_API_TOKEN must be changed from the example value before launch.",
+          },
+          {
+            id: "state_store",
+            label: "State store",
+            ok: true,
+            status: "ready",
+          },
+        ],
+      },
+    });
+
+    expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
+      expect.objectContaining({
+        value: "Production blocked",
+        detail: "1 readiness check blocks launch",
+        severity: "danger",
+      }),
+    );
   });
 
   it("shows failed jobs as the queue danger state", () => {

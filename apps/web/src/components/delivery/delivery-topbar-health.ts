@@ -9,7 +9,7 @@ export type DeliveryTopbarHealthSeverity =
   | "neutral";
 
 export type DeliveryTopbarHealthIndicator = {
-  id: "api" | "queue" | "worker";
+  id: "api" | "launch" | "queue" | "worker";
   label: string;
   value: string;
   detail: string;
@@ -37,6 +37,13 @@ export function buildDeliveryTopbarHealthIndicators(
       severity: readiness.severity,
     },
     {
+      id: "launch",
+      label: "Launch",
+      value: buildLaunchValue(readiness),
+      detail: buildLaunchDetail(readiness),
+      severity: readiness.severity,
+    },
+    {
       id: "worker",
       label: "Worker",
       value:
@@ -61,6 +68,40 @@ export function buildDeliveryTopbarHealthIndicators(
         failedJobs > 0 ? "danger" : queuedJobs > 0 ? "warning" : "neutral",
     },
   ];
+}
+
+function buildLaunchValue(
+  readiness: ReturnType<typeof summarizeReadiness>,
+): string {
+  if (readiness.blockedChecks > 0) {
+    return `${readiness.deploymentLabel} blocked`;
+  }
+
+  if (readiness.degradedChecks > 0) {
+    return `${readiness.deploymentLabel} degraded`;
+  }
+
+  return `${readiness.deploymentLabel} ready`;
+}
+
+function buildLaunchDetail(
+  readiness: ReturnType<typeof summarizeReadiness>,
+): string {
+  if (readiness.blockedChecks > 0) {
+    return `${readiness.blockedChecks} ${pluralize(
+      readiness.blockedChecks,
+      "readiness check",
+    )} ${readiness.blockedChecks === 1 ? "blocks" : "block"} launch`;
+  }
+
+  if (readiness.degradedChecks > 0) {
+    return `${readiness.degradedChecks} ${pluralize(
+      readiness.degradedChecks,
+      "readiness check",
+    )} degraded before launch`;
+  }
+
+  return `${readiness.deploymentLabel} readiness has no blockers`;
 }
 
 function buildMissingWorkerSeverity(
