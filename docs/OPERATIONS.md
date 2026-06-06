@@ -17,7 +17,8 @@ the workflow queue is still in-process.
   `MAWO_STATE_BACKEND=postgres`
 - Job history: `.mawo/state/jobs.json` by default, or Postgres with the same
   state backend setting. The Postgres job table includes worker lease and
-  attempt fields for external worker claim/heartbeat support.
+  attempt fields, and `npm run worker:postgres` can claim and execute queued
+  jobs for the external worker path.
 - Repository registry: `.mawo/state/repositories.json` by default, or Postgres
 - Audit events: `.mawo/state/audit-events.json` by default, or Postgres
 - Workflow artifacts: `.mawo/artifacts/<workflowId>/`
@@ -76,6 +77,11 @@ Reserved or optional:
   the Redis/worker queue is implemented.
 - `DATABASE_URL`: required when `MAWO_STATE_BACKEND=postgres`.
 - `REDIS_URL`: reserved for future queue/runtime work.
+- `MAWO_WORKER_ID`: optional stable ID for `npm run worker:postgres`.
+- `MAWO_WORKER_ONCE`: set to `1` to claim at most one job and exit.
+- `MAWO_WORKER_POLL_MS`: idle polling interval for the Postgres worker.
+- `MAWO_WORKER_LEASE_MS`: claim lease duration written to Postgres job rows.
+- `MAWO_WORKER_RENEW_INTERVAL_MS`: interval for worker lease heartbeat renewal.
 
 Agent template placeholders:
 
@@ -234,6 +240,20 @@ $env:MAWO_STATE_BACKEND = "postgres"
 The smoke verifies `/readiness` reports `activeStateBackend: "postgres"`, then
 creates a repository workflow, enqueues it, and checks the workflow/job rows
 through Prisma.
+
+Postgres worker process:
+
+```powershell
+$env:DATABASE_URL = "postgresql://mawo:<postgres-password>@localhost:5432/mawo?schema=public"
+$env:MAWO_WORKER_ID = "worker-1"
+.\.tools\node\npm.cmd run worker:postgres
+```
+
+For a one-shot operational probe, set `$env:MAWO_WORKER_ONCE = "1"` before
+running the command. The worker uses `PrismaJobStore.claimNextQueuedJob`, renews
+the lease while a workflow is running, executes through `LocalRunner`, writes
+workflow state through `PrismaRunStore`, stores artifacts under `.mawo/artifacts`,
+and appends runner task/gate audit events through `PrismaAuditStore`.
 
 Stop the stack:
 
@@ -501,10 +521,11 @@ back the web process first while keeping the API and `.mawo` untouched.
   are marked failed. Matching running workflows are recovered to `aborted` with
   interrupted task/gate metadata, then require operator retry.
 - Postgres is available as the active workflow state backend with
-  `MAWO_STATE_BACKEND=postgres`, and job rows include worker lease metadata for
-  the external worker queue path. Redis is present in Compose but is not yet the
-  active queue backend. `/readiness` reports the active `runtime_backend` and
-  blocks if `MAWO_QUEUE_BACKEND` requests an unimplemented backend.
+  `MAWO_STATE_BACKEND=postgres`, and `npm run worker:postgres` can claim queued
+  jobs with worker lease metadata for the external worker queue path. Redis is
+  present in Compose but is not yet the active queue backend. `/readiness`
+  reports the active `runtime_backend` and blocks if `MAWO_QUEUE_BACKEND`
+  requests an unimplemented backend.
 - API and web are containerized, but production public exposure still requires
   a reverse proxy, TLS, and an auth boundary.
 - Repository workflows require the target repository to be a git repository with
@@ -532,6 +553,8 @@ back the web process first while keeping the API and `.mawo` untouched.
 - [ ] `docker compose config` succeeds on the target host.
 - [ ] `npm run smoke:api:postgres` passes if `MAWO_STATE_BACKEND=postgres` is
       part of the rollout.
+- [ ] `MAWO_WORKER_ONCE=1 npm run worker:postgres` can start against the target
+      Postgres database if the external worker path is part of the rollout.
 - [ ] API starts and `GET /health` returns `{ "ok": true }`.
 - [ ] `GET /readiness` returns `ok=true`, reports token protection, and marks
       `state_store`, `artifact_store`, `git_cli`, `agents`, and

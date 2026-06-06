@@ -18,6 +18,7 @@
     "test": "vitest run",
     "smoke:api": "node scripts/smoke-api-repository.mjs",
     "smoke:api:postgres": "node scripts/smoke-api-postgres.mjs",
+    "worker:postgres": "node scripts/worker-postgres.mjs",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",

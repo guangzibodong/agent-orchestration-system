@@ -61,6 +61,11 @@ describe("deployment manifests", () => {
     expect(env).toContain("NEXT_PUBLIC_API_URL=http://127.0.0.1:4000");
     expect(env).toContain("MAWO_CODEX_COMMAND_TEMPLATE=");
     expect(env).toContain("MAWO_CODEX_AUTH_PROBE_COMMAND=");
+    expect(env).toContain("MAWO_WORKER_ID=");
+    expect(env).toContain("MAWO_WORKER_ONCE=");
+    expect(env).toContain("MAWO_WORKER_POLL_MS=");
+    expect(env).toContain("MAWO_WORKER_LEASE_MS=");
+    expect(env).toContain("MAWO_WORKER_RENEW_INTERVAL_MS=");
   });
 
   it("documents the database migration baseline", () => {
@@ -119,5 +124,18 @@ describe("deployment manifests", () => {
     expect(helper).toContain("activeStateBackend=postgres");
     expect(smoke).toContain("prisma.workflowRun.findUnique");
     expect(smoke).toContain("prisma.workflowJob.findUnique");
+  });
+
+  it("provides a Postgres worker entrypoint for claimed workflow jobs", () => {
+    const packageJson = read("package.json");
+    const wrapper = read("scripts/worker-postgres.mjs");
+    const worker = read("scripts/worker-postgres.ts");
+
+    expect(packageJson).toContain("\"worker:postgres\"");
+    expect(wrapper).toContain("scripts/worker-postgres.ts");
+    expect(worker).toContain("PostgresWorkflowWorker");
+    expect(worker).toContain("MAWO_WORKER_ONCE");
+    expect(worker).toContain("PrismaJobStore");
+    expect(worker).toContain("PrismaRunStore");
   });
 });

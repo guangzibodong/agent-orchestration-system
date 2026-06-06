@@ -60,6 +60,7 @@
 | API Server | `apps/api/src/server.ts` | HTTP 入口，负责校验请求、编排 runner/queue/store |
 | LocalRunner | `apps/api/src/runner/local-runner.ts` | 执行 workflow、任务依赖、质量门、报告聚合 |
 | WorkflowJobQueue | `apps/api/src/runner/workflow-job-queue.ts` | 后台队列、取消、active job guard |
+| PostgresWorkflowWorker | `apps/api/src/runner/postgres-workflow-worker.ts` | 从 Postgres claim queued job、续租、执行并回写结果 |
 | ShellAdapter | `apps/api/src/runner/shell-adapter.ts` | 执行 shell 命令、超时、取消、stdout/stderr 捕获 |
 | CliAgentAdapter | `apps/api/src/runner/cli-agent-adapter.ts` | 把 CLI agent 包装成统一 runner |
 | GitWorktreeManager | `apps/api/src/runner/git-worktree-manager.ts` | 创建 worktree、收集 diff、隔离任务执行 |
@@ -139,6 +140,16 @@ Postgres 的 baseline schema 已放在 `apps/api/prisma/migrations`，覆盖 wor
 对应的 package scripts 是 `npm run db:validate`、`npm run db:generate`、`npm run db:migrate` 和 `npm run db:migrate:deploy`。GitHub Actions 会启动 Postgres service 并执行 `npm run db:migrate:deploy`，防止迁移 SQL 和 Prisma schema 漂移。
 
 注意：默认 `MAWO_STATE_BACKEND=file` 仍使用 `.mawo` 文件持久化；设置 `MAWO_STATE_BACKEND=postgres` 并完成迁移后，workflow、job、仓库注册和审计事件会使用 Postgres。Postgres job 表已经包含 worker lease 字段，用于后续外部 worker 原子 claim/续租；当前 active queue 仍是进程内队列，`MAWO_QUEUE_BACKEND=redis` 还未实现；切换后端前要看 `/readiness` 的 `runtime_backend` 结果。
+
+Postgres worker 可以用单次模式验证 claim/执行链路：
+
+```powershell
+$env:DATABASE_URL = "postgresql://mawo:<postgres-password>@localhost:5432/mawo?schema=public"
+$env:MAWO_WORKER_ONCE = "1"
+.\.tools\node\npm.cmd run worker:postgres
+```
+
+长期运行时去掉 `MAWO_WORKER_ONCE`，用 `MAWO_WORKER_ID` 标识 worker；`MAWO_WORKER_LEASE_MS`、`MAWO_WORKER_RENEW_INTERVAL_MS` 和 `MAWO_WORKER_POLL_MS` 控制 claim 租约、续租心跳和空闲轮询间隔。
 
 停止服务：
 
@@ -324,7 +335,7 @@ MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
 - API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
 - `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
 - 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；如果生产环境声明多 API 副本，`GET /readiness` 会通过 `deployment_topology` 阻塞上线。
-- workflow、job history、仓库注册表和审计事件默认是文件持久化；`MAWO_STATE_BACKEND=postgres` 可切到 Postgres state store。Postgres job schema 已有 worker lease/attempt 字段，但队列执行仍在进程内，因此暂不支持多 API 副本并发运行 workflow。
+- workflow、job history、仓库注册表和审计事件默认是文件持久化；`MAWO_STATE_BACKEND=postgres` 可切到 Postgres state store。Postgres job schema 和 `worker:postgres` 已能 claim/续租/执行 queued job，但 API 默认队列执行仍在进程内，因此正式多 API 副本拓扑还要等 queue backend 切换完成。
 - job queue 运行器仍在单 API 进程内；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力，API 重启后 queued job 会继续调度，running job 会被标记为 failed，匹配的 running workflow 会恢复为 aborted 后等待人工重试。
 - Docker Compose 里有 Postgres/Redis；Postgres state backend 已可通过 `MAWO_STATE_BACKEND=postgres` 启用，Redis queue 尚未实现。如果把 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
 - 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
