@@ -42,6 +42,33 @@ const requirement: RequirementSummary = {
   workflowRunId: "workflow-review",
   workflowRunStatus: "needs_review",
   workflowRunStatusLabel: "Needs review",
+  taskDefinitions: [
+    {
+      id: "task-auth",
+      title: "Update auth guard",
+      agent: "shell",
+      command: "npm run patch:auth",
+      instructions: "Patch middleware and keep the review evidence focused.",
+      timeoutMs: 90000,
+      dependsOn: ["task-preflight"],
+    },
+  ],
+  qualityGateDefinitions: [
+    {
+      id: "gate-unit",
+      title: "Unit tests",
+      command: "npm test",
+      required: true,
+      timeoutMs: 120000,
+    },
+    {
+      id: "gate-visual",
+      title: "Visual smoke",
+      command: "npm run smoke:ui",
+      required: false,
+      timeoutMs: 180000,
+    },
+  ],
   reviewEvidence: {
     evidenceSourceWorkflowId: "workflow-review",
     reportSummary: "1/1 tasks passed; 1/1 gates passed",
@@ -191,6 +218,15 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Enterprise SSO/RBAC, Automatic PR creation");
     expect(html).toContain("medium risk");
     expect(html).toContain("2 tasks / 2 gates");
+    expect(html).toContain(
+      "task-auth Update auth guard: agent shell; command npm run patch:auth; instructions Patch middleware and keep the review evidence focused.; timeout 1m 30s; depends on task-preflight"
+    );
+    expect(html).toContain(
+      "gate-unit Unit tests: required; command npm test; timeout 2m 00s"
+    );
+    expect(html).toContain(
+      "gate-visual Visual smoke: optional; command npm run smoke:ui; timeout 3m 00s"
+    );
     expect(html).toContain("Quality gates passed");
     expect(html).toContain("Unit tests required passed (exit 0): npm test");
     expect(html).toContain("Merge candidate ready with 1 changed file");
@@ -224,6 +260,8 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain("Context paths pending requirement contract");
     expect(html).not.toContain("Frozen P0 scope, local repository safety first");
     expect(html).not.toContain("Quality-gated merge candidate evidence");
+    expect(html).not.toContain("Execution adapter selected by requirement run");
+    expect(html).not.toContain("Linked through artifacts when reported");
     expect(html).not.toContain("Merge candidate ready for manual apply");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");

@@ -52,6 +52,17 @@ export type RequirementQualityGateDefinition = {
   title: string;
   command?: string;
   required: boolean;
+  timeoutMs?: number;
+};
+
+export type RequirementTaskDefinition = {
+  id: string;
+  title: string;
+  agent?: string;
+  command?: string;
+  instructions?: string;
+  timeoutMs?: number;
+  dependsOn?: string[];
 };
 
 export type RequirementContractSummary = {
@@ -120,6 +131,7 @@ export type RequirementSummary = {
   reviewDecision?: "approved" | "rejected";
   artifactLinks?: RequirementArtifactLink[];
   requirementContract?: RequirementContractSummary;
+  taskDefinitions?: RequirementTaskDefinition[];
   qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
   workspaceCleanup?: RequirementWorkspaceCleanupSummary;
@@ -594,11 +606,20 @@ export function mapWorkflowToRequirementSummary(
     workflowRunId: workflow.id,
     workflowRunStatus: workflow.status,
     workflowRunStatusLabel,
+    taskDefinitions: workflow.tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      ...(task.agent ? { agent: task.agent } : {}),
+      ...(task.command ? { command: task.command } : {}),
+      ...(task.timeoutMs ? { timeoutMs: task.timeoutMs } : {}),
+      ...(task.dependsOn?.length ? { dependsOn: task.dependsOn } : {})
+    })),
     qualityGateDefinitions: workflow.qualityGates.map((gate) => ({
       id: gate.id,
       title: gate.title,
       ...(gate.command ? { command: gate.command } : {}),
-      required: true
+      required: gate.required,
+      ...(gate.timeoutMs ? { timeoutMs: gate.timeoutMs } : {})
     })),
     ...(workspaceCleanup ? { workspaceCleanup } : {}),
     ...(workflow.review?.decision
@@ -678,11 +699,21 @@ export function mapRequirementTicketToSummary(
       nonGoals: requirement.nonGoals,
       contextPaths: requirement.contextPaths
     },
+    taskDefinitions: requirement.tasks.map((task, index) => ({
+      id: task.id ?? `task-${index + 1}`,
+      title: task.title ?? `Task ${index + 1}`,
+      ...(task.agent ? { agent: task.agent } : {}),
+      ...(task.command ? { command: task.command } : {}),
+      ...(task.instructions ? { instructions: task.instructions } : {}),
+      ...(task.timeoutMs ? { timeoutMs: task.timeoutMs } : {}),
+      ...(task.dependsOn?.length ? { dependsOn: task.dependsOn } : {})
+    })),
     qualityGateDefinitions: requirement.qualityGates.map((gate, index) => ({
       id: gate.id ?? `gate-${index + 1}`,
       title: gate.title ?? `Gate ${index + 1}`,
       command: gate.command,
-      required: gate.required
+      required: gate.required,
+      ...(gate.timeoutMs ? { timeoutMs: gate.timeoutMs } : {})
     })),
     ...(workspaceCleanup ? { workspaceCleanup } : {}),
     ...(workflow?.review?.decision

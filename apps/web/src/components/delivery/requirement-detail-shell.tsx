@@ -544,9 +544,9 @@ function buildSectionRows(
       return [
         { label: "Task plan", value: requirement.nodeLabel },
         { label: "Task objective", value: requirement.title },
-        { label: "Dependency", value: "Runs inside isolated worktree evidence flow" },
-        { label: "Agent or command", value: "Execution adapter selected by requirement run" },
-        { label: "Gate mapping", value: buildGateSummary(requirement) },
+        { label: "Task contract", value: buildTaskContractDetail(requirement) },
+        { label: "Dependency", value: buildTaskDependencyDetail(requirement) },
+        { label: "Gate mapping", value: buildGateDefinitionDetail(requirement) },
         { label: "Task acceptance", value: "Reviewable patch plus passed required gates" },
         { label: "Owner", value: "Operator review required" }
       ];
@@ -566,6 +566,7 @@ function buildSectionRows(
       return [
         { label: "Required gate status", value: buildGateSummary(requirement) },
         { label: "Blocking rule", value: buildGateBlockingRule(requirement) },
+        { label: "Gate contract", value: buildGateDefinitionDetail(requirement) },
         { label: "Command evidence", value: buildGateEvidenceDetail(requirement) },
         { label: "Exit code", value: buildGateExitDetail(requirement) }
       ];
@@ -634,6 +635,67 @@ function buildRequirementAcceptanceCriteria(
   );
 }
 
+function buildTaskContractDetail(requirement: RequirementSummary): string {
+  const taskDefinitions = requirement.taskDefinitions ?? [];
+
+  if (!taskDefinitions.length) {
+    return "No task contract declared";
+  }
+
+  return taskDefinitions.map(formatTaskDefinition).join(" | ");
+}
+
+function formatTaskDefinition(
+  task: NonNullable<RequirementSummary["taskDefinitions"]>[number]
+): string {
+  const details = [
+    task.agent ? `agent ${task.agent}` : undefined,
+    task.command ? `command ${task.command}` : undefined,
+    task.instructions ? `instructions ${task.instructions}` : undefined,
+    task.timeoutMs ? `timeout ${formatDuration(task.timeoutMs)}` : undefined,
+    task.dependsOn?.length
+      ? `depends on ${task.dependsOn.join(", ")}`
+      : undefined
+  ].filter((detail): detail is string => Boolean(detail));
+
+  return details.length
+    ? `${task.id} ${task.title}: ${details.join("; ")}`
+    : `${task.id} ${task.title}: contract pending`;
+}
+
+function buildTaskDependencyDetail(requirement: RequirementSummary): string {
+  const taskDefinitions = requirement.taskDefinitions ?? [];
+  const dependencies = taskDefinitions.flatMap((task) => task.dependsOn ?? []);
+
+  if (!dependencies.length) {
+    return "Runs inside isolated worktree evidence flow";
+  }
+
+  return `Depends on ${formatDetailList([...new Set(dependencies)])}`;
+}
+
+function buildGateDefinitionDetail(requirement: RequirementSummary): string {
+  const gateDefinitions = requirement.qualityGateDefinitions ?? [];
+
+  if (!gateDefinitions.length) {
+    return "No quality gates declared";
+  }
+
+  return gateDefinitions.map(formatGateDefinition).join(" | ");
+}
+
+function formatGateDefinition(
+  gate: NonNullable<RequirementSummary["qualityGateDefinitions"]>[number]
+): string {
+  const details = [
+    gate.required ? "required" : "optional",
+    gate.command ? `command ${gate.command}` : undefined,
+    gate.timeoutMs ? `timeout ${formatDuration(gate.timeoutMs)}` : undefined
+  ].filter((detail): detail is string => Boolean(detail));
+
+  return `${gate.id} ${gate.title}: ${details.join("; ")}`;
+}
+
 function buildSectionEyebrow(title: string): string {
   switch (title) {
     case "Overview":
@@ -692,7 +754,7 @@ function buildGateEvidenceDetail(requirement: RequirementSummary): string {
   const gateResults = requirement.reviewEvidence?.gateResults ?? [];
 
   if (!gateResults.length) {
-    return "Linked through artifacts when reported";
+    return buildGateDefinitionDetail(requirement);
   }
 
   return gateResults.map(formatGateEvidenceDetail).join(", ");

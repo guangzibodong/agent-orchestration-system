@@ -59,6 +59,12 @@ describe("delivery console model", () => {
       workflowRunId: "workflow-123456789",
       workflowRunStatus: "ready",
       workflowRunStatusLabel: "Ready",
+      taskDefinitions: [
+        {
+          id: "task-1",
+          title: "Patch failing test"
+        }
+      ],
       qualityGateDefinitions: [
         {
           id: "gate-1",
@@ -276,6 +282,81 @@ describe("delivery console model", () => {
         title: "Smoke tests",
         command: "npm run smoke:ui",
         required: true
+      }
+    ]);
+  });
+
+  it("preserves the requirement task and gate execution contract for detail views", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-plan-contract",
+      title: "Show the confirmed execution plan",
+      repositoryPath: "C:/work/shop",
+      goal: "Let reviewers inspect the exact frozen execution contract.",
+      acceptanceCriteria: ["Task and gate contracts are visible before run."],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic task decomposition"],
+      riskLevel: "medium",
+      contextPaths: ["apps/web/src/app/page.tsx"],
+      tasks: [
+        {
+          id: "task-contract",
+          title: "Patch checkout evidence",
+          agent: "shell",
+          command: "npm run patch:checkout",
+          instructions: "Patch checkout copy and keep evidence reviewable.",
+          timeoutMs: 90000,
+          dependsOn: ["task-preflight"]
+        }
+      ],
+      qualityGates: [
+        {
+          id: "gate-unit",
+          title: "Unit tests",
+          command: "npm test",
+          required: true,
+          timeoutMs: 120000
+        },
+        {
+          id: "gate-visual",
+          title: "Visual smoke",
+          command: "npm run smoke:ui",
+          required: false,
+          timeoutMs: 180000
+        }
+      ],
+      status: "plan_review",
+      runLinks: [],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:05:00.000Z"
+    };
+
+    const summary = mapRequirementTicketToSummary(requirement);
+
+    expect(summary.taskDefinitions).toEqual([
+      {
+        id: "task-contract",
+        title: "Patch checkout evidence",
+        agent: "shell",
+        command: "npm run patch:checkout",
+        instructions: "Patch checkout copy and keep evidence reviewable.",
+        timeoutMs: 90000,
+        dependsOn: ["task-preflight"]
+      }
+    ]);
+    expect(summary.qualityGateDefinitions).toEqual([
+      {
+        id: "gate-unit",
+        title: "Unit tests",
+        command: "npm test",
+        required: true,
+        timeoutMs: 120000
+      },
+      {
+        id: "gate-visual",
+        title: "Visual smoke",
+        command: "npm run smoke:ui",
+        required: false,
+        timeoutMs: 180000
       }
     ]);
   });

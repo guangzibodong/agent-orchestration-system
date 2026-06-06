@@ -354,6 +354,15 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await expect(detail).toContainText("apps/web/src/app/page.tsx");
     await expect(detail).toContainText("Automatic PR creation");
+    await expect(detail).toContainText(
+      "task-view Inspect evidence: agent shell; command npm run inspect:evidence; instructions Review evidence without making changes.; timeout 1m 30s; depends on task-preflight",
+    );
+    await expect(detail).toContainText(
+      "gate-view Evidence visible: required; command npm test; timeout 2m 00s",
+    );
+    await expect(detail).toContainText(
+      "gate-visual Visual smoke: optional; command npm run smoke:ui; timeout 3m 00s",
+    );
     await expect(detail).not.toContainText(
       "Context paths pending requirement contract",
     );
@@ -362,6 +371,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await expect(detail).not.toContainText(
       "Quality-gated merge candidate evidence",
+    );
+    await expect(detail).not.toContainText(
+      "Execution adapter selected by requirement run",
+    );
+    await expect(detail).not.toContainText(
+      "Linked through artifacts when reported",
     );
     await expect(detail).toContainText(
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
@@ -1791,7 +1806,10 @@ const requirementTickets: RequirementDeliveryTicket[] = [
         id: "task-view",
         title: "Inspect evidence",
         agent: "shell",
+        command: "npm run inspect:evidence",
         instructions: "Review evidence without making changes.",
+        timeoutMs: 90000,
+        dependsOn: ["task-preflight"],
       },
     ],
     qualityGates: [
@@ -1800,12 +1818,14 @@ const requirementTickets: RequirementDeliveryTicket[] = [
         title: "Evidence visible",
         command: "npm test",
         required: true,
+        timeoutMs: 120000,
       },
       {
         id: "gate-visual",
         title: "Visual smoke",
         command: "npm run smoke:ui",
         required: false,
+        timeoutMs: 180000,
       },
     ],
     status: "needs_review",
