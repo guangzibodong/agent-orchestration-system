@@ -158,6 +158,72 @@ describe("FileRequirementStore", () => {
     expect(restored.get(draft.id)).toEqual(confirmed);
   });
 
+  it("links workflow runs and updates execution status without losing history", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-requirement-link-test-"));
+    tempRoots.push(root);
+    const store = new FileRequirementStore({
+      stateFile: join(root, "state", "requirements.json"),
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-06T00:00:00.000Z"));
+    const ticket = store.create({
+      title: "Linked requirement",
+      repositoryPath: "C:/repo",
+      goal: "Create review evidence",
+      acceptanceCriteria: ["Evidence is linked"],
+      tasks: [
+        {
+          title: "Patch",
+          agent: "shell",
+          command: "node patch.js",
+        },
+      ],
+      qualityGates: [
+        {
+          title: "Tests",
+          command: "npm test",
+        },
+      ],
+    });
+
+    vi.setSystemTime(new Date("2026-06-06T00:01:00.000Z"));
+    const running = store.linkWorkflowRun(ticket.id, {
+      workflowRunId: "workflow-1",
+      workflowStatus: "ready",
+      requirementStatus: "running",
+    });
+    vi.setSystemTime(new Date("2026-06-06T00:02:00.000Z"));
+    const retryReady = store.setStatus(ticket.id, "ready_to_run");
+
+    expect(running).toMatchObject({
+      id: ticket.id,
+      status: "running",
+      currentWorkflowRunId: "workflow-1",
+      updatedAt: "2026-06-06T00:01:00.000Z",
+      runLinks: [
+        {
+          workflowRunId: "workflow-1",
+          status: "ready",
+          linkedAt: "2026-06-06T00:01:00.000Z",
+        },
+      ],
+    });
+    expect(retryReady).toMatchObject({
+      id: ticket.id,
+      status: "ready_to_run",
+      currentWorkflowRunId: "workflow-1",
+      updatedAt: "2026-06-06T00:02:00.000Z",
+      runLinks: [
+        {
+          workflowRunId: "workflow-1",
+          status: "ready",
+          linkedAt: "2026-06-06T00:01:00.000Z",
+        },
+      ],
+    });
+  });
+
   it("rejects plan confirmation until the minimum runnable fields exist", async () => {
     const root = await mkdtemp(join(tmpdir(), "mawo-requirement-block-test-"));
     tempRoots.push(root);

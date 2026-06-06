@@ -920,6 +920,257 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
   });
 
+  app.post<{
+    Params: { id: string };
+  }>("/requirements/:id/enqueue", async (request, reply) => {
+    const requirement = await requirementStore.get(request.params.id);
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    if (requirement.status !== "ready_to_run") {
+      return reply.code(409).send({
+        error: "requirement_not_ready_to_run",
+        message: "Confirm a complete requirement plan before enqueueing it.",
+        status: requirement.status,
+      });
+    }
+
+    await activeRunner.refreshFromStore();
+
+    try {
+      let workflow = requirement.currentWorkflowRunId
+        ? activeRunner.getWorkflow(requirement.currentWorkflowRunId)
+        : undefined;
+
+      if (!workflow && !requirement.currentWorkflowRunId) {
+        const repository = requirement.repositoryId
+          ? await repositoryStore.get(requirement.repositoryId)
+          : undefined;
+
+        if (requirement.repositoryId && !repository) {
+          return reply.code(404).send({ error: "repository_not_found" });
+        }
+
+        const repositoryPath = repository?.path ?? requirement.repositoryPath;
+        if (!repositoryPath) {
+          return reply.code(400).send({
+            error: "repository_path_required",
+          });
+        }
+
+        const safety = await repositorySafetyInspector({
+          repository: repository ?? {
+            id: requirement.id,
+            name: requirement.title,
+            path: repositoryPath,
+            qualityGates: [],
+            createdAt: requirement.createdAt,
+            updatedAt: requirement.updatedAt,
+          },
+          allowedRoots: allowedRepositoryRoots,
+        });
+
+        if (!safety.allowedRoot) {
+          return reply.code(403).send({
+            error: "repository_path_not_allowed",
+            message: "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS.",
+            safety,
+          });
+        }
+
+        if (safety.dirty) {
+          return reply.code(409).send({
+            error: "repository_not_clean",
+            message:
+              "Commit, stash, or discard local changes before enqueueing a requirement.",
+            safety,
+          });
+        }
+
+        if (safety.blockedReason) {
+          return reply.code(422).send({
+            error: "repository_not_ready",
+            message: safety.recoveryAction,
+            safety,
+          });
+        }
+
+        const definition = await createRepositoryWorkflowDefinition(
+          {
+            goal: requirement.goal,
+            repositoryId: requirement.repositoryId,
+            repositoryPath,
+            tasks: requirement.tasks,
+            qualityGates:
+              requirement.qualityGates.length > 0
+                ? requirement.qualityGates
+                : (repository?.qualityGates ?? []),
+          },
+          {
+            root,
+          },
+        );
+        workflow = activeRunner.createWorkflow(definition);
+        await activeRunner.flush();
+
+        await appendAuditEvent({
+          type: "workflow.created",
+          actor: "operator",
+          workflowId: workflow.id,
+          metadata: {
+            source: "requirement",
+            requirementId: requirement.id,
+            repositoryId: workflow.repositoryId ?? "",
+            repositoryPath: workflow.repositoryPath ?? "",
+          },
+        });
+      }
+
+      if (!workflow) {
+        return reply.code(409).send({
+          error: "requirement_workflow_not_found",
+          message:
+            "Requirement points to a workflow run that is not available in the runner store.",
+          workflowRunId: requirement.currentWorkflowRunId,
+        });
+      }
+
+      if (workflow.status !== "ready") {
+        return reply.code(409).send({
+          error: "requirement_workflow_not_ready",
+          message: "Retry or resolve the linked workflow before enqueueing.",
+          workflowRunId: workflow.id,
+          workflowStatus: workflow.status,
+        });
+      }
+
+      const nextRequirement = requirement.currentWorkflowRunId
+        ? await requirementStore.setStatus(requirement.id, "running")
+        : await requirementStore.linkWorkflowRun(requirement.id, {
+            workflowRunId: workflow.id,
+            workflowStatus: workflow.status,
+            requirementStatus: "running",
+          });
+
+      const job = await queue.enqueue(workflow.id);
+      await queue.flush();
+
+      await appendAuditEvent({
+        type: "workflow.enqueued",
+        actor: "operator",
+        workflowId: workflow.id,
+        jobId: job.id,
+        metadata: {
+          requirementId: requirement.id,
+          repositoryId: workflow.repositoryId ?? "",
+          repositoryPath: workflow.repositoryPath ?? "",
+          status: job.status,
+        },
+      });
+
+      return reply.code(202).send({
+        requirement: nextRequirement,
+        workflow,
+        job,
+      });
+    } catch (error) {
+      if (error instanceof WorkflowAlreadyRunningError) {
+        return reply.code(409).send({
+          error: "workflow_already_running",
+          message: error.message,
+          job: error.job,
+        });
+      }
+
+      if (error instanceof RepositoryNotReadyError) {
+        return reply.code(422).send({
+          error: "repository_not_ready",
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+  }>("/requirements/:id/retry", async (request, reply) => {
+    const requirement = await requirementStore.get(request.params.id);
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    if (!requirement.currentWorkflowRunId) {
+      return reply.code(409).send({
+        error: "requirement_workflow_required",
+        message: "Requirement has no linked workflow run to retry.",
+        status: requirement.status,
+      });
+    }
+
+    await activeRunner.refreshFromStore();
+
+    if (!activeRunner.getWorkflow(requirement.currentWorkflowRunId)) {
+      return reply.code(409).send({
+        error: "requirement_workflow_not_found",
+        message:
+          "Requirement points to a workflow run that is not available in the runner store.",
+        workflowRunId: requirement.currentWorkflowRunId,
+      });
+    }
+
+    try {
+      const retry = await activeRunner.retryWorkflowWithResult(
+        requirement.currentWorkflowRunId,
+      );
+      await activeRunner.flush();
+      const nextRequirement = await requirementStore.setStatus(
+        requirement.id,
+        "ready_to_run",
+      );
+
+      await appendAuditEvent({
+        type: "workflow.retry_requested",
+        actor: "operator",
+        workflowId: retry.run.id,
+        metadata: {
+          requirementId: requirement.id,
+          previousStatus: retry.previousStatus,
+          status: retry.run.status,
+          cleanedCount: String(retry.cleanedWorkspaces.length),
+          cleanedTaskIds: retry.cleanedWorkspaces
+            .map((item) => item.taskId)
+            .join(","),
+          cleanedBranches: retry.cleanedWorkspaces
+            .map((item) => item.branch)
+            .join(","),
+          cleanedPaths: retry.cleanedWorkspaces
+            .map((item) => item.path)
+            .join(","),
+        },
+      });
+
+      return {
+        requirement: nextRequirement,
+        workflow: retry.run,
+        retry,
+      };
+    } catch (error) {
+      if (error instanceof WorkflowNotRetryableError) {
+        return reply.code(409).send({
+          error: "workflow_not_retryable",
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  });
+
   app.get<{
     Params: { id: string };
   }>("/requirements/:id/report", async (request, reply) => {

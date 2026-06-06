@@ -3,15 +3,26 @@ import {
   ClipboardCheck,
   GitBranch,
   ListChecks,
+  Play,
   RefreshCw,
   X
 } from "lucide-react";
-import type { RequirementStage, RequirementSummary } from "./delivery-console-model";
+import type {
+  RequirementLifecycleAction,
+  RequirementStage,
+  RequirementSummary
+} from "./delivery-console-model";
 import { ArtifactDrawer, type ArtifactDrawerLink } from "./artifact-drawer";
 
 type RequirementDetailShellProps = {
+  actionState?: {
+    action: RequirementLifecycleAction;
+    requirementId: string;
+    status: "error" | "loading" | "success";
+  };
   requirement?: RequirementSummary;
   artifacts?: ArtifactDrawerLink[];
+  onLifecycleAction?: (action: RequirementLifecycleAction) => void;
   viewerMode?: boolean;
   showViewerBanner?: boolean;
 };
@@ -49,9 +60,23 @@ const stageLabels: Record<RequirementStage, string> = {
   archived: "Archived"
 };
 
+const lifecycleActionLabels: Record<RequirementLifecycleAction, string> = {
+  "confirm-plan": "Confirm plan",
+  enqueue: "Enqueue",
+  retry: "Retry"
+};
+
+const lifecycleLoadingLabels: Record<RequirementLifecycleAction, string> = {
+  "confirm-plan": "Confirming plan",
+  enqueue: "Enqueueing",
+  retry: "Retrying"
+};
+
 export function RequirementDetailShell({
+  actionState,
   requirement,
   artifacts = [],
+  onLifecycleAction,
   viewerMode = false,
   showViewerBanner = true,
 }: RequirementDetailShellProps) {
@@ -123,20 +148,37 @@ export function RequirementDetailShell({
             </dl>
 
             {section.title === "Execution" ? (
-              <ArtifactDrawer artifacts={artifacts} />
+              <>
+                <ArtifactDrawer artifacts={artifacts} />
+                <RequirementDetailLifecycleActions
+                  actionState={actionState}
+                  disabled={actionDisabled || !onLifecycleAction}
+                  onAction={onLifecycleAction}
+                  requirement={requirement}
+                />
+              </>
             ) : null}
 
             {section.title === "Review" ? (
               <div className="requirementDetailActions" aria-label="Review actions">
-                <button className="secondaryButton" disabled={actionDisabled} type="button">
+                <button className="secondaryButton" disabled type="button">
                   <Check size={16} aria-hidden="true" />
                   Approve
                 </button>
-                <button className="secondaryButton dangerButton" disabled={actionDisabled} type="button">
+                <button className="secondaryButton dangerButton" disabled type="button">
                   <X size={16} aria-hidden="true" />
                   Reject
                 </button>
-                <button className="secondaryButton" disabled={actionDisabled} type="button">
+                <button
+                  className="secondaryButton"
+                  disabled={
+                    actionDisabled ||
+                    !onLifecycleAction ||
+                    !requirement?.availableActions.includes("retry")
+                  }
+                  onClick={() => onLifecycleAction?.("retry")}
+                  type="button"
+                >
                   <RefreshCw size={16} aria-hidden="true" />
                   Retry
                 </button>
@@ -147,6 +189,69 @@ export function RequirementDetailShell({
       </div>
     </section>
   );
+}
+
+function RequirementDetailLifecycleActions({
+  actionState,
+  disabled,
+  onAction,
+  requirement,
+}: {
+  actionState?: RequirementDetailShellProps["actionState"];
+  disabled: boolean;
+  onAction?: (action: RequirementLifecycleAction) => void;
+  requirement?: RequirementSummary;
+}) {
+  const availableActions = requirement?.availableActions ?? [];
+
+  return (
+    <div className="requirementDetailActions" aria-label="Requirement lifecycle actions">
+      {(["confirm-plan", "enqueue", "retry"] as RequirementLifecycleAction[]).map(
+        (action) => {
+          const isLoading =
+            actionState?.status === "loading" &&
+            actionState.requirementId === requirement?.id &&
+            actionState.action === action;
+
+          return (
+            <button
+              className={
+                action === "retry" ? "secondaryButton dangerButton" : "secondaryButton"
+              }
+              disabled={disabled || !availableActions.includes(action) || isLoading}
+              key={action}
+              onClick={() => onAction?.(action)}
+              type="button"
+            >
+              <RequirementDetailActionIcon action={action} spinning={isLoading} />
+              {isLoading
+                ? lifecycleLoadingLabels[action]
+                : lifecycleActionLabels[action]}
+            </button>
+          );
+        },
+      )}
+    </div>
+  );
+}
+
+function RequirementDetailActionIcon({
+  action,
+  spinning,
+}: {
+  action: RequirementLifecycleAction;
+  spinning?: boolean;
+}) {
+  const className = spinning ? "spinIcon" : undefined;
+
+  switch (action) {
+    case "confirm-plan":
+      return <Check className={className} size={16} aria-hidden="true" />;
+    case "enqueue":
+      return <Play className={className} size={16} aria-hidden="true" />;
+    case "retry":
+      return <RefreshCw className={className} size={16} aria-hidden="true" />;
+  }
 }
 
 export function buildRequirementDetailSections(

@@ -1,11 +1,24 @@
 "use client";
 
-import { Plus, Search, Settings, ShieldCheck } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  Play,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 import { useState } from "react";
-import type { DeliveryConsoleModel } from "./delivery-console-model";
+import type {
+  DeliveryConsoleModel,
+  RequirementLifecycleAction,
+} from "./delivery-console-model";
 import {
   buildDecisionQueueDisplay,
   buildRequirementQueueRows,
+  type RequirementQueueRow,
 } from "./requirement-queue-display";
 import { NewRequirementPanel } from "./new-requirement-panel";
 import type { NewRequirementPayload } from "./new-requirement-payload";
@@ -19,7 +32,36 @@ type RequirementDeliveryConsoleProps = {
   syncTone?: "muted" | "danger";
   viewerMode?: boolean;
   initialNewRequirementPanelOpen?: boolean;
+  onRequirementLifecycleAction?: (
+    requirementId: string,
+    action: RequirementLifecycleAction,
+  ) => Promise<void> | void;
   onNewRequirementSubmit?: (payload: NewRequirementPayload) => Promise<void> | void;
+};
+
+type RequirementActionState = {
+  action: RequirementLifecycleAction;
+  message: string;
+  requirementId: string;
+  status: "error" | "loading" | "success";
+};
+
+const actionLabels: Record<RequirementLifecycleAction, string> = {
+  "confirm-plan": "Confirm plan",
+  enqueue: "Enqueue",
+  retry: "Retry",
+};
+
+const loadingActionLabels: Record<RequirementLifecycleAction, string> = {
+  "confirm-plan": "Confirming plan",
+  enqueue: "Enqueueing",
+  retry: "Retrying",
+};
+
+const successActionMessages: Record<RequirementLifecycleAction, string> = {
+  "confirm-plan": "Plan confirmed",
+  enqueue: "Requirement enqueued",
+  retry: "Retry reset to ready",
 };
 
 export function RequirementDeliveryConsole({
@@ -28,12 +70,15 @@ export function RequirementDeliveryConsole({
   syncTone = "muted",
   viewerMode = false,
   initialNewRequirementPanelOpen = false,
+  onRequirementLifecycleAction,
   onNewRequirementSubmit,
 }: RequirementDeliveryConsoleProps) {
   const [isNewRequirementPanelOpen, setIsNewRequirementPanelOpen] = useState(
     initialNewRequirementPanelOpen,
   );
   const [newRequirementMessage, setNewRequirementMessage] = useState<string>();
+  const [requirementActionState, setRequirementActionState] =
+    useState<RequirementActionState>();
   const queueRows = buildRequirementQueueRows(model.requirements);
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
   const selectedRequirement = model.requirements[0];
@@ -53,6 +98,42 @@ export function RequirementDeliveryConsole({
           ? error.message
           : "Requirement draft submission failed",
       );
+    }
+  }
+
+  async function handleRequirementLifecycleAction(
+    requirementId: string,
+    action: RequirementLifecycleAction,
+  ) {
+    const requirementTitle =
+      model.requirements.find((requirement) => requirement.id === requirementId)
+        ?.title ?? requirementId;
+
+    setRequirementActionState({
+      action,
+      message: `${loadingActionLabels[action]} for ${requirementTitle}`,
+      requirementId,
+      status: "loading",
+    });
+
+    try {
+      await onRequirementLifecycleAction?.(requirementId, action);
+      setRequirementActionState({
+        action,
+        message: `${successActionMessages[action]} for ${requirementTitle}`,
+        requirementId,
+        status: "success",
+      });
+    } catch (error: unknown) {
+      setRequirementActionState({
+        action,
+        message:
+          error instanceof Error
+            ? error.message
+            : `${actionLabels[action]} failed for ${requirementTitle}`,
+        requirementId,
+        status: "error",
+      });
     }
   }
 
@@ -162,6 +243,19 @@ export function RequirementDeliveryConsole({
                     <span>{row.riskLabel}</span>
                   </div>
                   <p>{row.nextAction}</p>
+                  <RequirementRunStatus row={row} />
+                  <RequirementQueueActions
+                    actionState={requirementActionState}
+                    disabled={
+                      viewerMode ||
+                      !onRequirementLifecycleAction ||
+                      requirementActionState?.status === "loading"
+                    }
+                    onAction={(action) =>
+                      handleRequirementLifecycleAction(row.id, action)
+                    }
+                    row={row}
+                  />
                   <small>
                     {row.nodeLabel} / {row.updatedAt}
                   </small>
@@ -255,8 +349,17 @@ export function RequirementDeliveryConsole({
           <details className="requirementDetailDisclosure">
             <summary>Requirement detail</summary>
             <RequirementDetailShell
+              actionState={requirementActionState}
               requirement={selectedRequirement}
               showViewerBanner={false}
+              onLifecycleAction={(action) =>
+                selectedRequirement
+                  ? handleRequirementLifecycleAction(
+                      selectedRequirement.id,
+                      action,
+                    )
+                  : undefined
+              }
               viewerMode={viewerMode}
             />
           </details>
@@ -293,6 +396,102 @@ export function RequirementDeliveryConsole({
       </section>
     </main>
   );
+}
+
+function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {
+  return (
+    <div className="requirementRunStatus" aria-label="Current workflow">
+      <span>Current workflow</span>
+      {row.workflowRunId && row.workflowRunHref ? (
+        <a href={row.workflowRunHref}>
+          <ExternalLink size={13} aria-hidden="true" />
+          {row.workflowRunId}
+        </a>
+      ) : (
+        <strong>No run linked</strong>
+      )}
+      <strong>{row.currentJobStatusLabel ?? row.workflowRunStatusLabel}</strong>
+    </div>
+  );
+}
+
+function RequirementQueueActions({
+  actionState,
+  disabled,
+  onAction,
+  row,
+}: {
+  actionState?: RequirementActionState;
+  disabled: boolean;
+  onAction: (action: RequirementLifecycleAction) => void;
+  row: RequirementQueueRow;
+}) {
+  const rowActionState =
+    actionState?.requirementId === row.id ? actionState : undefined;
+
+  if (!row.availableActions.length) {
+    return (
+      <div className="requirementQueueActions" aria-label="Requirement actions">
+        <button className="secondaryButton" disabled type="button">
+          No action available
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="requirementQueueActions" aria-label="Requirement actions">
+      {row.availableActions.map((action) => {
+        const isLoading =
+          rowActionState?.status === "loading" &&
+          rowActionState.action === action;
+
+        return (
+          <button
+            className={action === "retry" ? "secondaryButton dangerButton" : "secondaryButton"}
+            disabled={disabled || isLoading}
+            key={action}
+            onClick={() => onAction(action)}
+            type="button"
+          >
+            <ActionIcon action={action} spinning={isLoading} />
+            {isLoading ? loadingActionLabels[action] : actionLabels[action]}
+          </button>
+        );
+      })}
+      {rowActionState ? (
+        <p
+          className={
+            rowActionState.status === "error"
+              ? "requirementActionMessage errorText"
+              : "requirementActionMessage"
+          }
+          role={rowActionState.status === "error" ? "alert" : "status"}
+        >
+          {rowActionState.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ActionIcon({
+  action,
+  spinning,
+}: {
+  action: RequirementLifecycleAction;
+  spinning?: boolean;
+}) {
+  const className = spinning ? "spinIcon" : undefined;
+
+  switch (action) {
+    case "confirm-plan":
+      return <Check className={className} size={16} aria-hidden="true" />;
+    case "enqueue":
+      return <Play className={className} size={16} aria-hidden="true" />;
+    case "retry":
+      return <RefreshCw className={className} size={16} aria-hidden="true" />;
+  }
 }
 
 function Metric({

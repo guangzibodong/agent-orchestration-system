@@ -24,7 +24,12 @@ const requirement: RequirementSummary = {
   riskLevel: "medium",
   nextAction: "Review merge candidate",
   nodeLabel: "2 tasks / 2 gates",
-  updatedAt: "2026-06-06T10:10:00.000Z"
+  updatedAt: "2026-06-06T10:10:00.000Z",
+  workflowRunHref: "/workflows/workflow-review",
+  workflowRunId: "workflow-review",
+  workflowRunStatus: "needs_review",
+  workflowRunStatusLabel: "Needs review",
+  availableActions: []
 };
 
 const artifacts: ArtifactDrawerLink[] = [

@@ -1,6 +1,7 @@
 import type {
   DeliveryDecisionItem,
   DeliveryDecisionSeverity,
+  RequirementLifecycleAction,
   RequirementRiskLevel,
   RequirementStage,
   RequirementSummary
@@ -15,6 +16,11 @@ export type RequirementQueueRow = {
   nextAction: string;
   nodeLabel: string;
   updatedAt: string;
+  availableActions: RequirementLifecycleAction[];
+  currentJobStatusLabel?: string;
+  workflowRunHref?: string;
+  workflowRunId?: string;
+  workflowRunStatusLabel: string;
 };
 
 export type DecisionQueueDisplayItem = {
@@ -44,6 +50,14 @@ const riskLabels: Record<RequirementRiskLevel, string> = {
   high: "High risk"
 };
 
+const jobStatusLabels = {
+  queued: "Queued",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  canceled: "Canceled"
+} as const;
+
 const severityLabels: Record<DeliveryDecisionSeverity, string> = {
   info: "Info",
   warning: "Needs review",
@@ -61,7 +75,14 @@ export function buildRequirementQueueRows(
     riskLabel: riskLabels[requirement.riskLevel],
     nextAction: requirement.nextAction,
     nodeLabel: requirement.nodeLabel,
-    updatedAt: requirement.updatedAt
+    updatedAt: requirement.updatedAt,
+    availableActions: requirement.availableActions,
+    currentJobStatusLabel: requirement.currentJobStatus
+      ? jobStatusLabels[requirement.currentJobStatus]
+      : undefined,
+    workflowRunHref: requirement.workflowRunHref,
+    workflowRunId: requirement.workflowRunId,
+    workflowRunStatusLabel: requirement.workflowRunStatusLabel
   }));
 }
 

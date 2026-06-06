@@ -8,6 +8,7 @@ import {
   type RequirementDeliveryTicket,
   type RequirementStatus,
   type UpdateRequirementDeliveryTicketRequest,
+  type WorkflowStatus,
 } from "@mawo/shared";
 import { writeJsonFileAtomically } from "./atomic-json-file.js";
 
@@ -24,6 +25,20 @@ export type RequirementStore = {
     input: UpdateRequirementDeliveryTicketRequest,
   ): MaybePromise<RequirementDeliveryTicket | undefined>;
   confirmPlan(id: string): MaybePromise<RequirementDeliveryTicket | undefined>;
+  linkWorkflowRun(
+    id: string,
+    input: RequirementWorkflowRunLinkInput,
+  ): MaybePromise<RequirementDeliveryTicket | undefined>;
+  setStatus(
+    id: string,
+    status: RequirementStatus,
+  ): MaybePromise<RequirementDeliveryTicket | undefined>;
+};
+
+export type RequirementWorkflowRunLinkInput = {
+  workflowRunId: string;
+  workflowStatus?: WorkflowStatus;
+  requirementStatus: RequirementStatus;
 };
 
 export type FileRequirementStoreOptions = {
@@ -211,8 +226,68 @@ export class FileRequirementStore implements RequirementStore {
     return confirmed;
   }
 
+  linkWorkflowRun(
+    id: string,
+    input: RequirementWorkflowRunLinkInput,
+  ): RequirementDeliveryTicket | undefined {
+    return this.replace(id, (existing) =>
+      requirementDeliveryTicketSchema.parse({
+        ...existing,
+        status: input.requirementStatus,
+        currentWorkflowRunId: input.workflowRunId,
+        runLinks: [
+          ...existing.runLinks,
+          {
+            workflowRunId: input.workflowRunId,
+            status: input.workflowStatus,
+            linkedAt: new Date().toISOString(),
+          },
+        ],
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  setStatus(
+    id: string,
+    status: RequirementStatus,
+  ): RequirementDeliveryTicket | undefined {
+    return this.replace(id, (existing) =>
+      requirementDeliveryTicketSchema.parse({
+        ...existing,
+        status,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
   private write(requirements: RequirementDeliveryTicket[]): void {
     writeJsonFileAtomically(this.stateFile, requirements);
+  }
+
+  private replace(
+    id: string,
+    createNext: (
+      existing: RequirementDeliveryTicket,
+    ) => RequirementDeliveryTicket,
+  ): RequirementDeliveryTicket | undefined {
+    const requirements = this.list();
+    const index = requirements.findIndex(
+      (requirement) => requirement.id === id,
+    );
+
+    if (index < 0) {
+      return undefined;
+    }
+
+    const next = createNext(requirements[index]!);
+    const nextRequirements = requirements.map((requirement, currentIndex) =>
+      currentIndex === index ? next : requirement,
+    );
+
+    this.write(nextRequirements);
+
+    return next;
   }
 }
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { WorkflowRun } from "@mawo/shared";
+import type { RequirementDeliveryTicket, WorkflowRun } from "@mawo/shared";
 import {
   buildDeliveryConsoleModel,
+  mapRequirementTicketToSummary,
   mapWorkflowToRequirementSummary
 } from "./delivery-console-model";
 
@@ -50,7 +51,12 @@ describe("delivery console model", () => {
       riskLevel: "medium",
       nextAction: "Run isolated workflow",
       nodeLabel: "1 task / 1 gate",
-      updatedAt: "2026-06-06T09:05:00.000Z"
+      updatedAt: "2026-06-06T09:05:00.000Z",
+      workflowRunHref: "/workflows/workflow-123456789",
+      workflowRunId: "workflow-123456789",
+      workflowRunStatus: "ready",
+      workflowRunStatusLabel: "Ready",
+      availableActions: ["enqueue"]
     });
 
     expect(
@@ -77,6 +83,74 @@ describe("delivery console model", () => {
       requirementStage: "delivered",
       nextAction: "Review delivered evidence",
       riskLevel: "low"
+    });
+  });
+
+  it("maps requirement tickets to lifecycle actions and current workflow evidence", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-1",
+      title: "Confirm checkout plan",
+      repositoryPath: "C:/work/shop",
+      goal: "Ship checkout evidence",
+      acceptanceCriteria: ["Gate evidence is reviewable"],
+      constraints: ["Manual git apply only"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "medium",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          agent: "shell",
+          instructions: "Patch checkout"
+        }
+      ],
+      qualityGates: [
+        {
+          id: "gate-1",
+          title: "Unit tests",
+          command: "npm test",
+          required: true
+        }
+      ],
+      status: "plan_review",
+      runLinks: [],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:05:00.000Z"
+    };
+
+    expect(mapRequirementTicketToSummary(requirement)).toMatchObject({
+      id: "requirement-1",
+      requirementStage: "plan_review",
+      nextAction: "Confirm plan",
+      workflowRunStatusLabel: "No workflow run linked",
+      availableActions: ["confirm-plan"]
+    });
+
+    expect(
+      mapRequirementTicketToSummary(
+        {
+          ...requirement,
+          status: "running",
+          currentWorkflowRunId: "workflow-1",
+          runLinks: [
+            {
+              workflowRunId: "workflow-1",
+              status: "ready",
+              linkedAt: "2026-06-06T11:06:00.000Z"
+            }
+          ]
+        },
+        new Map([[baseWorkflow.id, baseWorkflow]]),
+        { jobStatusByRequirementId: { "requirement-1": "queued" } }
+      )
+    ).toMatchObject({
+      currentJobStatus: "queued",
+      requirementStage: "running",
+      workflowRunHref: "/workflows/workflow-1",
+      workflowRunId: "workflow-1",
+      workflowRunStatus: "ready",
+      workflowRunStatusLabel: "Ready"
     });
   });
 

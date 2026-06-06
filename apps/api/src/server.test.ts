@@ -377,6 +377,8 @@ describe("runner API", () => {
         payload: {},
       },
       { method: "POST", url: "/requirements/missing-requirement/confirm-plan" },
+      { method: "POST", url: "/requirements/missing-requirement/enqueue" },
+      { method: "POST", url: "/requirements/missing-requirement/retry" },
       { method: "POST", url: "/workflows/demo" },
       { method: "POST", url: "/workflows/worktree-demo" },
       { method: "POST", url: "/workflows/agent-demo" },
@@ -602,6 +604,256 @@ describe("runner API", () => {
     });
     expect(workflowsResponse.statusCode).toBe(200);
     expect(workflowsResponse.json()).toEqual([]);
+  });
+
+  it("enqueues confirmed requirements as repository workflows and links run evidence", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-enqueue-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Deliver safe README change",
+        repositoryPath: repoPath,
+        goal: "Produce an isolated, reviewable patch",
+        acceptanceCriteria: ["README explains the manual apply path"],
+        tasks: [
+          {
+            id: "edit-readme",
+            title: "Edit README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','requirement\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "tests",
+            title: "Unit tests",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    const enqueueBody = enqueueResponse.json();
+    const linkedRequirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+    const workflowsResponse = await app.inject({
+      method: "GET",
+      url: "/workflows",
+    });
+    let completedJobResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${enqueueBody.job.id}`,
+    });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (completedJobResponse.json().status === "completed") {
+        break;
+      }
+
+      await delay(250);
+      completedJobResponse = await app.inject({
+        method: "GET",
+        url: `/jobs/${enqueueBody.job.id}`,
+      });
+    }
+
+    expect(enqueueResponse.statusCode).toBe(202);
+    expect(enqueueBody).toMatchObject({
+      requirement: {
+        id: requirement.id,
+        status: "running",
+        currentWorkflowRunId: expect.any(String),
+        runLinks: [
+          expect.objectContaining({
+            workflowRunId: expect.any(String),
+            status: "ready",
+          }),
+        ],
+      },
+      workflow: {
+        status: "ready",
+        repositoryPath: repoPath,
+      },
+      job: {
+        status: "queued",
+        workflowId: expect.any(String),
+      },
+    });
+    expect(enqueueBody.job.workflowId).toBe(enqueueBody.workflow.id);
+    expect(enqueueBody.requirement.currentWorkflowRunId).toBe(
+      enqueueBody.workflow.id,
+    );
+    expect(linkedRequirementResponse.json()).toEqual(enqueueBody.requirement);
+    expect(workflowsResponse.json()).toEqual([
+      expect.objectContaining({
+        id: enqueueBody.workflow.id,
+        repositoryPath: repoPath,
+      }),
+    ]);
+    expect(completedJobResponse.json()).toMatchObject({
+      id: enqueueBody.job.id,
+      status: "completed",
+    });
+  });
+
+  it("rejects requirement enqueue when repository safety blocks execution", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-dirty-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    await writeFile(join(repoPath, "dirty.txt"), "dirty\n", "utf8");
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Dirty repo requirement",
+        repositoryPath: repoPath,
+        goal: "Should not start",
+        acceptanceCriteria: ["Dirty repo blocks execution"],
+        tasks: [
+          {
+            title: "Patch",
+            agent: "shell",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+        qualityGates: [
+          {
+            title: "Tests",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+
+    expect(enqueueResponse.statusCode).toBe(409);
+    expect(enqueueResponse.json()).toMatchObject({
+      error: "repository_not_clean",
+      safety: {
+        repositoryId: requirement.id,
+        dirty: true,
+        blockedReason: "repository_dirty",
+      },
+    });
+  });
+
+  it("retries linked requirement workflows without stale evidence", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-retry-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Retry failed gate requirement",
+        repositoryPath: repoPath,
+        goal: "Fail first, retry cleanly",
+        acceptanceCriteria: ["Retry clears stale gate result"],
+        tasks: [
+          {
+            id: "patch",
+            title: "Patch README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','retry\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "gate",
+            title: "Failing gate",
+            command: `${node} -e "process.exit(1)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    const workflowId = enqueueResponse.json().workflow.id;
+    const runResponse = await app.inject({
+      method: "POST",
+      url: `/workflows/${workflowId}/run`,
+    });
+
+    const retryResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/retry`,
+    });
+    const retryBody = retryResponse.json();
+
+    expect(runResponse.json()).toMatchObject({
+      id: workflowId,
+      status: "gate_failed",
+      qualityGates: [
+        expect.objectContaining({
+          id: "gate",
+          status: "failed",
+        }),
+      ],
+    });
+    expect(retryResponse.statusCode).toBe(200);
+    expect(retryBody).toMatchObject({
+      requirement: {
+        id: requirement.id,
+        status: "ready_to_run",
+        currentWorkflowRunId: workflowId,
+      },
+      workflow: {
+        id: workflowId,
+        status: "ready",
+        qualityGates: [
+          expect.objectContaining({
+            id: "gate",
+            status: "waiting",
+          }),
+        ],
+      },
+      retry: {
+        previousStatus: "gate_failed",
+        status: "ready",
+      },
+    });
+    expect(retryBody.workflow.qualityGates[0].result).toBeUndefined();
   });
 
   it("lists configured agents without exposing command templates", async () => {

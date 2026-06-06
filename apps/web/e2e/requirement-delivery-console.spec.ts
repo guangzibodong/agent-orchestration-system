@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import type { WorkflowRun } from "@mawo/shared";
+import type { RequirementDeliveryTicket, WorkflowRun } from "@mawo/shared";
 
 const API_ORIGIN = "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
@@ -20,7 +20,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       }),
     ).toBeVisible();
     await expect(consoleShell.getByLabel("Workflow sync")).toContainText(
-      "0 workflow runs loaded",
+      "0 requirement tickets loaded",
     );
     await expect(consoleShell.getByText("No requirements yet")).toBeVisible();
     await expect(consoleShell.getByText("No decisions waiting")).toBeVisible();
@@ -38,7 +38,7 @@ test.describe("Requirement Delivery Console smoke", () => {
 
     const consoleShell = page.locator("main.deliveryShell");
     await expect(consoleShell.getByLabel("Workflow sync")).toContainText(
-      "2 workflow runs loaded",
+      "2 requirement tickets loaded",
     );
 
     await expectMetric(page, "Active", "2");
@@ -73,6 +73,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       [apiTokenStorageKey, apiTokenRoleStorageKey],
     );
     await mockApi(page, mixedWorkflows, {
+      requirements: requirementTickets,
       onWorkflowRequest: (authorization) => {
         workflowAuthorizations.push(authorization);
       },
@@ -273,6 +274,155 @@ test.describe("Requirement Delivery Console smoke", () => {
       ]),
     });
   });
+
+  test("operator can confirm, enqueue, and retry requirement lifecycle actions", async ({
+    page,
+  }) => {
+    const actions: string[] = [];
+    const lifecycleWorkflows: WorkflowRun[] = [lifecycleFailedWorkflow];
+    const lifecycleRequirements: RequirementDeliveryTicket[] = [
+      lifecyclePlanRequirement,
+      lifecycleRetryRequirement,
+    ];
+    let releaseConfirmPlan: (() => void) | undefined;
+    const confirmPlanHold = new Promise<void>((resolve) => {
+      releaseConfirmPlan = resolve;
+    });
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, lifecycleWorkflows, {
+      requirements: lifecycleRequirements,
+      onRequirementAction: async ({ action, id }) => {
+        actions.push(`${action}:${id}`);
+
+        if (id === "requirement-plan" && action === "confirm-plan") {
+          await confirmPlanHold;
+          return updateRequirement(lifecycleRequirements, id, {
+            status: "ready_to_run",
+            updatedAt: "2026-06-06T11:05:00.000Z",
+          });
+        }
+
+        if (id === "requirement-plan" && action === "enqueue") {
+          lifecycleWorkflows.push(lifecycleQueuedWorkflow);
+          const nextRequirement = updateRequirement(
+            lifecycleRequirements,
+            id,
+            {
+              status: "running",
+              currentWorkflowRunId: "workflow-lifecycle",
+              runLinks: [
+                {
+                  workflowRunId: "workflow-lifecycle",
+                  status: "ready",
+                  linkedAt: "2026-06-06T11:06:00.000Z",
+                },
+              ],
+              updatedAt: "2026-06-06T11:06:00.000Z",
+            },
+          );
+
+          return {
+            requirement: nextRequirement,
+            workflow: lifecycleQueuedWorkflow,
+            job: {
+              id: "job-lifecycle",
+              workflowId: "workflow-lifecycle",
+              status: "queued",
+              createdAt: "2026-06-06T11:06:00.000Z",
+              updatedAt: "2026-06-06T11:06:00.000Z",
+            },
+          };
+        }
+
+        if (id === "requirement-retry" && action === "retry") {
+          const nextRequirement = updateRequirement(
+            lifecycleRequirements,
+            id,
+            {
+              status: "ready_to_run",
+              updatedAt: "2026-06-06T11:07:00.000Z",
+              runLinks: [
+                {
+                  workflowRunId: "workflow-failed",
+                  status: "ready",
+                  linkedAt: "2026-06-06T11:07:00.000Z",
+                },
+              ],
+            },
+          );
+
+          return {
+            requirement: nextRequirement,
+            workflow: {
+              ...lifecycleFailedWorkflow,
+              status: "ready",
+              qualityGates: lifecycleFailedWorkflow.qualityGates.map((gate) => ({
+                ...gate,
+                status: "waiting",
+                result: undefined,
+              })),
+            },
+            retry: {
+              previousStatus: "gate_failed",
+              status: "ready",
+            },
+          };
+        }
+
+        throw new Error(`Unexpected requirement action ${action}:${id}`);
+      },
+    });
+
+    await page.goto("/");
+
+    const queue = page.locator(".requirementQueuePanel");
+    const planItem = queue
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Confirm checkout plan" });
+    await expect(planItem).toContainText("Plan review");
+
+    await planItem.getByRole("button", { name: "Confirm plan" }).click();
+    await expect(
+      planItem.getByRole("button", { name: "Confirming plan" }),
+    ).toBeDisabled();
+    releaseConfirmPlan?.();
+
+    await expect(planItem).toContainText("Ready to run");
+    await expect
+      .poll(() => actions.join("|"), {
+        message: "wait for confirm plan action",
+      })
+      .toContain("confirm-plan:requirement-plan");
+
+    await planItem.getByRole("button", { name: "Enqueue" }).click();
+    await expect(planItem).toContainText("Running");
+    await expect(
+      planItem.getByRole("link", { name: /workflow-lifecycle/i }),
+    ).toBeVisible();
+    await expect(planItem).toContainText("Queued");
+
+    const retryItem = queue
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Retry stale gate" });
+    await expect(retryItem).toContainText("Needs rework");
+    await expect(
+      retryItem.getByRole("link", { name: /workflow-failed/i }),
+    ).toBeVisible();
+    await retryItem.getByRole("button", { name: "Retry" }).click();
+    await expect(retryItem).toContainText("Ready to run");
+    expect(actions).toEqual([
+      "confirm-plan:requirement-plan",
+      "enqueue:requirement-plan",
+      "retry:requirement-retry",
+    ]);
+  });
 });
 
 async function expectMetric(page: Page, label: string, value: string) {
@@ -290,6 +440,12 @@ async function mockApi(
   options: {
     onWorkflowRequest?: (authorization: string | undefined) => void;
     onRequirementCreate?: (payload: unknown) => void;
+    onRequirementAction?: (request: {
+      action: "confirm-plan" | "enqueue" | "retry";
+      authorization: string | undefined;
+      id: string;
+    }) => Promise<unknown> | unknown;
+    requirements?: RequirementDeliveryTicket[];
   } = {},
 ) {
   await page.unroute(`${API_ORIGIN}/**`).catch(() => undefined);
@@ -305,7 +461,7 @@ async function mockApi(
     }
 
     if (request.method() === "GET" && url.pathname === "/requirements") {
-      await route.fulfill({ json: requirementTickets });
+      await route.fulfill({ json: options.requirements ?? [] });
       return;
     }
 
@@ -334,6 +490,36 @@ async function mockApi(
           updatedAt: "2026-06-06T10:30:00.000Z",
           ...(typeof payload === "object" && payload ? payload : {}),
         },
+      });
+      return;
+    }
+
+    const requirementActionMatch = url.pathname.match(
+      /^\/requirements\/([^/]+)\/(confirm-plan|enqueue|retry)$/,
+    );
+    if (request.method() === "POST" && requirementActionMatch) {
+      if (request.headers().authorization === "Bearer viewer-token") {
+        await route.fulfill({
+          status: 403,
+          json: {
+            error: "forbidden",
+            message: "This endpoint requires an operator token.",
+            requiredRole: "operator",
+            role: "viewer",
+          },
+        });
+        return;
+      }
+
+      const [, id, action] = requirementActionMatch;
+      const body = await options.onRequirementAction?.({
+        action: action as "confirm-plan" | "enqueue" | "retry",
+        authorization: request.headers().authorization,
+        id,
+      });
+      await route.fulfill({
+        status: action === "enqueue" ? 202 : 200,
+        json: body ?? { error: "unhandled_requirement_action" },
       });
       return;
     }
@@ -375,6 +561,22 @@ async function mockApi(
       json: fallbackBody(url.pathname),
     });
   });
+}
+
+function updateRequirement(
+  requirements: RequirementDeliveryTicket[],
+  id: string,
+  patch: Partial<RequirementDeliveryTicket>,
+): RequirementDeliveryTicket {
+  const index = requirements.findIndex((requirement) => requirement.id === id);
+  expect(index).toBeGreaterThanOrEqual(0);
+
+  requirements[index] = {
+    ...(requirements[index] as RequirementDeliveryTicket),
+    ...patch,
+  };
+
+  return requirements[index] as RequirementDeliveryTicket;
 }
 
 async function fillField(scope: Locator, label: RegExp, value: string) {
@@ -535,7 +737,105 @@ const mobileStressWorkflows: WorkflowRun[] = [
   },
 ];
 
-const requirementTickets = [
+const lifecycleFailedWorkflow: WorkflowRun = {
+  ...baseWorkflow,
+  id: "workflow-failed",
+  goal: "Retry stale gate",
+  status: "gate_failed",
+  updatedAt: "2026-06-06T10:58:00.000Z",
+  qualityGates: [
+    {
+      id: "gate-retry",
+      title: "Unit tests",
+      status: "failed",
+      result: {
+        exitCode: 1,
+        stderr: "failing gate",
+      },
+    },
+  ],
+};
+
+const lifecycleQueuedWorkflow: WorkflowRun = {
+  ...baseWorkflow,
+  id: "workflow-lifecycle",
+  goal: "Confirm checkout plan",
+  status: "ready",
+  updatedAt: "2026-06-06T11:06:00.000Z",
+};
+
+const lifecyclePlanRequirement: RequirementDeliveryTicket = {
+  id: "requirement-plan",
+  title: "Confirm checkout plan",
+  repositoryPath: "C:/work/shop",
+  goal: "Run a confirmed checkout plan with isolated evidence.",
+  acceptanceCriteria: ["Plan is confirmed before execution."],
+  constraints: ["Manual git apply only"],
+  nonGoals: ["Automatic PR creation"],
+  riskLevel: "medium",
+  contextPaths: ["apps/web/src/app/page.tsx"],
+  tasks: [
+    {
+      id: "task-plan",
+      title: "Patch checkout copy",
+      agent: "shell",
+      instructions: "Patch checkout copy.",
+    },
+  ],
+  qualityGates: [
+    {
+      id: "gate-plan",
+      title: "Unit tests",
+      command: "npm test",
+      required: true,
+    },
+  ],
+  status: "plan_review",
+  runLinks: [],
+  createdAt: "2026-06-06T11:00:00.000Z",
+  updatedAt: "2026-06-06T11:00:00.000Z",
+};
+
+const lifecycleRetryRequirement: RequirementDeliveryTicket = {
+  id: "requirement-retry",
+  title: "Retry stale gate",
+  repositoryPath: "C:/work/shop",
+  goal: "Retry a failed gate without stale evidence.",
+  acceptanceCriteria: ["Retry resets the current execution attempt."],
+  constraints: ["Manual git apply only"],
+  nonGoals: ["Automatic PR creation"],
+  riskLevel: "high",
+  contextPaths: ["apps/web/src/app/page.tsx"],
+  tasks: [
+    {
+      id: "task-retry",
+      title: "Patch retry path",
+      agent: "shell",
+      instructions: "Patch retry path.",
+    },
+  ],
+  qualityGates: [
+    {
+      id: "gate-retry",
+      title: "Unit tests",
+      command: "npm test",
+      required: true,
+    },
+  ],
+  status: "needs_rework",
+  currentWorkflowRunId: "workflow-failed",
+  runLinks: [
+    {
+      workflowRunId: "workflow-failed",
+      status: "gate_failed",
+      linkedAt: "2026-06-06T10:58:00.000Z",
+    },
+  ],
+  createdAt: "2026-06-06T10:50:00.000Z",
+  updatedAt: "2026-06-06T10:58:00.000Z",
+};
+
+const requirementTickets: RequirementDeliveryTicket[] = [
   {
     id: "requirement-viewer-readable",
     title: "Viewer readable requirement",
@@ -567,6 +867,13 @@ const requirementTickets = [
     ],
     status: "needs_review",
     currentWorkflowRunId: "workflow-needs-review",
+    runLinks: [
+      {
+        workflowRunId: "workflow-needs-review",
+        status: "needs_review",
+        linkedAt: "2026-06-06T10:25:00.000Z",
+      },
+    ],
     createdAt: "2026-06-06T10:20:00.000Z",
     updatedAt: "2026-06-06T10:25:00.000Z",
   },

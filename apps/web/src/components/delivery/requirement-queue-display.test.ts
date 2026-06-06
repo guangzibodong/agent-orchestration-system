@@ -19,7 +19,12 @@ const requirements: RequirementSummary[] = [
     riskLevel: "medium",
     nextAction: "Run isolated workflow",
     nodeLabel: "1 task / 1 gate",
-    updatedAt: "2026-06-06T09:05:00.000Z"
+    updatedAt: "2026-06-06T09:05:00.000Z",
+    workflowRunHref: "/workflows/workflow-ready",
+    workflowRunId: "workflow-ready",
+    workflowRunStatus: "ready",
+    workflowRunStatusLabel: "Ready",
+    availableActions: ["enqueue"]
   },
   {
     id: "req-2",
@@ -31,7 +36,13 @@ const requirements: RequirementSummary[] = [
     riskLevel: "high",
     nextAction: "Retry failed gate",
     nodeLabel: "2 tasks / 1 gate",
-    updatedAt: "2026-06-06T10:05:00.000Z"
+    updatedAt: "2026-06-06T10:05:00.000Z",
+    currentJobStatus: "failed",
+    workflowRunHref: "/workflows/workflow-failed",
+    workflowRunId: "workflow-failed",
+    workflowRunStatus: "gate_failed",
+    workflowRunStatusLabel: "Gate failed",
+    availableActions: ["retry"]
   }
 ];
 
@@ -59,7 +70,12 @@ describe("requirement queue display", () => {
         riskLabel: "Medium risk",
         nextAction: "Run isolated workflow",
         nodeLabel: "1 task / 1 gate",
-        updatedAt: "2026-06-06T09:05:00.000Z"
+        updatedAt: "2026-06-06T09:05:00.000Z",
+        availableActions: ["enqueue"],
+        currentJobStatusLabel: undefined,
+        workflowRunHref: "/workflows/workflow-ready",
+        workflowRunId: "workflow-ready",
+        workflowRunStatusLabel: "Ready"
       },
       {
         id: "req-2",
@@ -69,7 +85,12 @@ describe("requirement queue display", () => {
         riskLabel: "High risk",
         nextAction: "Retry failed gate",
         nodeLabel: "2 tasks / 1 gate",
-        updatedAt: "2026-06-06T10:05:00.000Z"
+        updatedAt: "2026-06-06T10:05:00.000Z",
+        availableActions: ["retry"],
+        currentJobStatusLabel: "Failed",
+        workflowRunHref: "/workflows/workflow-failed",
+        workflowRunId: "workflow-failed",
+        workflowRunStatusLabel: "Gate failed"
       }
     ]);
   });

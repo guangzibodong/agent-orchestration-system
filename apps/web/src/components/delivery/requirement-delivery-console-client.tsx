@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  requirementDeliveryTicketSchema,
+  workflowJobSchema,
+  type RequirementDeliveryTicket,
+  type WorkflowJobStatus
+} from "@mawo/shared";
 import { useEffect, useState } from "react";
 import {
   buildApiHeaders,
@@ -8,7 +14,8 @@ import {
 } from "../api-auth";
 import {
   buildDeliveryConsoleModel,
-  type DeliveryConsoleModel
+  type DeliveryConsoleModel,
+  type RequirementLifecycleAction
 } from "./delivery-console-model";
 import type { NewRequirementPayload } from "./new-requirement-payload";
 import { RequirementDeliveryConsole } from "./requirement-delivery-console";
@@ -25,8 +32,11 @@ export function RequirementDeliveryConsoleClient() {
     buildDeliveryConsoleModel([])
   );
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState("Loading workflow runs");
+  const [message, setMessage] = useState("Loading requirement tickets");
   const [viewerMode, setViewerMode] = useState(false);
+  const [jobStatusByRequirementId, setJobStatusByRequirementId] = useState<
+    Record<string, WorkflowJobStatus | undefined>
+  >({});
 
   async function api(path: string, init?: RequestInit): Promise<unknown> {
     const token =
@@ -53,10 +63,43 @@ export function RequirementDeliveryConsoleClient() {
       body: JSON.stringify(payload)
     });
 
-    const nextModel = await loadRequirementDeliveryModel(api);
+    const nextModel = await loadRequirementDeliveryModel(
+      api,
+      {},
+      { jobStatusByRequirementId }
+    );
     setModel(nextModel);
     setLoadState("ready");
     setMessage(`Requirement draft saved: ${payload.title}`);
+  }
+
+  async function handleRequirementLifecycleAction(
+    requirementId: string,
+    action: RequirementLifecycleAction
+  ) {
+    const result = await api(`/requirements/${requirementId}/${action}`, {
+      method: "POST"
+    });
+    const lifecycleResult = parseRequirementLifecycleResult(result);
+    const nextJobStatusByRequirementId = {
+      ...jobStatusByRequirementId,
+      [requirementId]: lifecycleResult.jobStatus
+    };
+
+    if (action !== "enqueue") {
+      delete nextJobStatusByRequirementId[requirementId];
+    }
+
+    setJobStatusByRequirementId(nextJobStatusByRequirementId);
+
+    const nextModel = await loadRequirementDeliveryModel(
+      api,
+      {},
+      { jobStatusByRequirementId: nextJobStatusByRequirementId }
+    );
+    setModel(nextModel);
+    setLoadState("ready");
+    setMessage(buildLifecycleMessage(action, lifecycleResult.requirement));
   }
 
   useEffect(() => {
@@ -72,14 +115,18 @@ export function RequirementDeliveryConsoleClient() {
       }
 
       try {
-        const nextModel = await loadRequirementDeliveryModel(api);
+        const nextModel = await loadRequirementDeliveryModel(
+          api,
+          {},
+          { jobStatusByRequirementId }
+        );
         if (canceled) {
           return;
         }
 
         setModel(nextModel);
         setLoadState("ready");
-        setMessage(`${nextModel.requirements.length} workflow runs loaded`);
+        setMessage(`${nextModel.requirements.length} requirement tickets loaded`);
       } catch (error: unknown) {
         if (canceled) {
           return;
@@ -97,7 +144,7 @@ export function RequirementDeliveryConsoleClient() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [jobStatusByRequirementId]);
 
   return (
     <RequirementDeliveryConsole
@@ -105,6 +152,7 @@ export function RequirementDeliveryConsoleClient() {
       syncMessage={message}
       syncTone={loadState === "error" ? "danger" : "muted"}
       viewerMode={viewerMode}
+      onRequirementLifecycleAction={handleRequirementLifecycleAction}
       onNewRequirementSubmit={handleNewRequirementSubmit}
     />
   );
@@ -114,5 +162,49 @@ class ApiResponseError extends Error {
   constructor(status: number, path: string, body: unknown) {
     super(formatApiErrorMessage(status, path, body));
     this.name = "ApiResponseError";
+  }
+}
+
+function parseRequirementLifecycleResult(value: unknown): {
+  jobStatus?: WorkflowJobStatus;
+  requirement?: RequirementDeliveryTicket;
+} {
+  const directRequirement = requirementDeliveryTicketSchema.safeParse(value);
+  if (directRequirement.success) {
+    return { requirement: directRequirement.data };
+  }
+
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const result = value as {
+    job?: unknown;
+    requirement?: unknown;
+  };
+  const requirement = requirementDeliveryTicketSchema.safeParse(
+    result.requirement
+  );
+  const job = workflowJobSchema.safeParse(result.job);
+
+  return {
+    jobStatus: job.success ? job.data.status : undefined,
+    requirement: requirement.success ? requirement.data : undefined
+  };
+}
+
+function buildLifecycleMessage(
+  action: RequirementLifecycleAction,
+  requirement?: RequirementDeliveryTicket
+): string {
+  const title = requirement?.title ?? "Requirement";
+
+  switch (action) {
+    case "confirm-plan":
+      return `Plan confirmed: ${title}`;
+    case "enqueue":
+      return `Requirement enqueued: ${title}`;
+    case "retry":
+      return `Retry reset to ready: ${title}`;
   }
 }

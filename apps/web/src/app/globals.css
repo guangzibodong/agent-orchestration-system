@@ -314,6 +314,76 @@ button {
   gap: 6px;
 }
 
+.requirementRunStatus,
+.requirementQueueActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.requirementRunStatus {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+}
+
+.requirementRunStatus > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.requirementRunStatus a,
+.requirementRunStatus strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  max-width: 100%;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 750;
+  padding: 4px 8px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.requirementRunStatus strong:last-child {
+  color: var(--text);
+}
+
+.requirementQueueActions {
+  justify-content: flex-end;
+}
+
+.requirementQueueActions .secondaryButton {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.requirementActionMessage {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.spinIcon {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .requirementQueueMeta span,
 .decisionItem span {
   border-radius: 999px;

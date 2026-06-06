@@ -1,4 +1,9 @@
-import type { WorkflowRun } from "@mawo/shared";
+import type {
+  RequirementDeliveryTicket,
+  WorkflowJobStatus,
+  WorkflowRun,
+  WorkflowStatus
+} from "@mawo/shared";
 
 export type RequirementStage =
   | "draft"
@@ -25,6 +30,8 @@ export type RepositorySafetySummary = {
   recoveryAction: string;
 };
 
+export type RequirementLifecycleAction = "confirm-plan" | "enqueue" | "retry";
+
 export type RequirementSummary = {
   id: string;
   title: string;
@@ -36,6 +43,12 @@ export type RequirementSummary = {
   nextAction: string;
   nodeLabel: string;
   updatedAt: string;
+  currentJobStatus?: WorkflowJobStatus;
+  workflowRunHref?: string;
+  workflowRunId?: string;
+  workflowRunStatus?: WorkflowRun["status"];
+  workflowRunStatusLabel: string;
+  availableActions: RequirementLifecycleAction[];
 };
 
 export type DeliveryDecisionSeverity = "info" | "warning" | "danger";
@@ -61,6 +74,10 @@ export type DeliveryConsoleModel = {
   requirements: RequirementSummary[];
   kpis: DeliveryConsoleKpis;
   decisionQueue: DeliveryDecisionItem[];
+};
+
+export type DeliveryConsoleModelContext = {
+  jobStatusByRequirementId?: Record<string, WorkflowJobStatus | undefined>;
 };
 
 const statusStageMap: Record<WorkflowRun["status"], RequirementStage> = {
@@ -116,6 +133,179 @@ function mapNextAction(workflow: WorkflowRun): string {
       return "Retry failed workflow";
     case "archived":
       return "View archived evidence";
+  }
+}
+
+function mapRequirementNextAction(
+  requirement: RequirementDeliveryTicket,
+  workflowStatus?: WorkflowStatus
+): string {
+  switch (requirement.status) {
+    case "draft":
+      return "Complete requirement";
+    case "needs_clarification":
+      return "Clarify requirement";
+    case "plan_review":
+      return "Confirm plan";
+    case "ready_to_run":
+      return "Enqueue";
+    case "running":
+      return "View execution";
+    case "needs_review":
+      return "Review merge candidate";
+    case "delivered":
+      return "Review delivered evidence";
+    case "needs_rework":
+      return workflowStatus === "gate_failed"
+        ? "Retry failed gate"
+        : "Retry workflow";
+    case "archived":
+      return "View archived evidence";
+  }
+}
+
+function mapRequirementExecutionStatus(
+  requirement: RequirementDeliveryTicket,
+  workflowStatus?: WorkflowStatus
+): WorkflowRun["status"] {
+  if (workflowStatus) {
+    return workflowStatus;
+  }
+
+  switch (requirement.status) {
+    case "ready_to_run":
+      return "ready";
+    case "running":
+      return "running";
+    case "needs_review":
+      return "needs_review";
+    case "delivered":
+      return "completed";
+    case "needs_rework":
+      return "failed";
+    case "archived":
+      return "archived";
+    case "draft":
+    case "needs_clarification":
+    case "plan_review":
+      return "draft";
+  }
+}
+
+function buildRequirementNodeLabel(
+  requirement: RequirementDeliveryTicket
+): string {
+  const taskCount = requirement.tasks.length;
+  const gateCount = requirement.qualityGates.length;
+  const taskLabel = `${taskCount} ${taskCount === 1 ? "task" : "tasks"}`;
+  const gateLabel = `${gateCount} ${gateCount === 1 ? "gate" : "gates"}`;
+
+  return `${taskLabel} / ${gateLabel}`;
+}
+
+function mapRequirementRiskLevel(
+  requirement: RequirementDeliveryTicket,
+  workflowStatus?: WorkflowStatus
+): RequirementRiskLevel {
+  if (
+    requirement.status === "needs_rework" ||
+    workflowStatus === "gate_failed" ||
+    workflowStatus === "failed"
+  ) {
+    return "high";
+  }
+
+  if (requirement.status === "delivered") {
+    return "low";
+  }
+
+  return requirement.riskLevel;
+}
+
+function buildTicketRepositorySafety(
+  requirement: RequirementDeliveryTicket,
+  executionStatus: WorkflowRun["status"],
+  workflow?: WorkflowRun
+): RepositorySafetySummary {
+  if (workflow) {
+    return buildRepositorySafety(workflow);
+  }
+
+  const hasRepository = Boolean(
+    requirement.repositoryPath || requirement.repositoryId
+  );
+
+  return {
+    repositoryLabel:
+      requirement.repositoryPath ??
+      requirement.repositoryId ??
+      "No repository selected",
+    executionModeLabel: "Isolated worktree",
+    branchLabel: "Branch pending preflight",
+    headLabel: "HEAD SHA not reported",
+    cleanStateLabel: hasRepository
+      ? requirement.status === "needs_review" ||
+        requirement.status === "delivered" ||
+        requirement.status === "needs_rework"
+        ? "Apply clean check required"
+        : "Clean state pending preflight"
+      : "No repository selected",
+    allowedRootLabel: hasRepository
+      ? "Allowed root accepted by API"
+      : "Allowed root not checked",
+    mergePolicyLabel: "Manual git apply only",
+    blockedReason: buildTicketBlockedReason(
+      requirement,
+      hasRepository,
+      executionStatus
+    ),
+    recoveryAction: buildTicketRecoveryAction(requirement, hasRepository)
+  };
+}
+
+function buildTicketBlockedReason(
+  requirement: RequirementDeliveryTicket,
+  hasRepository: boolean,
+  executionStatus: WorkflowRun["status"]
+): string | undefined {
+  if (!hasRepository) {
+    return "Repository path required before execution.";
+  }
+
+  if (executionStatus === "gate_failed") {
+    return "Required gate failed; merge-ready conclusion is blocked.";
+  }
+
+  if (executionStatus === "failed") {
+    return "Workflow failed before merge-ready evidence was produced.";
+  }
+
+  if (executionStatus === "aborted") {
+    return "Workflow was canceled before delivery evidence was complete.";
+  }
+
+  return undefined;
+}
+
+function buildTicketRecoveryAction(
+  requirement: RequirementDeliveryTicket,
+  hasRepository: boolean
+): string {
+  if (!hasRepository) {
+    return "Register or select a repository";
+  }
+
+  switch (requirement.status) {
+    case "plan_review":
+      return "Confirm plan";
+    case "ready_to_run":
+      return "Enqueue requirement";
+    case "running":
+      return "View current workflow";
+    case "needs_rework":
+      return "Retry workflow";
+    default:
+      return "Run repository preflight before mutating actions";
   }
 }
 
@@ -195,6 +385,8 @@ function buildRepositoryRecoveryAction(
 export function mapWorkflowToRequirementSummary(
   workflow: WorkflowRun
 ): RequirementSummary {
+  const workflowRunStatusLabel = formatWorkflowStatus(workflow.status);
+
   return {
     id: workflow.id,
     title: workflow.goal,
@@ -205,8 +397,94 @@ export function mapWorkflowToRequirementSummary(
     riskLevel: mapRiskLevel(workflow),
     nextAction: mapNextAction(workflow),
     nodeLabel: buildNodeLabel(workflow),
-    updatedAt: workflow.updatedAt ?? workflow.createdAt ?? "Unknown"
+    updatedAt: workflow.updatedAt ?? workflow.createdAt ?? "Unknown",
+    workflowRunHref: `/workflows/${workflow.id}`,
+    workflowRunId: workflow.id,
+    workflowRunStatus: workflow.status,
+    workflowRunStatusLabel,
+    availableActions: buildWorkflowAvailableActions(workflow)
   };
+}
+
+export function mapRequirementTicketToSummary(
+  requirement: RequirementDeliveryTicket,
+  workflowsById: Map<string, WorkflowRun> = new Map(),
+  context: DeliveryConsoleModelContext = {}
+): RequirementSummary {
+  const latestRunLink = requirement.currentWorkflowRunId
+    ? requirement.runLinks.find(
+        (link) => link.workflowRunId === requirement.currentWorkflowRunId
+      )
+    : requirement.runLinks.at(-1);
+  const workflowRunId =
+    requirement.currentWorkflowRunId ?? latestRunLink?.workflowRunId;
+  const workflow = workflowRunId ? workflowsById.get(workflowRunId) : undefined;
+  const workflowStatus = workflow?.status ?? latestRunLink?.status;
+  const executionStatus = mapRequirementExecutionStatus(
+    requirement,
+    workflowStatus
+  );
+
+  return {
+    id: requirement.id,
+    title: requirement.title,
+    repositoryLabel:
+      requirement.repositoryPath ??
+      requirement.repositoryId ??
+      "No repository selected",
+    repositorySafety: buildTicketRepositorySafety(
+      requirement,
+      executionStatus,
+      workflow
+    ),
+    requirementStage: requirement.status,
+    executionStatus,
+    riskLevel: mapRequirementRiskLevel(requirement, workflowStatus),
+    nextAction: mapRequirementNextAction(requirement, workflowStatus),
+    nodeLabel: buildRequirementNodeLabel(requirement),
+    updatedAt: requirement.updatedAt,
+    currentJobStatus: context.jobStatusByRequirementId?.[requirement.id],
+    workflowRunHref: workflowRunId ? `/workflows/${workflowRunId}` : undefined,
+    workflowRunId,
+    workflowRunStatus: workflowStatus,
+    workflowRunStatusLabel: workflowStatus
+      ? formatWorkflowStatus(workflowStatus)
+      : "No workflow run linked",
+    availableActions: buildRequirementAvailableActions(requirement)
+  };
+}
+
+function buildWorkflowAvailableActions(
+  workflow: WorkflowRun
+): RequirementLifecycleAction[] {
+  if (workflow.status === "ready") {
+    return ["enqueue"];
+  }
+
+  if (
+    workflow.status === "gate_failed" ||
+    workflow.status === "failed" ||
+    workflow.status === "aborted"
+  ) {
+    return ["retry"];
+  }
+
+  return [];
+}
+
+function buildRequirementAvailableActions(
+  requirement: RequirementDeliveryTicket
+): RequirementLifecycleAction[] {
+  switch (requirement.status) {
+    case "plan_review":
+      return ["confirm-plan"];
+    case "ready_to_run":
+      return ["enqueue"];
+    case "needs_rework":
+      return requirement.currentWorkflowRunId ? ["retry"] : [];
+    default:
+      return [];
+  }
 }
 
 function buildDecisionQueue(workflows: WorkflowRun[]): DeliveryDecisionItem[] {
@@ -239,12 +517,66 @@ function buildDecisionQueue(workflows: WorkflowRun[]): DeliveryDecisionItem[] {
   });
 }
 
+function buildRequirementDecisionQueue(
+  requirements: RequirementSummary[]
+): DeliveryDecisionItem[] {
+  return requirements.flatMap((requirement): DeliveryDecisionItem[] => {
+    if (requirement.requirementStage === "plan_review") {
+      return [
+        {
+          id: `${requirement.id}:confirm-plan`,
+          requirementId: requirement.id,
+          title: requirement.title,
+          actionLabel: "Confirm plan",
+          severity: "info"
+        }
+      ];
+    }
+
+    if (requirement.requirementStage === "needs_rework") {
+      return [
+        {
+          id: `${requirement.id}:retry`,
+          requirementId: requirement.id,
+          title: requirement.title,
+          actionLabel: requirement.nextAction,
+          severity: "danger"
+        }
+      ];
+    }
+
+    if (requirement.requirementStage === "needs_review") {
+      return [
+        {
+          id: `${requirement.id}:review`,
+          requirementId: requirement.id,
+          title: requirement.title,
+          actionLabel: "Review merge candidate",
+          severity: "warning"
+        }
+      ];
+    }
+
+    return [];
+  });
+}
+
 export function buildDeliveryConsoleModel(
   workflows: WorkflowRun[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  requirementTickets: RequirementDeliveryTicket[] = [],
+  context: DeliveryConsoleModelContext = {}
 ): DeliveryConsoleModel {
-  const requirements = workflows.map(mapWorkflowToRequirementSummary);
+  const workflowsById = new Map(
+    workflows.map((workflow) => [workflow.id, workflow] as const)
+  );
+  const requirements = requirementTickets.length
+    ? requirementTickets.map((requirement) =>
+        mapRequirementTicketToSummary(requirement, workflowsById, context)
+      )
+    : workflows.map(mapWorkflowToRequirementSummary);
   const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const usesRequirementTickets = requirementTickets.length > 0;
 
   return {
     requirements,
@@ -255,22 +587,33 @@ export function buildDeliveryConsoleModel(
       needsClarification: requirements.filter(
         (requirement) => requirement.requirementStage === "needs_clarification"
       ).length,
-      runningTasks: workflows.filter((workflow) => workflow.status === "running")
-        .length,
-      failedGates: workflows.filter((workflow) => workflow.status === "gate_failed")
-        .length,
-      waitingForReview: workflows.filter(
-        (workflow) => workflow.status === "needs_review"
+      runningTasks: requirements.filter(
+        (requirement) => requirement.requirementStage === "running"
       ).length,
-      deliveredLastSevenDays: workflows.filter(
-        (workflow) =>
-          workflow.status === "completed" &&
-          workflow.review?.decision === "approved" &&
-          updatedAtMs(workflow) >= sevenDaysAgo &&
-          updatedAtMs(workflow) <= now.getTime()
-      ).length
+      failedGates: requirements.filter(
+        (requirement) => requirement.executionStatus === "gate_failed"
+      ).length,
+      waitingForReview: requirements.filter(
+        (requirement) => requirement.requirementStage === "needs_review"
+      ).length,
+      deliveredLastSevenDays: usesRequirementTickets
+        ? requirements.filter(
+            (requirement) =>
+              requirement.requirementStage === "delivered" &&
+              updatedAtStringMs(requirement.updatedAt) >= sevenDaysAgo &&
+              updatedAtStringMs(requirement.updatedAt) <= now.getTime()
+          ).length
+        : workflows.filter(
+            (workflow) =>
+              workflow.status === "completed" &&
+              workflow.review?.decision === "approved" &&
+              updatedAtMs(workflow) >= sevenDaysAgo &&
+              updatedAtMs(workflow) <= now.getTime()
+          ).length
     },
-    decisionQueue: buildDecisionQueue(workflows)
+    decisionQueue: usesRequirementTickets
+      ? buildRequirementDecisionQueue(requirements)
+      : buildDecisionQueue(workflows)
   };
 }
 
@@ -283,4 +626,32 @@ function updatedAtMs(workflow: WorkflowRun): number {
 
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function updatedAtStringMs(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatWorkflowStatus(status: WorkflowStatus): string {
+  switch (status) {
+    case "draft":
+      return "Draft";
+    case "ready":
+      return "Ready";
+    case "running":
+      return "Running";
+    case "gate_failed":
+      return "Gate failed";
+    case "needs_review":
+      return "Needs review";
+    case "completed":
+      return "Completed";
+    case "aborted":
+      return "Aborted";
+    case "archived":
+      return "Archived";
+    case "failed":
+      return "Failed";
+  }
 }
