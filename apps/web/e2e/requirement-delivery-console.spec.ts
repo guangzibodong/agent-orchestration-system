@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import type {
   RepositorySafety,
   RequirementDeliveryTicket,
+  WorkflowJob,
   WorkflowRun,
 } from "@mawo/shared";
 
@@ -892,6 +893,133 @@ test.describe("Requirement Delivery Console smoke", () => {
       "retry:requirement-retry",
     ]);
   });
+
+  test("automatically refreshes active requirement jobs after enqueue", async ({
+    page,
+  }) => {
+    const workflows: WorkflowRun[] = [];
+    const requirements: RequirementDeliveryTicket[] = [
+      {
+        ...lifecyclePlanRequirement,
+        id: "requirement-auto-refresh",
+        title: "Auto refresh checkout evidence",
+        status: "ready_to_run",
+        updatedAt: "2026-06-06T11:10:00.000Z",
+      },
+    ];
+    let jobPolls = 0;
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, workflows, {
+      requirements,
+      onRequirementAction: ({ action, id }) => {
+        if (id !== "requirement-auto-refresh" || action !== "enqueue") {
+          throw new Error(`Unexpected action ${action}:${id}`);
+        }
+
+        workflows.push({
+          ...lifecycleQueuedWorkflow,
+          id: "workflow-auto-refresh",
+          goal: "Auto refresh checkout evidence",
+          status: "ready",
+          updatedAt: "2026-06-06T11:11:00.000Z",
+        });
+
+        return {
+          requirement: updateRequirement(requirements, id, {
+            status: "running",
+            currentWorkflowRunId: "workflow-auto-refresh",
+            runLinks: [
+              {
+                workflowRunId: "workflow-auto-refresh",
+                status: "ready",
+                linkedAt: "2026-06-06T11:11:00.000Z",
+              },
+            ],
+            updatedAt: "2026-06-06T11:11:00.000Z",
+          }),
+          workflow: workflows[0],
+          job: {
+            id: "job-auto-refresh",
+            workflowId: "workflow-auto-refresh",
+            status: "queued",
+            createdAt: "2026-06-06T11:11:00.000Z",
+            updatedAt: "2026-06-06T11:11:00.000Z",
+          },
+        };
+      },
+      onJobRequest: ({ id }) => {
+        if (id !== "job-auto-refresh") {
+          throw new Error(`Unexpected job poll ${id}`);
+        }
+
+        jobPolls += 1;
+
+        if (jobPolls < 2) {
+          return {
+            id,
+            workflowId: "workflow-auto-refresh",
+            status: "running",
+            createdAt: "2026-06-06T11:11:00.000Z",
+            updatedAt: "2026-06-06T11:11:01.000Z",
+          };
+        }
+
+        workflows[0] = {
+          ...workflows[0]!,
+          status: "needs_review",
+          updatedAt: "2026-06-06T11:12:00.000Z",
+        };
+        updateRequirement(requirements, "requirement-auto-refresh", {
+          status: "needs_review",
+          runLinks: [
+            {
+              workflowRunId: "workflow-auto-refresh",
+              status: "needs_review",
+              linkedAt: "2026-06-06T11:12:00.000Z",
+            },
+          ],
+          updatedAt: "2026-06-06T11:12:00.000Z",
+        });
+
+        return {
+          id,
+          workflowId: "workflow-auto-refresh",
+          status: "completed",
+          createdAt: "2026-06-06T11:11:00.000Z",
+          updatedAt: "2026-06-06T11:12:00.000Z",
+          finishedAt: "2026-06-06T11:12:00.000Z",
+        };
+      },
+    });
+
+    await page.goto("/");
+
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Auto refresh checkout evidence" });
+    await expect(queueItem).toContainText("Ready to run");
+
+    await queueItem
+      .getByRole("button", { exact: true, name: "Enqueue" })
+      .click();
+    await expect(queueItem).toContainText("Running");
+    await expect(queueItem).toContainText("Queued");
+    await expect
+      .poll(() => jobPolls, {
+        message: "wait for the client to poll the active job",
+      })
+      .toBeGreaterThan(0);
+    await expect(queueItem).toContainText("Needs review");
+    await expect(queueItem).toContainText("Review merge candidate");
+    await expect(queueItem).not.toContainText("Queued");
+  });
 });
 
 async function expectMetric(page: Page, label: string, value: string) {
@@ -923,6 +1051,7 @@ async function mockApi(
       method: string;
       pathname: string;
     }) => void;
+    onJobRequest?: (request: { id: string }) => WorkflowJob | unknown;
     mergeCandidates?: Record<string, unknown>;
     reports?: Record<string, unknown>;
     repositorySafetyByRepositoryId?: Record<string, RepositorySafety>;
@@ -950,6 +1079,21 @@ async function mockApi(
 
     if (request.method() === "GET" && url.pathname === "/requirements") {
       await route.fulfill({ json: options.requirements ?? [] });
+      return;
+    }
+
+    const jobMatch = url.pathname.match(/^\/jobs\/([^/]+)$/);
+    if (request.method() === "GET" && jobMatch) {
+      const id = decodeURIComponent(jobMatch[1] ?? "");
+      const job = options.onJobRequest?.({ id }) ?? {
+        id,
+        workflowId: "",
+        status: "queued",
+        createdAt: "2026-06-06T11:00:00.000Z",
+        updatedAt: "2026-06-06T11:00:00.000Z",
+      };
+
+      await route.fulfill({ json: job });
       return;
     }
 

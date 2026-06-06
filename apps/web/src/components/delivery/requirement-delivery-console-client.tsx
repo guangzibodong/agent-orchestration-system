@@ -5,6 +5,7 @@ import {
   workflowRunSchema,
   workflowJobSchema,
   type RequirementDeliveryTicket,
+  type WorkflowJob,
   type WorkflowRun,
   type WorkflowJobStatus
 } from "@mawo/shared";
@@ -28,8 +29,14 @@ import { buildWorkflowReviewPayload } from "../workflow-review-payload";
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
 const apiTokenRoleStorageKey = "mawo-api-token-role";
+const activeJobPollIntervalMs = 1500;
 
 type LoadState = "loading" | "ready" | "error";
+type TrackedRequirementJob = {
+  jobId: string;
+  workflowId: string;
+  status: WorkflowJobStatus;
+};
 
 export function RequirementDeliveryConsoleClient() {
   const [model, setModel] = useState<DeliveryConsoleModel>(() =>
@@ -40,6 +47,9 @@ export function RequirementDeliveryConsoleClient() {
   const [viewerMode, setViewerMode] = useState(false);
   const [jobStatusByRequirementId, setJobStatusByRequirementId] = useState<
     Record<string, WorkflowJobStatus | undefined>
+  >({});
+  const [activeJobsByRequirementId, setActiveJobsByRequirementId] = useState<
+    Record<string, TrackedRequirementJob | undefined>
   >({});
   const [workflowOverridesById, setWorkflowOverridesById] = useState<
     Record<string, WorkflowRun | undefined>
@@ -95,12 +105,21 @@ export function RequirementDeliveryConsoleClient() {
       ...jobStatusByRequirementId,
       [requirementId]: lifecycleResult.jobStatus
     };
+    const nextActiveJobsByRequirementId = { ...activeJobsByRequirementId };
 
-    if (action !== "enqueue") {
+    if (action === "enqueue" && lifecycleResult.job) {
+      nextActiveJobsByRequirementId[requirementId] = {
+        jobId: lifecycleResult.job.id,
+        workflowId: lifecycleResult.job.workflowId,
+        status: lifecycleResult.job.status
+      };
+    } else {
       delete nextJobStatusByRequirementId[requirementId];
+      delete nextActiveJobsByRequirementId[requirementId];
     }
 
     setJobStatusByRequirementId(nextJobStatusByRequirementId);
+    setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
     const nextWorkflowOverridesById = lifecycleResult.workflow
       ? {
           ...workflowOverridesById,
@@ -153,6 +172,114 @@ export function RequirementDeliveryConsoleClient() {
     setLoadState("ready");
     setMessage(buildReviewMessage(action, requirementId, nextModel));
   }
+
+  useEffect(() => {
+    const activeEntries = Object.entries(activeJobsByRequirementId).flatMap(
+      ([requirementId, job]) =>
+        job && isActiveJobStatus(job.status)
+          ? ([[requirementId, job]] satisfies Array<
+              [string, TrackedRequirementJob]
+            >)
+          : []
+    );
+
+    if (!activeEntries.length) {
+      return;
+    }
+
+    let canceled = false;
+    let inFlight = false;
+
+    async function pollActiveJobs() {
+      if (inFlight) {
+        return;
+      }
+
+      inFlight = true;
+      const nextActiveJobsByRequirementId = { ...activeJobsByRequirementId };
+      const nextJobStatusByRequirementId = { ...jobStatusByRequirementId };
+      let shouldReloadModel = false;
+      let shouldUpdateJobState = false;
+
+      try {
+        await Promise.all(
+          activeEntries.map(async ([requirementId, trackedJob]) => {
+            const job = workflowJobSchema.parse(
+              await api(`/jobs/${encodeURIComponent(trackedJob.jobId)}`)
+            );
+
+            if (isActiveJobStatus(job.status)) {
+              nextActiveJobsByRequirementId[requirementId] = {
+                jobId: job.id,
+                workflowId: job.workflowId,
+                status: job.status
+              };
+              nextJobStatusByRequirementId[requirementId] = job.status;
+              shouldUpdateJobState =
+                shouldUpdateJobState || trackedJob.status !== job.status;
+              return;
+            }
+
+            delete nextActiveJobsByRequirementId[requirementId];
+            delete nextJobStatusByRequirementId[requirementId];
+            shouldUpdateJobState = true;
+            shouldReloadModel = true;
+          })
+        );
+
+        if (canceled) {
+          return;
+        }
+
+        if (shouldUpdateJobState) {
+          setActiveJobsByRequirementId(nextActiveJobsByRequirementId);
+          setJobStatusByRequirementId(nextJobStatusByRequirementId);
+        }
+
+        if (shouldReloadModel) {
+          const nextModel = await loadRequirementDeliveryModel(
+            api,
+            {},
+            {
+              jobStatusByRequirementId: nextJobStatusByRequirementId,
+              workflowOverrides: buildWorkflowOverrides(workflowOverridesById)
+            }
+          );
+
+          if (canceled) {
+            return;
+          }
+
+          setModel(nextModel);
+          setLoadState("ready");
+          setMessage("Requirement execution settled; evidence refreshed");
+        }
+      } catch (error: unknown) {
+        if (canceled) {
+          return;
+        }
+
+        setLoadState("error");
+        setMessage(
+          error instanceof Error ? error.message : "Active job refresh failed"
+        );
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    const firstPoll = window.setTimeout(pollActiveJobs, 250);
+    const interval = window.setInterval(
+      pollActiveJobs,
+      activeJobPollIntervalMs
+    );
+
+    return () => {
+      canceled = true;
+      window.clearTimeout(firstPoll);
+      window.clearInterval(interval);
+    };
+  }, [activeJobsByRequirementId, jobStatusByRequirementId, workflowOverridesById]);
 
   useEffect(() => {
     let canceled = false;
@@ -222,6 +349,7 @@ class ApiResponseError extends Error {
 }
 
 function parseRequirementLifecycleResult(value: unknown): {
+  job?: WorkflowJob;
   jobStatus?: WorkflowJobStatus;
   requirement?: RequirementDeliveryTicket;
   workflow?: WorkflowRun;
@@ -247,10 +375,15 @@ function parseRequirementLifecycleResult(value: unknown): {
   const workflow = workflowRunSchema.safeParse(result.workflow);
 
   return {
+    job: job.success ? job.data : undefined,
     jobStatus: job.success ? job.data.status : undefined,
     requirement: requirement.success ? requirement.data : undefined,
     workflow: workflow.success ? workflow.data : undefined
   };
+}
+
+function isActiveJobStatus(status: WorkflowJobStatus): boolean {
+  return status === "queued" || status === "running";
 }
 
 function buildWorkflowOverrides(
