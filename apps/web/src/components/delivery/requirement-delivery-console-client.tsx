@@ -21,10 +21,15 @@ import {
   type RequirementLifecycleAction,
   type RequirementReviewAction
 } from "./delivery-console-model";
+import {
+  buildDeliveryTopbarHealthIndicators,
+  type DeliveryTopbarHealthIndicator
+} from "./delivery-topbar-health";
 import type { NewRequirementPayload } from "./new-requirement-payload";
 import { RequirementDeliveryConsole } from "./requirement-delivery-console";
 import { loadRequirementDeliveryModel } from "./requirement-delivery-loader";
 import { buildWorkflowReviewPayload } from "../workflow-review-payload";
+import { loadOperationsSnapshot } from "../operations-snapshot";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
@@ -47,6 +52,9 @@ export function RequirementDeliveryConsoleClient() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [message, setMessage] = useState("Loading requirement tickets");
   const [viewerMode, setViewerMode] = useState(false);
+  const [topbarHealthIndicators, setTopbarHealthIndicators] = useState<
+    DeliveryTopbarHealthIndicator[]
+  >([]);
   const [jobStatusByRequirementId, setJobStatusByRequirementId] = useState<
     Record<string, WorkflowJobStatus | undefined>
   >({});
@@ -336,11 +344,41 @@ export function RequirementDeliveryConsoleClient() {
     };
   }, [jobStatusByRequirementId, workflowOverridesById]);
 
+  useEffect(() => {
+    let canceled = false;
+
+    async function loadTopbarHealthIndicators() {
+      try {
+        const snapshot = await loadOperationsSnapshot(api);
+        if (canceled) {
+          return;
+        }
+
+        setTopbarHealthIndicators(
+          buildDeliveryTopbarHealthIndicators(snapshot)
+        );
+      } catch {
+        if (canceled) {
+          return;
+        }
+
+        setTopbarHealthIndicators([]);
+      }
+    }
+
+    void loadTopbarHealthIndicators();
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
   return (
     <RequirementDeliveryConsole
       model={model}
       syncMessage={message}
       syncTone={loadState === "error" ? "danger" : "muted"}
+      topbarHealthIndicators={topbarHealthIndicators}
       viewerMode={viewerMode}
       onRequirementLifecycleAction={handleRequirementLifecycleAction}
       onRequirementReviewAction={handleRequirementReviewAction}

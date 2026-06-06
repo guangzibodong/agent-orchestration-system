@@ -30,11 +30,13 @@ import {
   buildRequirementEvidenceArtifactLinks,
 } from "./requirement-evidence-panel";
 import { buildRequirementStageStepper } from "./requirement-stage-stepper";
+import type { DeliveryTopbarHealthIndicator } from "./delivery-topbar-health";
 
 type RequirementDeliveryConsoleProps = {
   model: DeliveryConsoleModel;
   syncMessage?: string;
   syncTone?: "muted" | "danger";
+  topbarHealthIndicators?: DeliveryTopbarHealthIndicator[];
   viewerMode?: boolean;
   initialNewRequirementPanelOpen?: boolean;
   onRequirementLifecycleAction?: (
@@ -100,6 +102,7 @@ export function RequirementDeliveryConsole({
   model,
   syncMessage,
   syncTone = "muted",
+  topbarHealthIndicators = [],
   viewerMode = false,
   initialNewRequirementPanelOpen = false,
   onRequirementLifecycleAction,
@@ -239,26 +242,29 @@ export function RequirementDeliveryConsole({
           <p className="eyebrow">Local agent safety console</p>
           <h1 id="delivery-title">Requirement Delivery Console</h1>
         </div>
-        <div className="deliveryTopbarActions" aria-label="Primary actions">
-          <label className="deliverySearch">
-            <Search size={16} aria-hidden="true" />
-            <span>Search requirements, repos, reports</span>
-          </label>
-          <button
-            className="primaryButton"
-            type="button"
-            disabled={viewerMode}
-            aria-controls="new-requirement-panel"
-            aria-expanded={isNewRequirementPanelOpen}
-            onClick={() => setIsNewRequirementPanelOpen(true)}
-          >
-            <Plus size={16} aria-hidden="true" />
-            New Requirement
-          </button>
-          <a className="secondaryButton" href="#legacy-run-console">
-            <Settings size={16} aria-hidden="true" />
-            Legacy Run Console
-          </a>
+        <div className="deliveryTopbarControls">
+          <DeliveryHealthIndicators indicators={topbarHealthIndicators} />
+          <div className="deliveryTopbarActions" aria-label="Primary actions">
+            <label className="deliverySearch">
+              <Search size={16} aria-hidden="true" />
+              <span>Search requirements, repos, reports</span>
+            </label>
+            <button
+              className="primaryButton"
+              type="button"
+              disabled={viewerMode}
+              aria-controls="new-requirement-panel"
+              aria-expanded={isNewRequirementPanelOpen}
+              onClick={() => setIsNewRequirementPanelOpen(true)}
+            >
+              <Plus size={16} aria-hidden="true" />
+              New Requirement
+            </button>
+            <a className="secondaryButton" href="#legacy-run-console">
+              <Settings size={16} aria-hidden="true" />
+              Legacy Run Console
+            </a>
+          </div>
         </div>
       </section>
 
@@ -553,6 +559,31 @@ export function RequirementDeliveryConsole({
         </aside>
       </section>
     </main>
+  );
+}
+
+function DeliveryHealthIndicators({
+  indicators,
+}: {
+  indicators: DeliveryTopbarHealthIndicator[];
+}) {
+  if (!indicators.length) {
+    return null;
+  }
+
+  return (
+    <div className="deliveryHealthIndicators" aria-label="Delivery health">
+      {indicators.map((indicator) => (
+        <div
+          aria-label={`${indicator.label} ${indicator.value}: ${indicator.detail}`}
+          className={`deliveryHealthIndicator ${indicator.severity}`}
+          key={indicator.id}
+        >
+          <span>{indicator.label}</span>{" "}
+          <strong>{indicator.value}</strong>
+        </div>
+      ))}
+    </div>
   );
 }
 

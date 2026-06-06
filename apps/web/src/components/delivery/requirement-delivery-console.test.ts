@@ -115,6 +115,50 @@ describe("RequirementDeliveryConsole", () => {
     );
   });
 
+  it("renders compact read-only health indicators in the topbar", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([workflow]),
+        topbarHealthIndicators: [
+          {
+            id: "api",
+            label: "API",
+            value: "Ready",
+            detail: "API readiness check is passing",
+            severity: "healthy",
+          },
+          {
+            id: "worker",
+            label: "Worker",
+            value: "1/1",
+            detail: "1 of 1 workers healthy",
+            severity: "healthy",
+          },
+          {
+            id: "queue",
+            label: "Queue",
+            value: "2",
+            detail: "2 jobs waiting for workers",
+            severity: "warning",
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain('aria-label="Delivery health"');
+    expect(html).toContain("API");
+    expect(html).toContain("Ready");
+    expect(html).toContain("Worker");
+    expect(html).toContain("1/1");
+    expect(html).toContain("Queue");
+    expect(html).toContain("2");
+    expect(html).not.toContain("Operations snapshot summary");
+    expect(html).not.toContain("Worker health panel");
+    expect(html.indexOf("Delivery health")).toBeLessThan(
+      html.indexOf("New Requirement"),
+    );
+  });
+
   it("shows required gate failure evidence without raw logs", () => {
     const html = renderConsoleFor([
       {

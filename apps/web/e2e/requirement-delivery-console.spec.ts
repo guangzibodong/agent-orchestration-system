@@ -27,6 +27,10 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(consoleShell.getByLabel("Workflow sync")).toContainText(
       "0 requirement tickets loaded",
     );
+    const deliveryHealth = consoleShell.getByLabel("Delivery health");
+    await expect(deliveryHealth).toContainText("API Ready");
+    await expect(deliveryHealth).toContainText("Worker No Workers");
+    await expect(deliveryHealth).toContainText("Queue 0");
     await expect(consoleShell.getByText("No requirements yet")).toBeVisible();
     await expect(consoleShell.getByText("No decisions waiting")).toBeVisible();
     await expect(
