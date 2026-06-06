@@ -142,7 +142,10 @@ button {
 
 .deliveryGrid {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(
+      280px,
+      340px
+    );
   gap: 16px;
   min-width: 0;
 }
@@ -249,6 +252,78 @@ button {
 
 .repositorySafetyCard > div {
   gap: 8px;
+}
+
+.requirementEvidenceCard {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-left: 4px solid #8792a3;
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 12px;
+}
+
+.requirementEvidenceCard.danger {
+  border-left-color: var(--danger);
+  background: #fff6f6;
+}
+
+.requirementEvidenceCard.warning {
+  border-left-color: var(--warning);
+  background: #fffaf0;
+}
+
+.requirementEvidenceCard.success {
+  border-left-color: var(--success);
+  background: #f1fbf6;
+}
+
+.requirementEvidenceCard.muted {
+  border-left-color: #8792a3;
+}
+
+.requirementEvidenceLead {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.requirementEvidenceLead strong,
+.requirementEvidenceLead p {
+  overflow-wrap: anywhere;
+}
+
+.requirementEvidenceLead p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.requirementEvidenceList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.requirementEvidenceItem {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.requirementEvidenceItem dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.requirementEvidenceItem dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .repositorySafetyList {

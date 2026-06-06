@@ -7,7 +7,7 @@ export const taskStatusSchema = z.enum([
   "passed",
   "failed",
   "canceled",
-  "reviewing"
+  "reviewing",
 ]);
 
 export const workflowStatusSchema = z.enum([
@@ -19,7 +19,7 @@ export const workflowStatusSchema = z.enum([
   "completed",
   "aborted",
   "archived",
-  "failed"
+  "failed",
 ]);
 
 export const shellRunResultSchema = z.object({
@@ -31,18 +31,18 @@ export const shellRunResultSchema = z.object({
   durationMs: z.number().optional(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
-  metadata: z.record(z.string(), z.string()).optional()
+  metadata: z.record(z.string(), z.string()).optional(),
 });
 
 export const worktreeWorkspaceSchema = z.object({
   path: z.string(),
   branch: z.string(),
-  repoPath: z.string()
+  repoPath: z.string(),
 });
 
 export const diffArtifactSchema = z.object({
   status: z.string(),
-  patch: z.string()
+  patch: z.string(),
 });
 
 export const taskRunSchema = z.object({
@@ -55,7 +55,7 @@ export const taskRunSchema = z.object({
   dependsOn: z.array(z.string()).optional(),
   result: shellRunResultSchema.optional(),
   workspace: worktreeWorkspaceSchema.optional(),
-  diff: diffArtifactSchema.optional()
+  diff: diffArtifactSchema.optional(),
 });
 
 export const qualityGateRunSchema = z.object({
@@ -64,13 +64,13 @@ export const qualityGateRunSchema = z.object({
   status: taskStatusSchema,
   command: z.string().optional(),
   timeoutMs: z.number().int().positive().optional(),
-  result: shellRunResultSchema.optional()
+  result: shellRunResultSchema.optional(),
 });
 
 export const workflowReviewRecordSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
   note: z.string().optional(),
-  reviewedAt: z.string()
+  reviewedAt: z.string(),
 });
 
 export const workflowRunSchema = z.object({
@@ -85,7 +85,7 @@ export const workflowRunSchema = z.object({
   updatedAt: z.string().optional(),
   review: workflowReviewRecordSchema.optional(),
   tasks: z.array(taskRunSchema),
-  qualityGates: z.array(qualityGateRunSchema).default([])
+  qualityGates: z.array(qualityGateRunSchema).default([]),
 });
 
 export const workflowTaskInputSchema = z
@@ -97,11 +97,11 @@ export const workflowTaskInputSchema = z
     instructions: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
     timeoutMs: z.number().int().positive().optional(),
-    dependsOn: z.array(z.string().min(1)).optional()
+    dependsOn: z.array(z.string().min(1)).optional(),
   })
   .refine((task) => task.command || task.instructions, {
     message: "Task requires command or instructions",
-    path: ["command"]
+    path: ["command"],
   });
 
 export const qualityGateInputSchema = z.object({
@@ -109,20 +109,36 @@ export const qualityGateInputSchema = z.object({
   title: z.string().min(1).optional(),
   command: z.string().min(1),
   timeoutMs: z.number().int().positive().optional(),
-  cwd: z.string().min(1).optional()
+  cwd: z.string().min(1).optional(),
 });
 
 export const repositoryRegistrationRequestSchema = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
   defaultBranch: z.string().min(1).optional(),
-  qualityGates: z.array(qualityGateInputSchema).default([])
+  qualityGates: z.array(qualityGateInputSchema).default([]),
 });
 
-export const repositoryRecordSchema = repositoryRegistrationRequestSchema.extend({
-  id: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string()
+export const repositoryRecordSchema =
+  repositoryRegistrationRequestSchema.extend({
+    id: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  });
+
+export const repositorySafetySchema = z.object({
+  repositoryId: z.string(),
+  path: z.string(),
+  defaultBranch: z.string().min(1).optional(),
+  currentBranch: z.string().min(1).optional(),
+  headShortSha: z.string().min(1).optional(),
+  clean: z.boolean(),
+  dirty: z.boolean(),
+  allowedRoot: z.boolean(),
+  blockedReason: z.string().min(1).optional(),
+  recoveryAction: z.string().min(1).optional(),
+  noAutoMerge: z.literal(true),
+  manualApplyPolicy: z.string().min(1),
 });
 
 export const createRepositoryWorkflowRequestSchema = z
@@ -132,26 +148,31 @@ export const createRepositoryWorkflowRequestSchema = z
     repositoryPath: z.string().min(1).optional(),
     worktreeRoot: z.string().min(1).optional(),
     tasks: z.array(workflowTaskInputSchema).min(1),
-    qualityGates: z.array(qualityGateInputSchema).default([])
+    qualityGates: z.array(qualityGateInputSchema).default([]),
   })
   .refine((request) => request.repositoryId || request.repositoryPath, {
     message: "Repository workflow requires repositoryId or repositoryPath",
-    path: ["repositoryPath"]
+    path: ["repositoryPath"],
   });
 
 export const agentSummarySchema = z.object({
   id: z.string().min(1),
-  label: z.string().min(1)
+  label: z.string().min(1),
 });
 
 export const agentHealthSchema = agentSummarySchema.extend({
   configured: z.boolean(),
   healthy: z.boolean(),
-  status: z.enum(["healthy", "missing_command", "auth_unchecked", "auth_failed"]),
+  status: z.enum([
+    "healthy",
+    "missing_command",
+    "auth_unchecked",
+    "auth_failed",
+  ]),
   message: z.string(),
   command: z.string().optional(),
   authProbeConfigured: z.boolean().optional(),
-  checkedAt: z.string()
+  checkedAt: z.string(),
 });
 
 export const readinessCheckSchema = z
@@ -161,7 +182,7 @@ export const readinessCheckSchema = z
     ok: z.boolean(),
     status: z.enum(["ready", "degraded", "blocked", "failed"]),
     message: z.string().optional(),
-    missing: z.array(z.string()).optional()
+    missing: z.array(z.string()).optional(),
   })
   .passthrough();
 
@@ -173,7 +194,7 @@ export const readinessResponseSchema = z.object({
   protectedByToken: z.boolean(),
   root: z.string(),
   activeJobs: z.number().int().nonnegative(),
-  checks: z.array(readinessCheckSchema)
+  checks: z.array(readinessCheckSchema),
 });
 
 export const workerHealthSchema = z.object({
@@ -184,7 +205,7 @@ export const workerHealthSchema = z.object({
   ageMs: z.number().nonnegative(),
   workflowId: z.string().optional(),
   jobId: z.string().optional(),
-  lastJobStatus: z.string().optional()
+  lastJobStatus: z.string().optional(),
 });
 
 export const workerHealthResponseSchema = z.object({
@@ -194,14 +215,14 @@ export const workerHealthResponseSchema = z.object({
   summary: z.object({
     totalWorkers: z.number().int().nonnegative(),
     healthyWorkers: z.number().int().nonnegative(),
-    staleWorkers: z.number().int().nonnegative()
+    staleWorkers: z.number().int().nonnegative(),
   }),
-  workers: z.array(workerHealthSchema)
+  workers: z.array(workerHealthSchema),
 });
 
 export const workflowReviewRequestSchema = z.object({
   decision: z.enum(["approve", "reject"]),
-  note: z.string().min(1).optional()
+  note: z.string().min(1).optional(),
 });
 
 export const mergeCandidateSchema = z.object({
@@ -213,7 +234,7 @@ export const mergeCandidateSchema = z.object({
   patchArtifactPath: z.string().optional(),
   manifestArtifactPath: z.string().optional(),
   applyCommand: z.string().optional(),
-  createdAt: z.string()
+  createdAt: z.string(),
 });
 
 export const mergeCandidateApplyResultSchema = z.object({
@@ -223,20 +244,20 @@ export const mergeCandidateApplyResultSchema = z.object({
   sourceBranches: z.array(z.string()),
   patchArtifactPath: z.string().optional(),
   gitStatus: z.string(),
-  appliedAt: z.string()
+  appliedAt: z.string(),
 });
 
 export const workspaceCleanupItemSchema = z.object({
   taskId: z.string(),
   path: z.string(),
-  branch: z.string()
+  branch: z.string(),
 });
 
 export const workspaceCleanupResultSchema = z.object({
   workflowId: z.string(),
   status: z.enum(["cleaned", "empty"]),
   cleanedAt: z.string(),
-  cleaned: z.array(workspaceCleanupItemSchema)
+  cleaned: z.array(workspaceCleanupItemSchema),
 });
 
 export const workspaceCleanupPreviewItemSchema = z.object({
@@ -246,7 +267,7 @@ export const workspaceCleanupPreviewItemSchema = z.object({
   branch: z.string(),
   repoPath: z.string(),
   exists: z.boolean(),
-  cleanupAllowed: z.boolean()
+  cleanupAllowed: z.boolean(),
 });
 
 export const workspaceCleanupPreviewSchema = z.object({
@@ -256,7 +277,7 @@ export const workspaceCleanupPreviewSchema = z.object({
   blockedReason: z.string().optional(),
   workspaceCount: z.number().int().nonnegative(),
   existingCount: z.number().int().nonnegative(),
-  workspaces: z.array(workspaceCleanupPreviewItemSchema)
+  workspaces: z.array(workspaceCleanupPreviewItemSchema),
 });
 
 export const runReportSchema = z.object({
@@ -266,39 +287,43 @@ export const runReportSchema = z.object({
   recommendation: z.enum([
     "ready_for_review",
     "fix_failed_tasks",
-    "fix_failed_gates"
+    "fix_failed_gates",
   ]),
   failedTasks: z.array(z.string()),
   failedGates: z.array(z.string()),
-  taskResults: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    status: taskStatusSchema,
-    agentId: z.string().optional(),
-    agentLabel: z.string().optional(),
-    promptFile: z.string().optional(),
-    exitCode: z.number().optional(),
-    stdout: z.string().optional(),
-    stderr: z.string().optional(),
-    workspacePath: z.string().optional(),
-    branch: z.string().optional(),
-    gitStatus: z.string().optional(),
-    patch: z.string().optional(),
-    stdoutArtifactPath: z.string().optional(),
-    stderrArtifactPath: z.string().optional(),
-    gitStatusArtifactPath: z.string().optional(),
-    patchArtifactPath: z.string().optional()
-  })),
-  gateResults: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    status: taskStatusSchema,
-    exitCode: z.number().optional(),
-    stdout: z.string().optional(),
-    stderr: z.string().optional(),
-    stdoutArtifactPath: z.string().optional(),
-    stderrArtifactPath: z.string().optional()
-  }))
+  taskResults: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      status: taskStatusSchema,
+      agentId: z.string().optional(),
+      agentLabel: z.string().optional(),
+      promptFile: z.string().optional(),
+      exitCode: z.number().optional(),
+      stdout: z.string().optional(),
+      stderr: z.string().optional(),
+      workspacePath: z.string().optional(),
+      branch: z.string().optional(),
+      gitStatus: z.string().optional(),
+      patch: z.string().optional(),
+      stdoutArtifactPath: z.string().optional(),
+      stderrArtifactPath: z.string().optional(),
+      gitStatusArtifactPath: z.string().optional(),
+      patchArtifactPath: z.string().optional(),
+    }),
+  ),
+  gateResults: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      status: taskStatusSchema,
+      exitCode: z.number().optional(),
+      stdout: z.string().optional(),
+      stderr: z.string().optional(),
+      stdoutArtifactPath: z.string().optional(),
+      stderrArtifactPath: z.string().optional(),
+    }),
+  ),
 });
 
 export const workflowJobStatusSchema = z.enum([
@@ -306,7 +331,7 @@ export const workflowJobStatusSchema = z.enum([
   "running",
   "completed",
   "failed",
-  "canceled"
+  "canceled",
 ]);
 
 export const workflowJobSchema = z.object({
@@ -317,7 +342,7 @@ export const workflowJobSchema = z.object({
   updatedAt: z.string(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
-  error: z.string().optional()
+  error: z.string().optional(),
 });
 
 export const auditEventTypeSchema = z.enum([
@@ -341,7 +366,7 @@ export const auditEventTypeSchema = z.enum([
   "job.completed",
   "job.failed",
   "job.lease_lost",
-  "job.canceled"
+  "job.canceled",
 ]);
 
 export const auditEventSchema = z.object({
@@ -351,7 +376,7 @@ export const auditEventSchema = z.object({
   actor: z.string().optional(),
   workflowId: z.string().optional(),
   jobId: z.string().optional(),
-  metadata: z.record(z.string(), z.string()).optional()
+  metadata: z.record(z.string(), z.string()).optional(),
 });
 
 export const operationsSnapshotSchema = z.object({
@@ -365,12 +390,12 @@ export const operationsSnapshotSchema = z.object({
     needsReviewWorkflows: z.number().int().nonnegative(),
     blockedReadinessChecks: z.number().int().nonnegative(),
     healthyWorkers: z.number().int().nonnegative(),
-    totalWorkers: z.number().int().nonnegative()
+    totalWorkers: z.number().int().nonnegative(),
   }),
   auditEvents: z.array(auditEventSchema),
   jobs: z.array(workflowJobSchema),
   readiness: readinessResponseSchema,
-  workerHealth: workerHealthResponseSchema
+  workerHealth: workerHealthResponseSchema,
 });
 
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
@@ -393,6 +418,7 @@ export type RepositoryRegistrationRequest = z.infer<
   typeof repositoryRegistrationRequestSchema
 >;
 export type RepositoryRecord = z.infer<typeof repositoryRecordSchema>;
+export type RepositorySafety = z.infer<typeof repositorySafetySchema>;
 export type CreateRepositoryWorkflowRequest = z.infer<
   typeof createRepositoryWorkflowRequestSchema
 >;
@@ -403,9 +429,7 @@ export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type WorkerHealth = z.infer<typeof workerHealthSchema>;
 export type WorkerHealthResponse = z.infer<typeof workerHealthResponseSchema>;
 export type OperationsSnapshot = z.infer<typeof operationsSnapshotSchema>;
-export type WorkflowReviewRequest = z.infer<
-  typeof workflowReviewRequestSchema
->;
+export type WorkflowReviewRequest = z.infer<typeof workflowReviewRequestSchema>;
 export type MergeCandidate = z.infer<typeof mergeCandidateSchema>;
 export type MergeCandidateApplyResult = z.infer<
   typeof mergeCandidateApplyResultSchema

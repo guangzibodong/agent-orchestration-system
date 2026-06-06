@@ -499,6 +499,23 @@ async function main() {
         blockedMergeCandidate.body.error === "merge_candidate_not_ready",
       "Gate-failed workflow returned a merge candidate instead of a 409.",
     );
+    const gateFailedWorkflows = await request(
+      baseUrl,
+      "GET",
+      "/workflows?status=gate_failed&limit=1",
+    );
+    assert(
+      gateFailedWorkflows.status === 200,
+      `Gate-failed workflow filter returned ${gateFailedWorkflows.status}`,
+    );
+    const gateFailedWorkflowRows =
+      gateFailedWorkflows.body as unknown as Array<JsonObject>;
+    assert(
+      gateFailedWorkflowRows.length === 1 &&
+        gateFailedWorkflowRows[0]?.id === blockedMergeWorkflowId &&
+        gateFailedWorkflowRows[0]?.status === "gate_failed",
+      "Gate-failed workflow filter did not return the blocked workflow.",
+    );
     log("merge candidate is blocked until quality gates pass");
 
     const create = await request(baseUrl, "POST", "/workflows/repository", {
@@ -634,6 +651,27 @@ async function main() {
         filteredRepositoryWorkflowRows[0]?.repositoryId === repositoryId,
       "Repository id workflow filter did not return the registered repository workflow.",
     );
+    if (process.env.MAWO_VIEWER_API_TOKEN) {
+      const viewerFilteredWorkflows = await request(
+        baseUrl,
+        "GET",
+        `/workflows?status=needs_review&repositoryId=${repositoryId}&limit=1`,
+        undefined,
+        process.env.MAWO_VIEWER_API_TOKEN,
+      );
+      assert(
+        viewerFilteredWorkflows.status === 200,
+        `Viewer token GET /workflows returned ${viewerFilteredWorkflows.status}`,
+      );
+      const viewerFilteredWorkflowRows =
+        viewerFilteredWorkflows.body as unknown as Array<JsonObject>;
+      assert(
+        viewerFilteredWorkflowRows.length === 1 &&
+          viewerFilteredWorkflowRows[0]?.id === workflowId &&
+          viewerFilteredWorkflowRows[0]?.status === "needs_review",
+        "Viewer token workflow filter did not return the review-ready workflow.",
+      );
+    }
     log(
       "workflow history filters isolate repository runs by status and repository id",
     );

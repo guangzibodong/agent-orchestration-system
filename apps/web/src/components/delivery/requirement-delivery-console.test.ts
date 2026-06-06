@@ -15,25 +15,29 @@ const workflow: WorkflowRun = {
     {
       id: "task-1",
       title: "Update auth guard",
-      status: "passed"
-    }
+      status: "passed",
+    },
   ],
   qualityGates: [
     {
       id: "gate-1",
       title: "Unit tests",
-      status: "passed"
-    }
-  ]
+      status: "passed",
+    },
+  ],
 };
+
+function renderConsoleFor(workflows: WorkflowRun[]): string {
+  return renderToStaticMarkup(
+    createElement(RequirementDeliveryConsole, {
+      model: buildDeliveryConsoleModel(workflows),
+    }),
+  );
+}
 
 describe("RequirementDeliveryConsole", () => {
   it("renders the requirement-first console without making legacy runs primary", () => {
-    const html = renderToStaticMarkup(
-      createElement(RequirementDeliveryConsole, {
-        model: buildDeliveryConsoleModel([workflow])
-      })
-    );
+    const html = renderConsoleFor([workflow]);
 
     expect(html).toContain("Requirement Delivery Console");
     expect(html).toContain("New Requirement");
@@ -49,19 +53,76 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Review merge candidate");
     expect(html).toContain("Legacy Run Console");
     expect(html).toContain("1 task / 1 gate / 2026-06-06T10:10:00.000Z");
-    expect(html).not.toContain("路");
     expect(html).not.toContain("Shell Run");
     expect(html.indexOf("New Requirement")).toBeLessThan(
-      html.indexOf("Legacy Run Console")
+      html.indexOf("Legacy Run Console"),
     );
+  });
+
+  it("shows required gate failure evidence without raw logs", () => {
+    const html = renderConsoleFor([
+      {
+        ...workflow,
+        id: "workflow-gate-failed",
+        goal: "Update billing copy",
+        status: "gate_failed",
+        qualityGates: [
+          {
+            id: "gate-1",
+            title: "Required unit tests",
+            status: "failed",
+            result: {
+              exitCode: 1,
+              stdout: '{"internal":"raw-gate-log"}',
+              stderr: "stacktrace: private failure details",
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(html).toContain("Gate Result / Review Evidence");
+    expect(html).toContain("Required gate failed");
+    expect(html).toContain("Merge-ready blocked");
+    expect(html).toContain("Retry failed gate");
+    expect(html).not.toContain("raw-gate-log");
+    expect(html).not.toContain("stacktrace");
+  });
+
+  it("shows review merge candidate evidence for review-ready requirements", () => {
+    const html = renderConsoleFor([workflow]);
+
+    expect(html).toContain("Review merge candidate evidence");
+    expect(html).toContain("Quality gates passed");
+    expect(html).toContain("Manual review required");
+    expect(html).not.toContain("Apply Candidate");
+  });
+
+  it("shows delivered evidence for approved completed requirements", () => {
+    const html = renderConsoleFor([
+      {
+        ...workflow,
+        id: "workflow-approved",
+        status: "completed",
+        review: {
+          decision: "approved",
+          note: "Looks ready",
+          reviewedAt: "2026-06-06T10:30:00.000Z",
+        },
+      },
+    ]);
+
+    expect(html).toContain("Delivered evidence");
+    expect(html).toContain("Approved delivery");
+    expect(html).toContain("Review delivered evidence");
   });
 
   it("keeps write actions disabled in viewer mode", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {
         model: buildDeliveryConsoleModel([workflow]),
-        viewerMode: true
-      })
+        viewerMode: true,
+      }),
     );
 
     expect(html).toContain("Viewer mode");

@@ -1,6 +1,10 @@
 import { Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import type { DeliveryConsoleModel } from "./delivery-console-model";
-import { buildDecisionQueueDisplay, buildRequirementQueueRows } from "./requirement-queue-display";
+import {
+  buildDecisionQueueDisplay,
+  buildRequirementQueueRows,
+} from "./requirement-queue-display";
+import { RequirementEvidencePanel } from "./requirement-evidence-panel";
 import { buildRequirementStageStepper } from "./requirement-stage-stepper";
 
 type RequirementDeliveryConsoleProps = {
@@ -14,13 +18,13 @@ export function RequirementDeliveryConsole({
   model,
   syncMessage,
   syncTone = "muted",
-  viewerMode = false
+  viewerMode = false,
 }: RequirementDeliveryConsoleProps) {
   const queueRows = buildRequirementQueueRows(model.requirements);
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
   const selectedRequirement = model.requirements[0];
   const stageSteps = buildRequirementStageStepper(
-    selectedRequirement?.requirementStage ?? "draft"
+    selectedRequirement?.requirementStage ?? "draft",
   );
 
   return (
@@ -49,26 +53,47 @@ export function RequirementDeliveryConsole({
       {viewerMode ? (
         <section className="viewerModeBanner" aria-label="Viewer mode">
           <strong>Viewer mode</strong>
-          <span>Write actions are disabled. Review evidence remains readable.</span>
+          <span>
+            Write actions are disabled. Review evidence remains readable.
+          </span>
         </section>
       ) : null}
 
       {syncMessage ? (
-        <section className={`deliverySyncBanner ${syncTone}`} aria-label="Workflow sync">
+        <section
+          className={`deliverySyncBanner ${syncTone}`}
+          aria-label="Workflow sync"
+        >
           {syncMessage}
         </section>
       ) : null}
 
-      <section className="deliveryKpis" aria-label="Requirement delivery metrics">
+      <section
+        className="deliveryKpis"
+        aria-label="Requirement delivery metrics"
+      >
         <Metric label="Active" value={model.kpis.activeRequirements} />
-        <Metric label="Needs Clarification" value={model.kpis.needsClarification} />
+        <Metric
+          label="Needs Clarification"
+          value={model.kpis.needsClarification}
+        />
         <Metric label="Running" value={model.kpis.runningTasks} />
-        <Metric label="Failed Gates" value={model.kpis.failedGates} tone="danger" />
+        <Metric
+          label="Failed Gates"
+          value={model.kpis.failedGates}
+          tone="danger"
+        />
         <Metric label="Waiting Review" value={model.kpis.waitingForReview} />
-        <Metric label="Delivered 7d" value={model.kpis.deliveredLastSevenDays} />
+        <Metric
+          label="Delivered 7d"
+          value={model.kpis.deliveredLastSevenDays}
+        />
       </section>
 
-      <section className="deliveryGrid" aria-label="Requirement delivery workspace">
+      <section
+        className="deliveryGrid"
+        aria-label="Requirement delivery workspace"
+      >
         <aside className="deliveryPanel requirementQueuePanel">
           <div className="deliveryPanelHeader">
             <h2>Requirement Queue</h2>
@@ -110,20 +135,38 @@ export function RequirementDeliveryConsole({
             <span>{selectedRequirement?.riskLevel ?? "medium"} risk</span>
           </div>
 
-          <section className="repositorySafetyCard" aria-label="Repository Safety">
+          <section
+            className="repositorySafetyCard"
+            aria-label="Repository Safety"
+          >
             <div>
               <ShieldCheck size={20} aria-hidden="true" />
               <strong>Repository Safety</strong>
             </div>
             <dl className="repositorySafetyList">
               {[
-                ["Repository", selectedRequirement?.repositorySafety.repositoryLabel],
-                ["Mode", selectedRequirement?.repositorySafety.executionModeLabel],
+                [
+                  "Repository",
+                  selectedRequirement?.repositorySafety.repositoryLabel,
+                ],
+                [
+                  "Mode",
+                  selectedRequirement?.repositorySafety.executionModeLabel,
+                ],
                 ["Branch", selectedRequirement?.repositorySafety.branchLabel],
                 ["HEAD", selectedRequirement?.repositorySafety.headLabel],
-                ["Clean state", selectedRequirement?.repositorySafety.cleanStateLabel],
-                ["Allowed root", selectedRequirement?.repositorySafety.allowedRootLabel],
-                ["Merge policy", selectedRequirement?.repositorySafety.mergePolicyLabel]
+                [
+                  "Clean state",
+                  selectedRequirement?.repositorySafety.cleanStateLabel,
+                ],
+                [
+                  "Allowed root",
+                  selectedRequirement?.repositorySafety.allowedRootLabel,
+                ],
+                [
+                  "Merge policy",
+                  selectedRequirement?.repositorySafety.mergePolicyLabel,
+                ],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
@@ -143,7 +186,9 @@ export function RequirementDeliveryConsole({
           <section aria-label="Stage Stepper">
             <div className="deliveryPanelHeader compact">
               <h2>Stage Stepper</h2>
-              <span>{selectedRequirement?.nextAction ?? "Complete requirement"}</span>
+              <span>
+                {selectedRequirement?.nextAction ?? "Complete requirement"}
+              </span>
             </div>
             <ol className="stageStepper">
               {stageSteps.map((step) => (
@@ -154,6 +199,8 @@ export function RequirementDeliveryConsole({
               ))}
             </ol>
           </section>
+
+          <RequirementEvidencePanel requirement={selectedRequirement} />
         </section>
 
         <aside className="deliveryPanel decisionQueuePanel">
@@ -164,7 +211,10 @@ export function RequirementDeliveryConsole({
           {decisionRows.length ? (
             <div className="decisionQueueList">
               {decisionRows.map((decision) => (
-                <article className={`decisionItem ${decision.tone}`} key={decision.id}>
+                <article
+                  className={`decisionItem ${decision.tone}`}
+                  key={decision.id}
+                >
                   <span>{decision.severityLabel}</span>
                   <strong>{decision.title}</strong>
                   <p>{decision.actionLabel}</p>
@@ -189,7 +239,7 @@ export function RequirementDeliveryConsole({
 function Metric({
   label,
   value,
-  tone
+  tone,
 }: {
   label: string;
   value: number;

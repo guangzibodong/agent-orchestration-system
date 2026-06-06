@@ -319,6 +319,7 @@ describe("runner API", () => {
       { method: "GET", url: "/workers/health" },
       { method: "GET", url: "/operations/snapshot" },
       { method: "GET", url: "/repositories" },
+      { method: "GET", url: "/repositories/missing-repository/safety" },
       { method: "GET", url: "/workflows" },
       { method: "GET", url: "/workflows/missing-workflow" },
       { method: "GET", url: "/workflows/missing-workflow/report" },
@@ -344,8 +345,8 @@ describe("runner API", () => {
     );
 
     expect(responses.map((response) => response.statusCode)).toEqual([
-      200, 200, 200, 200, 200, 200, 200, 404, 404, 404, 404, 404, 200, 404, 404,
-      200,
+      200, 200, 200, 200, 200, 200, 404, 200, 404, 404, 404, 404, 404, 200, 404,
+      404, 200,
     ]);
   });
 
@@ -2567,6 +2568,71 @@ describe("runner API", () => {
         ],
       }),
     ]);
+  });
+
+  it("returns repository safety for a registered repository", async () => {
+    const repository = {
+      id: "repo-safety",
+      name: "Safety repo",
+      path: "C:/work/safety-repo",
+      defaultBranch: "main",
+      qualityGates: [],
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:00:00.000Z",
+    };
+    const repositoryStore = {
+      async list() {
+        return [repository];
+      },
+      async get(id: string) {
+        return id === repository.id ? repository : undefined;
+      },
+      async upsert() {
+        return {
+          repository,
+          created: false,
+        };
+      },
+      async remove() {
+        return undefined;
+      },
+    } as unknown as RepositoryStore;
+    const app = buildApp(undefined, {
+      repositoryStore,
+      repositorySafetyInspector: async ({ repository: checkedRepository }) => ({
+        repositoryId: checkedRepository.id,
+        path: checkedRepository.path,
+        defaultBranch: checkedRepository.defaultBranch,
+        currentBranch: "feature/repository-safety",
+        headShortSha: "abc1234",
+        clean: true,
+        dirty: false,
+        allowedRoot: true,
+        noAutoMerge: true,
+        manualApplyPolicy:
+          "Manual review is required; MAWO never automatically merges repository changes.",
+      }),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/repositories/repo-safety/safety",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      repositoryId: "repo-safety",
+      path: "C:/work/safety-repo",
+      defaultBranch: "main",
+      currentBranch: "feature/repository-safety",
+      headShortSha: "abc1234",
+      clean: true,
+      dirty: false,
+      allowedRoot: true,
+      noAutoMerge: true,
+      manualApplyPolicy:
+        "Manual review is required; MAWO never automatically merges repository changes.",
+    });
   });
 
   it("records an audit event when a repository is registered", async () => {

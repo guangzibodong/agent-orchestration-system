@@ -5,18 +5,18 @@ export default defineConfig({
   fullyParallel: true,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:3000",
-    trace: "on-first-retry"
+    baseURL: "http://localhost:3000",
+    trace: "on-first-retry",
   },
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] }
-    }
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   webServer: {
     command: ".tools\\node\\npm.cmd run dev:web",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: true
-  }
+    url: "http://localhost:3000",
+    reuseExistingServer: true,
+  },
 });

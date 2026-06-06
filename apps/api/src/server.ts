@@ -74,6 +74,10 @@ import {
   RepositoryNotReadyError,
 } from "./runner/repository-workflow.js";
 import {
+  inspectRepositorySafety,
+  type RepositorySafetyInspector,
+} from "./runner/repository-safety.js";
+import {
   WorkflowAlreadyRunningError,
   WorkflowJobQueue,
 } from "./runner/workflow-job-queue.js";
@@ -86,6 +90,7 @@ export type BuildAppOptions = {
   prismaClient?: PrismaStateStoreClient;
   runStore?: RunStore;
   repositoryStore?: RepositoryStore;
+  repositorySafetyInspector?: RepositorySafetyInspector;
 };
 
 type PrismaStateStoreClient = PrismaAuditStoreClient &
@@ -104,6 +109,7 @@ const VIEWER_READ_ENDPOINTS: Array<string | RegExp> = [
   "/workers/health",
   "/operations/snapshot",
   "/repositories",
+  /^\/repositories\/[^/]+\/safety$/,
   "/workflows",
   /^\/workflows\/[^/]+$/,
   /^\/workflows\/[^/]+\/report$/,
@@ -311,6 +317,8 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
   });
   const repositoryStore =
     options.repositoryStore ?? stateStores.repositoryStore;
+  const repositorySafetyInspector =
+    options.repositorySafetyInspector ?? inspectRepositorySafety;
 
   app.register(cors, {
     origin: true,
@@ -645,6 +653,21 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.get("/repositories", async () => {
     return await repositoryStore.list();
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/repositories/:id/safety", async (request, reply) => {
+    const repository = await repositoryStore.get(request.params.id);
+
+    if (!repository) {
+      return reply.code(404).send({ error: "repository_not_found" });
+    }
+
+    return await repositorySafetyInspector({
+      repository,
+      allowedRoots: allowedRepositoryRoots,
+    });
   });
 
   app.post("/repositories", async (request, reply) => {
