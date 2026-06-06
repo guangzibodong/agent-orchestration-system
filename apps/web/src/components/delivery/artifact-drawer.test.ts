@@ -81,27 +81,32 @@ describe("ArtifactDrawer", () => {
     expect(buildArtifactDrawerGroups(artifactLinks)).toEqual([
       {
         kind: "stdout",
-        title: "stdout",
+        title: "Run output",
+        countLabel: "1 link",
         links: [artifactLinks[0]]
       },
       {
         kind: "stderr",
-        title: "stderr",
+        title: "Errors",
+        countLabel: "1 link",
         links: [artifactLinks[1]]
       },
       {
         kind: "patch",
-        title: "patch",
+        title: "Patches",
+        countLabel: "1 link",
         links: [artifactLinks[2]]
       },
       {
         kind: "report",
-        title: "report",
+        title: "Reports",
+        countLabel: "1 link",
         links: [artifactLinks[3]]
       },
       {
         kind: "audit",
-        title: "audit",
+        title: "Audit",
+        countLabel: "1 link",
         links: [artifactLinks[4]]
       }
     ]);
@@ -123,6 +128,13 @@ describe("ArtifactDrawer", () => {
 
     expect(html).toContain("Artifacts");
     expect(html).toContain("6 links");
+    expect(html).toContain("Run output");
+    expect(html).toContain("Errors");
+    expect(html).toContain("Patches");
+    expect(html).toContain("Reports");
+    expect(html).toContain("Audit");
+    expect(html).toContain("aria-label=\"Artifact group Run output\"");
+    expect(html).toContain("aria-label=\"Artifact group Errors\"");
     expect(html).toContain("Task stdout");
     expect(html).toContain("Gate stderr");
     expect(html).toContain("Merge candidate patch");
@@ -132,6 +144,30 @@ describe("ArtifactDrawer", () => {
       "href=\"/workflows/workflow-review/artifact?path=stdout.log\""
     );
     expect(html).not.toContain("SECRET_RAW_STDOUT_SHOULD_NOT_RENDER");
+  });
+
+  it("shows per-group artifact counts for fast review scanning", () => {
+    const html = renderToStaticMarkup(
+      createElement(ArtifactDrawer, {
+        artifacts: [
+          ...artifactLinks,
+          {
+            id: "stdout-2",
+            kind: "stdout",
+            label: "Gate stdout",
+            href: "/workflows/workflow-review/artifact?path=gate-stdout.log"
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain("Run output");
+    expect(html).toContain("2 links");
+    expect(html).toContain("Errors");
+    expect(html).toContain("1 link");
+    expect(html).toContain("Patches");
+    expect(html).toContain("Reports");
+    expect(html).toContain("Audit");
   });
 
   it("is collapsed by default so logs do not dominate the first screen", () => {

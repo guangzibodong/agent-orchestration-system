@@ -862,11 +862,24 @@ button {
 }
 
 .artifactDrawerGroup h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
   overflow-wrap: anywhere;
+}
+
+.artifactDrawerGroup h3 em {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 700;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .artifactDrawerList {

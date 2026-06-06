@@ -294,6 +294,21 @@ test.describe("Requirement Delivery Console smoke", () => {
     await evidenceDrawer.getByText("Evidence links", { exact: true }).click();
 
     await expect(
+      evidenceDrawer.getByLabel("Artifact group Run output"),
+    ).toContainText("2 links");
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Errors"),
+    ).toContainText("1 link");
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Patches"),
+    ).toContainText("3 links");
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Reports"),
+    ).toContainText("3 links");
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Audit"),
+    ).toContainText("1 link");
+    await expect(
       evidenceDrawer.getByRole("link", { name: "Inspect evidence stdout" }),
     ).toHaveAttribute(
       "href",
@@ -412,6 +427,15 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toBeVisible();
     await expect(evidenceDrawer.getByText("3 links")).toBeVisible();
     await evidenceDrawer.getByText("Evidence links", { exact: true }).click();
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Patches"),
+    ).toContainText("1 link");
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Reports"),
+    ).toContainText("1 link");
+    await expect(
+      evidenceDrawer.getByLabel("Artifact group Audit"),
+    ).toContainText("1 link");
     await expect(
       evidenceDrawer.getByRole("link", { name: "Current workflow" }),
     ).toHaveAttribute("href", "/workflows/workflow-needs-review");
@@ -570,6 +594,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       mobileEvidenceDrawer.getByRole("link", { name: "Workflow report" }),
     ).toBeVisible();
+    await expect(
+      mobileEvidenceDrawer.getByLabel("Artifact group Reports"),
+    ).toContainText("1 link");
+    await expect(
+      mobileEvidenceDrawer.getByLabel("Artifact group Audit"),
+    ).toContainText("1 link");
     await expectNoHorizontalDocumentOverflow(page);
     await expectElementsInsideViewport(
       page,
@@ -585,6 +615,8 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await expectLabelsInsideViewport(page, [
       "Evidence links",
+      "Reports",
+      "Audit",
       "Current workflow",
       "Workflow report",
     ]);

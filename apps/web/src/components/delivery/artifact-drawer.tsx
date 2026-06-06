@@ -19,6 +19,7 @@ export type ArtifactDrawerLink = {
 export type ArtifactDrawerGroup = {
   kind: ArtifactDrawerKind;
   title: string;
+  countLabel: string;
   links: ArtifactDrawerLink[];
 };
 
@@ -35,6 +36,18 @@ const artifactOrder: ArtifactDrawerKind[] = [
   "audit"
 ];
 
+const artifactGroupTitles: Record<ArtifactDrawerKind, string> = {
+  stdout: "Run output",
+  stderr: "Errors",
+  patch: "Patches",
+  report: "Reports",
+  audit: "Audit"
+};
+
+function formatArtifactLinkCount(count: number): string {
+  return `${count} ${count === 1 ? "link" : "links"}`;
+}
+
 export function buildArtifactDrawerGroups(
   artifacts: ArtifactDrawerLink[]
 ): ArtifactDrawerGroup[] {
@@ -48,7 +61,8 @@ export function buildArtifactDrawerGroups(
     return [
       {
         kind,
-        title: kind,
+        title: artifactGroupTitles[kind],
+        countLabel: formatArtifactLinkCount(links.length),
         links
       }
     ];
@@ -60,9 +74,7 @@ export function ArtifactDrawer({
   title = "Artifacts"
 }: ArtifactDrawerProps) {
   const groups = buildArtifactDrawerGroups(artifacts);
-  const linkLabel = `${artifacts.length} ${
-    artifacts.length === 1 ? "link" : "links"
-  }`;
+  const linkLabel = formatArtifactLinkCount(artifacts.length);
 
   return (
     <details className="artifactDrawer">
@@ -77,19 +89,32 @@ export function ArtifactDrawer({
       {groups.length ? (
         <div className="artifactDrawerGroups">
           {groups.map((group) => (
-            <section className="artifactDrawerGroup" key={group.kind}>
-              <h3>{group.title}</h3>
+            <section
+              aria-label={`Artifact group ${group.title}`}
+              className="artifactDrawerGroup"
+              key={group.kind}
+            >
+              <h3>
+                <span>{group.title}</span>
+                <em>{group.countLabel}</em>
+              </h3>
               <ul className="artifactDrawerList">
-                {group.links.map((artifact) => (
-                  <li className="artifactDrawerItem" key={artifact.id}>
-                    <a className="artifactDrawerLink" href={artifact.href}>
-                      {artifact.label}
-                    </a>
-                    <span className="artifactDrawerMeta">
-                      {[artifact.meta, artifact.path].filter(Boolean).join(" / ")}
-                    </span>
-                  </li>
-                ))}
+                {group.links.map((artifact) => {
+                  const metadata = [artifact.meta, artifact.path]
+                    .filter(Boolean)
+                    .join(" / ");
+
+                  return (
+                    <li className="artifactDrawerItem" key={artifact.id}>
+                      <a className="artifactDrawerLink" href={artifact.href}>
+                        {artifact.label}
+                      </a>
+                      {metadata ? (
+                        <span className="artifactDrawerMeta">{metadata}</span>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}
