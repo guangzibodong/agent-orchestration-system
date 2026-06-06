@@ -1,9 +1,16 @@
 import {
   mergeCandidateSchema,
   requirementDeliveryTicketSchema,
+  repositorySafetySchema,
   runReportSchema
 } from "@mawo/shared";
-import type { MergeCandidate, RunReport, WorkflowRun } from "@mawo/shared";
+import type {
+  MergeCandidate,
+  RepositorySafety,
+  RequirementDeliveryTicket,
+  RunReport,
+  WorkflowRun
+} from "@mawo/shared";
 import type {
   DeliveryConsoleModel,
   RequirementArtifactLink,
@@ -35,6 +42,10 @@ export async function loadRequirementDeliveryModel(
     workflowResult.status === "fulfilled" ? workflowResult.value : [];
   const requirements =
     requirementResult.status === "fulfilled" ? requirementResult.value : [];
+  const repositorySafetyByRepositoryId =
+    requirementResult.status === "fulfilled"
+      ? await loadRepositorySafetyForRequirements(api, requirements)
+      : {};
 
   if (
     workflowResult.status === "rejected" &&
@@ -47,7 +58,13 @@ export async function loadRequirementDeliveryModel(
     mergeWorkflowOverrides(workflows, context.workflowOverrides ?? []),
     new Date(),
     requirements,
-    context
+    {
+      ...context,
+      repositorySafetyByRepositoryId: {
+        ...repositorySafetyByRepositoryId,
+        ...context.repositorySafetyByRepositoryId
+      }
+    }
   );
 
   return loadRequirementArtifactEvidence(api, model);
@@ -73,6 +90,40 @@ function buildRequirementListPath(options: WorkflowListOptions): string {
   }
 
   return `/requirements?${params.toString()}`;
+}
+
+async function loadRepositorySafetyForRequirements(
+  api: ApiClient,
+  requirements: RequirementDeliveryTicket[]
+): Promise<Record<string, RepositorySafety | undefined>> {
+  const repositoryIds = [
+    ...new Set(
+      requirements
+        .map((requirement) => requirement.repositoryId)
+        .filter((repositoryId): repositoryId is string => Boolean(repositoryId))
+    )
+  ];
+
+  if (!repositoryIds.length) {
+    return {};
+  }
+
+  const results = await Promise.allSettled(
+    repositoryIds.map(async (repositoryId) => ({
+      repositoryId,
+      safety: repositorySafetySchema.parse(
+        await api(`/repositories/${encodeURIComponent(repositoryId)}/safety`)
+      )
+    }))
+  );
+
+  return Object.fromEntries(
+    results.flatMap((result) =>
+      result.status === "fulfilled"
+        ? [[result.value.repositoryId, result.value.safety]]
+        : []
+    )
+  );
 }
 
 function mergeWorkflowOverrides(

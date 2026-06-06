@@ -312,6 +312,146 @@ describe("delivery console model", () => {
     });
   });
 
+  it("maps registered repository safety evidence into blocked user-facing state", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-dirty",
+      title: "Run dirty repo safely",
+      repositoryId: "repo-dirty",
+      repositoryPath: "C:/work/shop",
+      goal: "Block execution until the repository is clean",
+      acceptanceCriteria: ["Dirty repository is visible before enqueue"],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "high",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          agent: "shell",
+          instructions: "Patch checkout"
+        }
+      ],
+      qualityGates: [
+        {
+          id: "gate-1",
+          title: "Unit tests",
+          command: "npm test",
+          required: true
+        }
+      ],
+      status: "ready_to_run",
+      runLinks: [],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:05:00.000Z"
+    };
+
+    const summary = mapRequirementTicketToSummary(
+      requirement,
+      new Map(),
+      {
+        repositorySafetyByRepositoryId: {
+          "repo-dirty": {
+            repositoryId: "repo-dirty",
+            path: "C:/work/shop",
+            defaultBranch: "main",
+            currentBranch: "feature/checkout",
+            headShortSha: "abc1234",
+            clean: false,
+            dirty: true,
+            allowedRoot: true,
+            blockedReason: "repository_dirty",
+            recoveryAction:
+              "Commit, stash, or discard local changes before running mutating workflows.",
+            noAutoMerge: true,
+            manualApplyPolicy:
+              "Manual review is required; MAWO never automatically merges repository changes."
+          }
+        }
+      }
+    );
+
+    expect(summary.repositorySafety).toEqual({
+      allowedRootLabel: "Allowed root accepted by API",
+      blockedReason:
+        "Repository has uncommitted changes; mutating requirement runs are blocked.",
+      branchLabel: "feature/checkout",
+      cleanStateLabel: "Dirty - mutating runs blocked",
+      executionModeLabel: "Isolated worktree",
+      headLabel: "HEAD abc1234",
+      mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
+      recoveryAction:
+        "Commit, stash, or discard local changes before running mutating workflows.",
+      repositoryLabel: "C:/work/shop",
+      statusLabel: "Safety blocked",
+      statusTone: "danger"
+    });
+  });
+
+  it("maps disallowed repository roots into blocked safety evidence", () => {
+    const requirement: RequirementDeliveryTicket = {
+      id: "requirement-outside-root",
+      title: "Reject outside root",
+      repositoryId: "repo-outside",
+      repositoryPath: "D:/client/app",
+      goal: "Keep runs inside approved roots",
+      acceptanceCriteria: ["Outside roots are blocked"],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "high",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Patch copy",
+          agent: "shell",
+          instructions: "Patch copy"
+        }
+      ],
+      qualityGates: [],
+      status: "ready_to_run",
+      runLinks: [],
+      createdAt: "2026-06-06T11:00:00.000Z",
+      updatedAt: "2026-06-06T11:05:00.000Z"
+    };
+
+    const summary = mapRequirementTicketToSummary(
+      requirement,
+      new Map(),
+      {
+        repositorySafetyByRepositoryId: {
+          "repo-outside": {
+            repositoryId: "repo-outside",
+            path: "D:/client/app",
+            defaultBranch: "main",
+            clean: false,
+            dirty: false,
+            allowedRoot: false,
+            blockedReason: "repository_path_not_allowed",
+            recoveryAction:
+              "Move the repository under MAWO_ALLOWED_REPOSITORY_ROOTS or update MAWO_ALLOWED_REPOSITORY_ROOTS.",
+            noAutoMerge: true,
+            manualApplyPolicy:
+              "Manual review is required; MAWO never automatically merges repository changes."
+          }
+        }
+      }
+    );
+
+    expect(summary.repositorySafety).toMatchObject({
+      allowedRootLabel: "Outside allowed roots - blocked",
+      blockedReason:
+        "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS.",
+      branchLabel: "main",
+      cleanStateLabel: "Clean state unavailable",
+      headLabel: "HEAD SHA not reported",
+      recoveryAction:
+        "Move the repository under MAWO_ALLOWED_REPOSITORY_ROOTS or update MAWO_ALLOWED_REPOSITORY_ROOTS.",
+      statusLabel: "Safety blocked",
+      statusTone: "danger"
+    });
+  });
+
   it("builds KPI and decision queues around user action, not job internals", () => {
     const model = buildDeliveryConsoleModel([
       baseWorkflow,

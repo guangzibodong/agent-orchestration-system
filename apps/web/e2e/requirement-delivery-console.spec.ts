@@ -1,5 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import type { RequirementDeliveryTicket, WorkflowRun } from "@mawo/shared";
+import type {
+  RepositorySafety,
+  RequirementDeliveryTicket,
+  WorkflowRun,
+} from "@mawo/shared";
 
 const API_ORIGIN = "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
@@ -116,6 +120,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(consoleShell.getByLabel("Repository Safety")).toContainText(
       "No MAWO auto-merge; manual git apply outside MAWO",
     );
+    await expect(
+      consoleShell.getByRole("button", {
+        name: /apply candidate|apply patch/i,
+      }),
+    ).toHaveCount(0);
     await expect(page.locator(".decisionQueuePanel")).toContainText(
       "Review merge candidate",
     );
@@ -209,6 +218,35 @@ test.describe("Requirement Delivery Console smoke", () => {
       error: "forbidden",
       role: "viewer",
     });
+  });
+
+  test("surfaces registered dirty repository safety before enqueue", async ({
+    page,
+  }) => {
+    await mockApi(page, [], {
+      repositorySafetyByRepositoryId: {
+        "repo-dirty": dirtyRepositorySafety,
+      },
+      requirements: [dirtyRepositoryRequirement],
+    });
+
+    await page.goto("/");
+
+    const safety = page.getByLabel("Repository Safety");
+    await expect(safety).toContainText("Safety blocked");
+    await expect(safety).toContainText("feature/checkout");
+    await expect(safety).toContainText("HEAD abc1234");
+    await expect(safety).toContainText("Dirty - mutating runs blocked");
+    await expect(safety).toContainText("Allowed root accepted by API");
+    await expect(safety).toContainText(
+      "Repository has uncommitted changes; mutating requirement runs are blocked.",
+    );
+    await expect(safety).toContainText(
+      "Commit, stash, or discard local changes before running mutating workflows.",
+    );
+    await expect(
+      page.getByRole("button", { name: /apply candidate|apply patch/i }),
+    ).toHaveCount(0);
   });
 
   test("surfaces readable review evidence and artifact paths for requirement tickets", async ({
@@ -387,6 +425,7 @@ test.describe("Requirement Delivery Console smoke", () => {
   test("operator can approve a review-ready requirement from the detail shell", async ({
     page,
   }) => {
+    const mutatingRequests: string[] = [];
     const reviewRequests: Array<{
       authorization: string | undefined;
       decision: string;
@@ -408,6 +447,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await mockApi(page, reviewWorkflows, {
       requirements: reviewRequirements,
+      onMutatingRequest: ({ method, pathname }) => {
+        mutatingRequests.push(`${method} ${pathname}`);
+      },
       onWorkflowReview: ({ authorization, decision, workflowId }) => {
         reviewRequests.push({ authorization, decision, workflowId });
         reviewWorkflows[0] = {
@@ -475,6 +517,15 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(page.getByLabel("Gate Result / Review Evidence")).toContainText(
       "Approved delivery",
     );
+    expect(mutatingRequests).toEqual([
+      "POST /workflows/workflow-needs-review/review",
+    ]);
+    expect(mutatingRequests).not.toContain(
+      "POST /workflows/workflow-needs-review/merge-candidate/apply",
+    );
+    await expect(
+      page.getByRole("button", { name: /apply candidate|apply patch/i }),
+    ).toHaveCount(0);
   });
 
   test("keeps key requirement labels inside the mobile viewport", async ({
@@ -513,6 +564,18 @@ test.describe("Requirement Delivery Console smoke", () => {
       mobileEvidenceDrawer.getByRole("link", { name: "Workflow report" }),
     ).toBeVisible();
     await expectNoHorizontalDocumentOverflow(page);
+    await expectElementsInsideViewport(
+      page,
+      page.locator(".repositorySafetyCard"),
+    );
+    await expectElementsInsideViewport(
+      page,
+      page.locator(".repositorySafetyList dd"),
+    );
+    await expectElementsInsideViewport(
+      page,
+      page.locator(".requirementEvidenceCard"),
+    );
     await expectLabelsInsideViewport(page, [
       "Evidence links",
       "Current workflow",
@@ -814,6 +877,7 @@ async function mockApi(
     }) => void;
     mergeCandidates?: Record<string, unknown>;
     reports?: Record<string, unknown>;
+    repositorySafetyByRepositoryId?: Record<string, RepositorySafety>;
     requirements?: RequirementDeliveryTicket[];
   } = {},
 ) {
@@ -838,6 +902,21 @@ async function mockApi(
 
     if (request.method() === "GET" && url.pathname === "/requirements") {
       await route.fulfill({ json: options.requirements ?? [] });
+      return;
+    }
+
+    const repositorySafetyMatch = url.pathname.match(
+      /^\/repositories\/([^/]+)\/safety$/,
+    );
+    if (request.method() === "GET" && repositorySafetyMatch) {
+      const repositoryId = decodeURIComponent(repositorySafetyMatch[1] ?? "");
+      const safety = options.repositorySafetyByRepositoryId?.[repositoryId];
+
+      await route.fulfill(
+        safety
+          ? { json: safety }
+          : { status: 404, json: { error: "repository_not_found" } },
+      );
       return;
     }
 
@@ -1106,6 +1185,29 @@ async function expectLabelsInsideViewport(page: Page, labels: string[]) {
   }
 }
 
+async function expectElementsInsideViewport(page: Page, locator: Locator) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+
+  const count = await locator.count();
+  expect(count).toBeGreaterThan(0);
+
+  for (let index = 0; index < count; index += 1) {
+    const item = locator.nth(index);
+    const box = await item.boundingBox();
+
+    expect(box, `element ${index} should have a measurable box`).not.toBeNull();
+    expect(
+      box!.x,
+      `element ${index} should not overflow left`,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      box!.x + box!.width,
+      `element ${index} should not overflow right`,
+    ).toBeLessThanOrEqual(viewport!.width + 1);
+  }
+}
+
 function fallbackStatus(request: { method(): string }) {
   return request.method() === "GET" ? 200 : 403;
 }
@@ -1223,6 +1325,56 @@ const gateFailedRequirementTickets: RequirementDeliveryTicket[] = [
     updatedAt: "2026-06-06T10:00:00.000Z",
   },
 ];
+
+const dirtyRepositoryRequirement: RequirementDeliveryTicket = {
+  id: "requirement-dirty-repo",
+  title: "Run dirty repo safely",
+  repositoryId: "repo-dirty",
+  repositoryPath: "C:/work/shop",
+  goal: "Block mutating runs until repository safety is clear.",
+  acceptanceCriteria: ["Dirty repository state is visible before enqueue."],
+  constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+  nonGoals: ["Automatic PR creation"],
+  riskLevel: "high",
+  contextPaths: ["apps/web/src/app/page.tsx"],
+  tasks: [
+    {
+      id: "task-dirty",
+      title: "Patch checkout",
+      agent: "shell",
+      instructions: "Patch checkout after the repository is clean.",
+    },
+  ],
+  qualityGates: [
+    {
+      id: "gate-dirty",
+      title: "Unit tests",
+      command: "npm test",
+      required: true,
+    },
+  ],
+  status: "ready_to_run",
+  runLinks: [],
+  createdAt: "2026-06-06T11:00:00.000Z",
+  updatedAt: "2026-06-06T11:05:00.000Z",
+};
+
+const dirtyRepositorySafety: RepositorySafety = {
+  repositoryId: "repo-dirty",
+  path: "C:/work/shop",
+  defaultBranch: "main",
+  currentBranch: "feature/checkout",
+  headShortSha: "abc1234",
+  clean: false,
+  dirty: true,
+  allowedRoot: true,
+  blockedReason: "repository_dirty",
+  recoveryAction:
+    "Commit, stash, or discard local changes before running mutating workflows.",
+  noAutoMerge: true,
+  manualApplyPolicy:
+    "Manual review is required; MAWO never automatically merges repository changes.",
+};
 
 const mobileStressWorkflows: WorkflowRun[] = [
   {

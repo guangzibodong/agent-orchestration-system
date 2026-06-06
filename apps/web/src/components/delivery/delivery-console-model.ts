@@ -1,5 +1,6 @@
 import type {
   RequirementDeliveryTicket,
+  RepositorySafety,
   WorkflowJobStatus,
   WorkflowRun,
   WorkflowStatus
@@ -21,6 +22,8 @@ export type RequirementRiskLevel = "low" | "medium" | "high";
 export type RepositorySafetySummary = {
   repositoryLabel: string;
   executionModeLabel: string;
+  statusLabel?: string;
+  statusTone?: "danger" | "muted" | "success" | "warning";
   branchLabel: string;
   headLabel: string;
   cleanStateLabel: string;
@@ -125,6 +128,7 @@ export type DeliveryConsoleModel = {
 
 export type DeliveryConsoleModelContext = {
   jobStatusByRequirementId?: Record<string, WorkflowJobStatus | undefined>;
+  repositorySafetyByRepositoryId?: Record<string, RepositorySafety | undefined>;
   workflowOverrides?: WorkflowRun[];
 };
 
@@ -276,10 +280,15 @@ function mapRequirementRiskLevel(
 function buildTicketRepositorySafety(
   requirement: RequirementDeliveryTicket,
   executionStatus: WorkflowRun["status"],
-  workflow?: WorkflowRun
+  workflow?: WorkflowRun,
+  repositorySafety?: RepositorySafety
 ): RepositorySafetySummary {
   if (workflow) {
     return buildRepositorySafety(workflow);
+  }
+
+  if (repositorySafety) {
+    return buildRepositorySafetyFromInspection(requirement, repositorySafety);
   }
 
   const hasRepository = Boolean(
@@ -314,6 +323,75 @@ function buildTicketRepositorySafety(
     ),
     recoveryAction: buildTicketRecoveryAction(requirement, hasRepository)
   };
+}
+
+function buildRepositorySafetyFromInspection(
+  requirement: RequirementDeliveryTicket,
+  safety: RepositorySafety
+): RepositorySafetySummary {
+  const repositoryLabel =
+    safety.path ??
+    requirement.repositoryPath ??
+    requirement.repositoryId ??
+    "No repository selected";
+
+  return {
+    repositoryLabel,
+    executionModeLabel: "Isolated worktree",
+    statusLabel: safety.blockedReason ? "Safety blocked" : "Safety accepted",
+    statusTone: safety.blockedReason ? "danger" : "success",
+    branchLabel:
+      safety.currentBranch ?? safety.defaultBranch ?? "Branch pending preflight",
+    headLabel: safety.headShortSha
+      ? `HEAD ${safety.headShortSha}`
+      : "HEAD SHA not reported",
+    cleanStateLabel: buildInspectedCleanStateLabel(safety),
+    allowedRootLabel: safety.allowedRoot
+      ? "Allowed root accepted by API"
+      : "Outside allowed roots - blocked",
+    mergePolicyLabel: noAutoMergePolicyLabel,
+    blockedReason: safety.blockedReason
+      ? formatRepositorySafetyBlockedReason(safety.blockedReason)
+      : undefined,
+    recoveryAction:
+      safety.recoveryAction ??
+      (safety.blockedReason
+        ? "Resolve repository safety before mutating actions"
+        : "Repository safety accepted for isolated requirement runs")
+  };
+}
+
+function buildInspectedCleanStateLabel(safety: RepositorySafety): string {
+  if (!safety.allowedRoot) {
+    return "Clean state unavailable";
+  }
+
+  if (safety.dirty) {
+    return "Dirty - mutating runs blocked";
+  }
+
+  if (safety.clean) {
+    return "Clean - mutating runs allowed";
+  }
+
+  return "Clean state unavailable";
+}
+
+function formatRepositorySafetyBlockedReason(reason: string): string {
+  switch (reason) {
+    case "repository_dirty":
+      return "Repository has uncommitted changes; mutating requirement runs are blocked.";
+    case "repository_path_not_allowed":
+      return "Repository path is outside MAWO_ALLOWED_REPOSITORY_ROOTS.";
+    case "git_repository_required":
+      return "Path is not a git repository.";
+    case "committed_head_required":
+      return "Repository needs an initial commit before mutating workflows.";
+    case "git_status_unavailable":
+      return "Git status is unavailable; repository safety cannot be verified.";
+    default:
+      return reason;
+  }
 }
 
 function buildTicketBlockedReason(
@@ -527,7 +605,10 @@ export function mapRequirementTicketToSummary(
     repositorySafety: buildTicketRepositorySafety(
       requirement,
       executionStatus,
-      workflow
+      workflow,
+      requirement.repositoryId
+        ? context.repositorySafetyByRepositoryId?.[requirement.repositoryId]
+        : undefined
     ),
     requirementStage: requirement.status,
     executionStatus,

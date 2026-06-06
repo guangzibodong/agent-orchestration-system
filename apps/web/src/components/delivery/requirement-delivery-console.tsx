@@ -394,12 +394,20 @@ export function RequirementDeliveryConsole({
           </div>
 
           <section
-            className="repositorySafetyCard"
+            className={`repositorySafetyCard ${
+              selectedRequirement?.repositorySafety.statusTone ?? "muted"
+            }`}
             aria-label="Repository Safety"
           >
-            <div>
-              <ShieldCheck size={20} aria-hidden="true" />
-              <strong>Repository Safety</strong>
+            <div className="repositorySafetyHeader">
+              <div>
+                <ShieldCheck size={20} aria-hidden="true" />
+                <strong>Repository Safety</strong>
+              </div>
+              <span className="repositorySafetyStatus">
+                {selectedRequirement?.repositorySafety.statusLabel ??
+                  "Preflight pending"}
+              </span>
             </div>
             <dl className="repositorySafetyList">
               {[
@@ -433,12 +441,25 @@ export function RequirementDeliveryConsole({
               ))}
             </dl>
             {selectedRequirement?.repositorySafety.blockedReason ? (
-              <p>{selectedRequirement.repositorySafety.blockedReason}</p>
+              <div className="repositorySafetyNotice">
+                <strong>Blocked reason</strong>
+                <p>{selectedRequirement.repositorySafety.blockedReason}</p>
+              </div>
             ) : null}
-            <span>
-              {selectedRequirement?.repositorySafety.recoveryAction ??
-                "Create a requirement to run repository safety checks"}
-            </span>
+            <div className="repositorySafetyNotice">
+              <strong>Recovery action</strong>
+              <p>
+                {selectedRequirement?.repositorySafety.recoveryAction ??
+                  "Create a requirement to run repository safety checks"}
+              </p>
+            </div>
+            <div className="repositorySafetyContract">
+              <strong>Contract</strong>
+              <p>
+                {selectedRequirement?.repositorySafety.mergePolicyLabel ??
+                  "No MAWO auto-merge; manual git apply outside MAWO"}
+              </p>
+            </div>
           </section>
 
           <section aria-label="Stage Stepper">

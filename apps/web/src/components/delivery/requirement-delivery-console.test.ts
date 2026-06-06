@@ -153,6 +153,83 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).not.toContain("Apply Candidate");
   });
 
+  it("renders blocked repository safety evidence with recovery action", () => {
+    const model = buildDeliveryConsoleModel(
+      [],
+      new Date("2026-06-06T11:10:00.000Z"),
+      [
+        {
+          id: "requirement-dirty",
+          title: "Run dirty repo safely",
+          repositoryId: "repo-dirty",
+          repositoryPath: "C:/work/shop",
+          goal: "Block execution until repository safety is clear",
+          acceptanceCriteria: ["Dirty repository state is visible"],
+          constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+          nonGoals: ["Automatic PR creation"],
+          riskLevel: "high",
+          contextPaths: [],
+          tasks: [
+            {
+              id: "task-1",
+              title: "Patch checkout",
+              agent: "shell",
+              instructions: "Patch checkout",
+            },
+          ],
+          qualityGates: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              command: "npm test",
+              required: true,
+            },
+          ],
+          status: "ready_to_run",
+          runLinks: [],
+          createdAt: "2026-06-06T11:00:00.000Z",
+          updatedAt: "2026-06-06T11:05:00.000Z",
+        },
+      ],
+      {
+        repositorySafetyByRepositoryId: {
+          "repo-dirty": {
+            repositoryId: "repo-dirty",
+            path: "C:/work/shop",
+            defaultBranch: "main",
+            currentBranch: "feature/checkout",
+            headShortSha: "abc1234",
+            clean: false,
+            dirty: true,
+            allowedRoot: true,
+            blockedReason: "repository_dirty",
+            recoveryAction:
+              "Commit, stash, or discard local changes before running mutating workflows.",
+            noAutoMerge: true,
+            manualApplyPolicy:
+              "Manual review is required; MAWO never automatically merges repository changes.",
+          },
+        },
+      },
+    );
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, { model }),
+    );
+
+    expect(html).toContain("Safety blocked");
+    expect(html).toContain("Dirty - mutating runs blocked");
+    expect(html).toContain("Allowed root accepted by API");
+    expect(html).toContain("HEAD abc1234");
+    expect(html).toContain(
+      "Repository has uncommitted changes; mutating requirement runs are blocked.",
+    );
+    expect(html).toContain(
+      "Commit, stash, or discard local changes before running mutating workflows.",
+    );
+    expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
+    expect(html).not.toContain("Apply Candidate");
+  });
+
   it("renders review evidence artifacts inside the requirement detail shell", () => {
     const html = renderConsoleFor([workflow]);
 

@@ -57,7 +57,8 @@ button {
 .deliverySearch,
 .viewerModeBanner,
 .deliveryPanelHeader,
-.repositorySafetyCard > div,
+.repositorySafetyHeader,
+.repositorySafetyHeader > div,
 .requirementQueueMeta {
   display: flex;
   align-items: center;
@@ -331,6 +332,8 @@ button {
 .decisionItem p,
 .deliveryEmptyState span,
 .repositorySafetyCard p,
+.repositorySafetyNotice,
+.repositorySafetyContract,
 .repositorySafetyCard span {
   overflow-wrap: anywhere;
 }
@@ -443,12 +446,73 @@ button {
 }
 
 .repositorySafetyCard {
+  border-left: 3px solid var(--panel-border);
   display: grid;
   gap: 10px;
 }
 
-.repositorySafetyCard > div {
+.repositorySafetyCard.danger {
+  border-left-color: var(--danger);
+}
+
+.repositorySafetyCard.success {
+  border-left-color: var(--success);
+}
+
+.repositorySafetyCard.warning {
+  border-left-color: var(--warning);
+}
+
+.repositorySafetyHeader {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.repositorySafetyHeader > div {
   gap: 8px;
+}
+
+.repositorySafetyStatus {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 4px 8px;
+}
+
+.repositorySafetyCard.danger .repositorySafetyStatus {
+  border-color: rgba(189, 47, 47, 0.26);
+  color: var(--danger);
+}
+
+.repositorySafetyCard.success .repositorySafetyStatus {
+  border-color: rgba(19, 138, 82, 0.26);
+  color: var(--success);
+}
+
+.repositorySafetyCard.warning .repositorySafetyStatus {
+  border-color: rgba(180, 106, 0, 0.26);
+  color: var(--warning);
+}
+
+.repositorySafetyNotice,
+.repositorySafetyContract {
+  display: grid;
+  gap: 3px;
+}
+
+.repositorySafetyNotice strong,
+.repositorySafetyContract strong {
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.repositorySafetyNotice p,
+.repositorySafetyContract p {
+  margin: 0;
 }
 
 .requirementEvidenceCard {
