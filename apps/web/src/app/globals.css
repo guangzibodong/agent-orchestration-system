@@ -94,6 +94,22 @@ button {
   padding: 12px 14px;
 }
 
+.deliverySyncBanner {
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+}
+
+.deliverySyncBanner.danger {
+  border-color: #efb3b3;
+  background: #fff6f6;
+  color: var(--danger);
+}
+
 .deliveryKpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));

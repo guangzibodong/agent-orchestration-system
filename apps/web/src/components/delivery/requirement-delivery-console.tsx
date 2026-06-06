@@ -5,11 +5,15 @@ import { buildRequirementStageStepper } from "./requirement-stage-stepper";
 
 type RequirementDeliveryConsoleProps = {
   model: DeliveryConsoleModel;
+  syncMessage?: string;
+  syncTone?: "muted" | "danger";
   viewerMode?: boolean;
 };
 
 export function RequirementDeliveryConsole({
   model,
+  syncMessage,
+  syncTone = "muted",
   viewerMode = false
 }: RequirementDeliveryConsoleProps) {
   const queueRows = buildRequirementQueueRows(model.requirements);
@@ -46,6 +50,12 @@ export function RequirementDeliveryConsole({
         <section className="viewerModeBanner" aria-label="Viewer mode">
           <strong>Viewer mode</strong>
           <span>Write actions are disabled. Review evidence remains readable.</span>
+        </section>
+      ) : null}
+
+      {syncMessage ? (
+        <section className={`deliverySyncBanner ${syncTone}`} aria-label="Workflow sync">
+          {syncMessage}
         </section>
       ) : null}
 
