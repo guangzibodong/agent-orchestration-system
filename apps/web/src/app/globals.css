@@ -44,6 +44,305 @@ button {
   font: inherit;
 }
 
+.deliveryShell {
+  display: grid;
+  gap: 16px;
+  min-height: 100vh;
+  min-width: 0;
+  padding: 24px;
+}
+
+.deliveryTopbar,
+.deliveryTopbarActions,
+.deliverySearch,
+.viewerModeBanner,
+.deliveryPanelHeader,
+.repositorySafetyCard > div,
+.requirementQueueMeta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.deliveryTopbar {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.deliveryTopbarActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.deliverySearch {
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 0 12px;
+}
+
+.viewerModeBanner {
+  gap: 10px;
+  border: 1px solid #c9d4de;
+  border-radius: 8px;
+  background: #eef5f8;
+  color: var(--accent-strong);
+  padding: 12px 14px;
+}
+
+.deliveryKpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.deliveryMetric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px;
+}
+
+.deliveryMetric strong {
+  font-size: 24px;
+}
+
+.deliveryMetric span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.deliveryMetric.danger strong {
+  color: var(--danger);
+}
+
+.deliveryGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(280px, 340px);
+  gap: 16px;
+  min-width: 0;
+}
+
+.deliveryPanel,
+.legacyConsolePanel {
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.deliveryPanel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 16px;
+}
+
+.deliveryPanelHeader {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.deliveryPanelHeader.compact h2 {
+  font-size: 18px;
+}
+
+.deliveryPanelHeader span {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.deliveryPanel h2 {
+  font-size: 18px;
+}
+
+.requirementQueueList,
+.decisionQueueList {
+  display: grid;
+  gap: 10px;
+}
+
+.requirementQueueItem,
+.decisionItem,
+.deliveryEmptyState,
+.repositorySafetyCard {
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 12px;
+}
+
+.requirementQueueItem {
+  display: grid;
+  gap: 8px;
+}
+
+.requirementQueueItem div,
+.requirementQueueItem p,
+.requirementQueueItem small,
+.decisionItem strong,
+.decisionItem p,
+.deliveryEmptyState span,
+.repositorySafetyCard p,
+.repositorySafetyCard span {
+  overflow-wrap: anywhere;
+}
+
+.requirementQueueItem div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.requirementQueueItem span,
+.requirementQueueItem small,
+.decisionItem span,
+.deliveryEmptyState span,
+.repositorySafetyCard p,
+.repositorySafetyCard span {
+  color: var(--muted);
+}
+
+.requirementQueueMeta {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.requirementQueueMeta span,
+.decisionItem span {
+  border-radius: 999px;
+  background: #eef3f7;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.repositorySafetyCard {
+  display: grid;
+  gap: 10px;
+}
+
+.repositorySafetyCard > div {
+  gap: 8px;
+}
+
+.stageStepper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 96px), 1fr));
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stageStep {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 58px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 10px;
+}
+
+.stageStep span,
+.stageStep small {
+  overflow-wrap: anywhere;
+}
+
+.stageStep.complete {
+  border-color: #b9d8c9;
+  color: var(--success);
+}
+
+.stageStep.active {
+  border-color: #9ac7da;
+  background: #eef8fb;
+  color: var(--accent-strong);
+}
+
+.stageStep.failed {
+  border-color: #efb3b3;
+  background: #fff6f6;
+  color: var(--danger);
+}
+
+.decisionItem {
+  display: grid;
+  gap: 8px;
+}
+
+.decisionItem.danger span {
+  background: #fff0f0;
+  color: var(--danger);
+}
+
+.decisionItem.warning span {
+  background: #fff7e8;
+  color: var(--warning);
+}
+
+.deliveryEmptyState {
+  display: grid;
+  gap: 6px;
+}
+
+.legacyConsolePanel {
+  margin: 0 24px 24px;
+}
+
+.legacyConsolePanel > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 14px 16px;
+}
+
+@media (max-width: 1100px) {
+  .deliveryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stageStepper {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .deliveryShell {
+    padding: 16px;
+  }
+
+  .deliveryTopbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .deliveryTopbarActions {
+    justify-content: stretch;
+  }
+
+  .deliveryTopbarActions > * {
+    width: 100%;
+  }
+
+  .legacyConsolePanel {
+    margin: 0 16px 16px;
+  }
+}
+
 .shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);

@@ -40,4 +40,12 @@ describe("global layout resilience styles", () => {
     expect(ruleFor(".primaryButton")).toContain("white-space: normal");
     expect(ruleFor(".consoleGrid")).toContain("min-width: 0");
   });
+
+  it("keeps requirement stage labels readable instead of forcing seven cramped columns", () => {
+    const stageStepperRule = ruleFor(".stageStepper");
+
+    expect(stageStepperRule).toContain("auto-fit");
+    expect(stageStepperRule).toContain("96px");
+    expect(stageStepperRule).not.toContain("repeat(7");
+  });
 });
