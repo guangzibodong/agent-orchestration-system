@@ -27,6 +27,11 @@ function createHarness(job?: WorkflowJob) {
   }> = [];
   const store: PostgresWorkflowWorkerJobStore = {
     claimNextQueuedJob: vi.fn(async () => job),
+    finishClaimedJob: vi.fn(async (input) => {
+      saved.push(input.job);
+      return input.job;
+    }),
+    getJob: vi.fn(async (id) => (job?.id === id ? job : undefined)),
     renewJobLease: vi.fn(async (input) => {
       renewals.push({
         jobId: input.jobId,
@@ -34,9 +39,6 @@ function createHarness(job?: WorkflowJob) {
         leaseExpiresAt: input.leaseExpiresAt
       });
       return true;
-    }),
-    save: vi.fn(async (updated) => {
-      saved.push(updated);
     })
   };
   const runner: PostgresWorkflowWorkerRunner = {
@@ -92,6 +94,14 @@ describe("PostgresWorkflowWorker", () => {
         finishedAt: "2026-06-05T00:02:00.000Z"
       })
     ]);
+    expect(store.finishClaimedJob).toHaveBeenCalledWith({
+      job: expect.objectContaining({
+        id: "job-1",
+        status: "completed",
+        finishedAt: "2026-06-05T00:02:00.000Z"
+      }),
+      workerId: "worker-a"
+    });
   });
 
   it("returns idle when there is no queued job to claim", async () => {
@@ -138,6 +148,54 @@ describe("PostgresWorkflowWorker", () => {
         finishedAt: "2026-06-05T00:03:00.000Z"
       })
     ]);
+    expect(store.finishClaimedJob).toHaveBeenCalledWith({
+      job: expect.objectContaining({
+        id: "job-1",
+        status: "failed",
+        error: "workflow exploded",
+        finishedAt: "2026-06-05T00:03:00.000Z"
+      }),
+      workerId: "worker-a"
+    });
+  });
+
+  it("returns the canceled job when completion loses its worker claim", async () => {
+    const claimed = createJob();
+    const canceled = createJob({
+      status: "canceled",
+      updatedAt: "2026-06-05T00:05:00.000Z",
+      finishedAt: "2026-06-05T00:05:00.000Z"
+    });
+    const saved: WorkflowJob[] = [];
+    const store = {
+      claimNextQueuedJob: vi.fn(async () => claimed),
+      finishClaimedJob: vi.fn(async () => undefined),
+      getJob: vi.fn(async () => canceled),
+      renewJobLease: vi.fn(async () => false),
+      save: vi.fn(async (updated: WorkflowJob) => {
+        saved.push(updated);
+      })
+    } as unknown as PostgresWorkflowWorkerJobStore;
+    const runner: PostgresWorkflowWorkerRunner = {
+      ready: vi.fn(async () => undefined),
+      flush: vi.fn(async () => undefined),
+      runWorkflow: vi.fn(async () => ({ id: claimed.workflowId }))
+    };
+    const worker = new PostgresWorkflowWorker({
+      jobStore: store,
+      runner,
+      workerId: "worker-a",
+      now: () => new Date("2026-06-05T00:06:00.000Z")
+    });
+
+    const result = await worker.runOnce();
+
+    expect(result).toEqual({
+      status: "canceled",
+      job: canceled
+    });
+    expect(store.getJob).toHaveBeenCalledWith("job-1");
+    expect(saved).toEqual([]);
   });
 
   it("renews the job lease while the workflow is running", async () => {

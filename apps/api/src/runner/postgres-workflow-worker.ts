@@ -3,6 +3,7 @@ import type { LocalRunner, RunWorkflowOptions } from "./local-runner.js";
 import type { WorkflowJob } from "./workflow-job-queue.js";
 import type {
   ClaimNextQueuedJobInput,
+  FinishClaimedJobInput,
   RenewJobLeaseInput
 } from "./prisma-job-store.js";
 
@@ -10,8 +11,11 @@ export type PostgresWorkflowWorkerJobStore = {
   claimNextQueuedJob(
     input: ClaimNextQueuedJobInput
   ): Promise<WorkflowJob | undefined>;
+  finishClaimedJob(
+    input: FinishClaimedJobInput
+  ): Promise<WorkflowJob | undefined>;
+  getJob(id: string): Promise<WorkflowJob | undefined>;
   renewJobLease(input: RenewJobLeaseInput): Promise<boolean>;
-  save(job: WorkflowJob): Promise<void>;
 };
 
 export type PostgresWorkflowWorkerRunner = Pick<
@@ -38,7 +42,7 @@ export type PostgresWorkflowWorkerRunOnceResult =
       status: "idle";
     }
   | {
-      status: "completed" | "failed";
+      status: "completed" | "failed" | "canceled";
       job: WorkflowJob;
     };
 
@@ -87,26 +91,54 @@ export class PostgresWorkflowWorker {
       const completed = this.finishJob(claimed, {
         status: "completed"
       });
-      await this.jobStore.save(completed);
-
-      return {
-        status: "completed",
-        job: completed
-      };
+      return await this.finishClaimedJob(completed);
     } catch (error) {
       const failed = this.finishJob(claimed, {
         status: "failed",
         error: error instanceof Error ? error.message : String(error)
       });
-      await this.jobStore.save(failed);
-
-      return {
-        status: "failed",
-        job: failed
-      };
+      return await this.finishClaimedJob(failed);
     } finally {
       stopRenewal();
     }
+  }
+
+  private async finishClaimedJob(
+    job: WorkflowJob
+  ): Promise<Exclude<PostgresWorkflowWorkerRunOnceResult, { status: "idle" }>> {
+    const finalized = await this.jobStore.finishClaimedJob({
+      job,
+      workerId: this.workerId
+    });
+
+    if (finalized?.status === "completed" || finalized?.status === "failed") {
+      return {
+        status: finalized.status,
+        job: finalized
+      };
+    }
+
+    const current = await this.jobStore.getJob(job.id);
+
+    if (
+      current?.status === "completed" ||
+      current?.status === "failed" ||
+      current?.status === "canceled"
+    ) {
+      return {
+        status: current.status,
+        job: current
+      };
+    }
+
+    return {
+      status: "failed",
+      job: {
+        ...job,
+        status: "failed",
+        error: "Job claim was lost before finalization."
+      }
+    };
   }
 
   private startLeaseRenewal(jobId: string): () => void {

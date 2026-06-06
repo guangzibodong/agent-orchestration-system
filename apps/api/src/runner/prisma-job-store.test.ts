@@ -17,6 +17,11 @@ type JobRow = {
   attempts: number;
 };
 
+type FinishClaimedJob = (input: {
+  job: WorkflowJob;
+  workerId: string;
+}) => Promise<WorkflowJob | undefined>;
+
 function createJobClient() {
   const rows: JobRow[] = [];
 
@@ -262,6 +267,112 @@ describe("PrismaJobStore", () => {
       lockedAt: new Date("2026-06-05T00:04:00.000Z"),
       leaseExpiresAt: new Date("2026-06-05T00:09:00.000Z"),
       attempts: 1
+    });
+  });
+
+  it("finishes a claimed job only for the worker holding its lease", async () => {
+    const client = createJobClient();
+    client.rows.push({
+      id: "job-claimed",
+      workflowRunId: "workflow-claimed",
+      status: "running",
+      error: null,
+      createdAt: new Date("2026-06-05T00:01:00.000Z"),
+      updatedAt: new Date("2026-06-05T00:03:00.000Z"),
+      startedAt: new Date("2026-06-05T00:03:00.000Z"),
+      finishedAt: null,
+      lockedBy: "worker-a",
+      lockedAt: new Date("2026-06-05T00:03:00.000Z"),
+      leaseExpiresAt: new Date("2026-06-05T00:08:00.000Z"),
+      attempts: 1
+    });
+    const store = new PrismaJobStore(client);
+    const finishClaimedJob = (
+      store as unknown as {
+        finishClaimedJob?: FinishClaimedJob;
+      }
+    ).finishClaimedJob;
+    const completed: WorkflowJob = {
+      id: "job-claimed",
+      workflowId: "workflow-claimed",
+      status: "completed",
+      createdAt: "2026-06-05T00:01:00.000Z",
+      updatedAt: "2026-06-05T00:05:00.000Z",
+      startedAt: "2026-06-05T00:03:00.000Z",
+      finishedAt: "2026-06-05T00:05:00.000Z"
+    };
+
+    expect(finishClaimedJob).toEqual(expect.any(Function));
+    await expect(
+      finishClaimedJob?.call(store, {
+        job: completed,
+        workerId: "worker-b"
+      })
+    ).resolves.toBeUndefined();
+    expect(client.rows[0]).toMatchObject({
+      status: "running",
+      lockedBy: "worker-a",
+      finishedAt: null
+    });
+
+    await expect(
+      finishClaimedJob?.call(store, {
+        job: completed,
+        workerId: "worker-a"
+      })
+    ).resolves.toEqual(completed);
+    expect(client.rows[0]).toMatchObject({
+      status: "completed",
+      lockedBy: null,
+      lockedAt: null,
+      leaseExpiresAt: null,
+      finishedAt: new Date("2026-06-05T00:05:00.000Z"),
+      attempts: 1
+    });
+  });
+
+  it("does not overwrite a canceled job when a worker finishes late", async () => {
+    const client = createJobClient();
+    client.rows.push({
+      id: "job-canceled",
+      workflowRunId: "workflow-canceled",
+      status: "canceled",
+      error: null,
+      createdAt: new Date("2026-06-05T00:01:00.000Z"),
+      updatedAt: new Date("2026-06-05T00:04:00.000Z"),
+      startedAt: new Date("2026-06-05T00:03:00.000Z"),
+      finishedAt: new Date("2026-06-05T00:04:00.000Z"),
+      lockedBy: null,
+      lockedAt: null,
+      leaseExpiresAt: null,
+      attempts: 1
+    });
+    const store = new PrismaJobStore(client);
+    const finishClaimedJob = (
+      store as unknown as {
+        finishClaimedJob?: FinishClaimedJob;
+      }
+    ).finishClaimedJob;
+
+    expect(finishClaimedJob).toEqual(expect.any(Function));
+    await expect(
+      finishClaimedJob?.call(store, {
+        job: {
+          id: "job-canceled",
+          workflowId: "workflow-canceled",
+          status: "completed",
+          createdAt: "2026-06-05T00:01:00.000Z",
+          updatedAt: "2026-06-05T00:06:00.000Z",
+          startedAt: "2026-06-05T00:03:00.000Z",
+          finishedAt: "2026-06-05T00:06:00.000Z"
+        },
+        workerId: "worker-a"
+      })
+    ).resolves.toBeUndefined();
+    expect(client.rows[0]).toMatchObject({
+      status: "canceled",
+      updatedAt: new Date("2026-06-05T00:04:00.000Z"),
+      finishedAt: new Date("2026-06-05T00:04:00.000Z")
     });
   });
 });

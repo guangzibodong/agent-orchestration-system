@@ -31,6 +31,11 @@ export type RenewJobLeaseInput = ClaimNextQueuedJobInput & {
   jobId: string;
 };
 
+export type FinishClaimedJobInput = {
+  job: WorkflowJob;
+  workerId: string;
+};
+
 export type PrismaJobStoreClient = {
   workflowJob: {
     findMany(args?: {
@@ -88,6 +93,16 @@ export class PrismaJobStore {
     });
 
     return rows.map(toWorkflowJob);
+  }
+
+  async getJob(id: string): Promise<WorkflowJob | undefined> {
+    const row = await this.client.workflowJob.findUnique({
+      where: {
+        id
+      }
+    });
+
+    return row ? toWorkflowJob(row) : undefined;
   }
 
   async save(job: WorkflowJob): Promise<void> {
@@ -179,6 +194,37 @@ export class PrismaJobStore {
     });
 
     return updated.count === 1;
+  }
+
+  async finishClaimedJob(
+    input: FinishClaimedJobInput
+  ): Promise<WorkflowJob | undefined> {
+    const row = toWorkflowJobRow(input.job);
+    const updated = await this.client.workflowJob.updateMany({
+      where: {
+        id: input.job.id,
+        status: "running",
+        lockedBy: input.workerId
+      },
+      data: {
+        workflowRunId: row.workflowRunId,
+        status: row.status,
+        error: row.error,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        startedAt: row.startedAt,
+        finishedAt: row.finishedAt,
+        lockedBy: null,
+        lockedAt: null,
+        leaseExpiresAt: null
+      }
+    });
+
+    if (updated.count !== 1) {
+      return undefined;
+    }
+
+    return await this.getJob(input.job.id);
   }
 }
 
