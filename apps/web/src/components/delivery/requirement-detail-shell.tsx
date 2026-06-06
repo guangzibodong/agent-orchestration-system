@@ -156,6 +156,10 @@ export function RequirementDetailShell({
               ))}
             </dl>
 
+            {section.title === "Review" ? (
+              <RequirementChangedFilesStrip requirement={requirement} />
+            ) : null}
+
             {section.title === "Execution" ? (
               <>
                 <ArtifactDrawer artifacts={artifacts} />
@@ -183,6 +187,35 @@ export function RequirementDetailShell({
           </section>
         ))}
       </div>
+    </section>
+  );
+}
+
+function RequirementChangedFilesStrip({
+  requirement,
+}: {
+  requirement?: RequirementSummary;
+}) {
+  const changedFiles = requirement?.reviewEvidence?.changedFiles ?? [];
+
+  if (!changedFiles.length) {
+    return null;
+  }
+
+  return (
+    <section
+      className="requirementChangedFilesStrip"
+      aria-label="Changed files under review"
+    >
+      <div>
+        <p className="eyebrow">Changed files under review</p>
+        <strong>{formatChangedFileCount(changedFiles.length)}</strong>
+      </div>
+      <ul>
+        {changedFiles.map((file) => (
+          <li key={file}>{file}</li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -723,4 +756,8 @@ function formatDetailList(values: string[]): string {
   }
 
   return `${values.slice(0, 3).join(", ")} and ${values.length - 3} more`;
+}
+
+function formatChangedFileCount(count: number): string {
+  return `${count} ${count === 1 ? "file" : "files"} changed`;
 }

@@ -166,10 +166,13 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Quality gates passed");
     expect(html).toContain("Unit tests required passed (exit 0): npm test");
     expect(html).toContain("Merge candidate ready with 1 changed file");
+    expect(html).toContain("Changed files under review");
+    expect(html).toContain("1 file changed");
     expect(html).toContain("apps/web/src/app/page.tsx");
     expect(html).toContain(
       "C:/mawo/artifacts/workflow-review/merge-candidate.patch"
     );
+    expect(html).not.toContain("diff --git");
     expect(html).not.toContain(
       "Changed file summary appears in report evidence"
     );

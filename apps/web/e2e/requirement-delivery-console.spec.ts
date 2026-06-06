@@ -348,6 +348,15 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(detail).toContainText(
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
+    await expect(detail.getByLabel("Changed files under review")).toContainText(
+      "2 files changed",
+    );
+    await expect(detail.getByLabel("Changed files under review")).toContainText(
+      "apps/web/src/app/page.tsx",
+    );
+    await expect(detail.getByLabel("Changed files under review")).toContainText(
+      "packages/shared/src/index.ts",
+    );
     await expect(detail).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(detail).not.toContainText("diff --git");
     const detailDrawer = page.locator(".requirementDetailShell .artifactDrawer");
