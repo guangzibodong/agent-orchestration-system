@@ -42,7 +42,7 @@ export type NewRequirementPayload = {
     timeoutMs?: number;
     dependsOn?: string[];
   }>;
-  qualityGates: Array<{ title: string; command: string; required: true }>;
+  qualityGates: Array<{ title: string; command: string; required: boolean }>;
 };
 
 export type NewRequirementPayloadResult =
@@ -64,7 +64,7 @@ export function buildNewRequirementPayload(
   const contextPaths = parseList(draft.contextPaths);
   const taskCandidates = draft.tasks.map(buildTaskCandidate);
   const tasks = taskCandidates.filter((task) => task.hasAnyValue);
-  const qualityGates = parseList(draft.qualityGates);
+  const qualityGates = parseQualityGates(draft.qualityGates);
   const riskLevel = normalizeRiskLevel(draft.riskLevel);
   const errors = new Array<string>();
 
@@ -96,7 +96,7 @@ export function buildNewRequirementPayload(
     errors.push("Task timeouts must be positive milliseconds.");
   }
 
-  if (!qualityGates.length) {
+  if (!qualityGates.some((gate) => gate.required)) {
     errors.push("Add at least one required quality gate.");
   }
 
@@ -131,11 +131,7 @@ export function buildNewRequirementPayload(
           : {}),
         ...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}),
       })),
-      qualityGates: qualityGates.map((gateCommand) => ({
-        title: gateCommand,
-        command: gateCommand,
-        required: true,
-      })),
+      qualityGates,
     },
   };
 }
@@ -241,6 +237,24 @@ function parseList(value: string): string[] {
     .split(/\r?\n/)
     .map(cleanListItem)
     .filter(Boolean);
+}
+
+function parseQualityGates(
+  value: string,
+): Array<{ title: string; command: string; required: boolean }> {
+  return parseList(value).map((line) => {
+    const optionalMatch = line.match(/^optional\s*:\s*(?<command>.+)$/i);
+    const requiredMatch = line.match(/^required\s*:\s*(?<command>.+)$/i);
+    const command = cleanValue(
+      optionalMatch?.groups?.command ?? requiredMatch?.groups?.command ?? line,
+    );
+
+    return {
+      title: command,
+      command,
+      required: !optionalMatch,
+    };
+  });
 }
 
 function parseDependencyList(value: string): string[] {

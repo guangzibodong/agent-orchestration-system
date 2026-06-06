@@ -86,7 +86,7 @@ const validNewRequirementDraft: NewRequirementDraft = {
       dependsOn: "",
     },
   ],
-  qualityGates: "delivery vitest\nweb typecheck",
+  qualityGates: "delivery vitest\noptional: web visual smoke",
 };
 
 describe("RequirementDeliveryConsole", () => {
@@ -348,9 +348,9 @@ describe("RequirementDeliveryConsole", () => {
             required: true,
           },
           {
-            title: "web typecheck",
-            command: "web typecheck",
-            required: true,
+            title: "web visual smoke",
+            command: "web visual smoke",
+            required: false,
           },
         ],
       },
@@ -398,6 +398,18 @@ describe("RequirementDeliveryConsole", () => {
     expect(result).toEqual({
       ok: false,
       errors: ["Add 1-5 tasks.", "Add at least one required quality gate."],
+    });
+  });
+
+  it("requires at least one blocking quality gate even when optional gates are present", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      qualityGates: "optional: npm run smoke:ui",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Add at least one required quality gate."],
     });
   });
 

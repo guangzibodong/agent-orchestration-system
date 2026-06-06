@@ -679,7 +679,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     await chooseTaskAgent(flow, /task 2 agent/i, "codex");
     await fillField(flow, /task 2 instructions/i, "Review the generated patch.");
     await fillField(flow, /task 2 depends/i, "task-1");
-    await fillField(flow, /quality gate|gate/i, "npm test");
+    await fillField(flow, /quality gate|gate/i, "npm test\noptional: npm run smoke:ui");
     await chooseRisk(flow, "medium");
 
     await flow
@@ -723,6 +723,10 @@ test.describe("Requirement Delivery Console smoke", () => {
         expect.objectContaining({
           command: "npm test",
           required: true,
+        }),
+        expect.objectContaining({
+          command: "npm run smoke:ui",
+          required: false,
         }),
       ]),
     });

@@ -273,7 +273,7 @@ export function NewRequirementPanel({
           <textarea
             name="qualityGates"
             defaultValue={defaultQualityGates}
-            placeholder="One required gate per line"
+            placeholder="One gate per line. Prefix optional: for non-blocking gates"
             required
             rows={3}
             disabled={viewerMode}
