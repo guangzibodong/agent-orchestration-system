@@ -98,7 +98,10 @@ describe("deployment manifests", () => {
     expect(workflow).toContain("on:");
     expect(workflow).toContain("push:");
     expect(workflow).toContain("pull_request:");
-    expect(workflow).toContain("node-version: 26");
+    expect(workflow).toContain("node-version: 24");
+    expect(workflow).toContain("registry-url: https://registry.npmjs.org");
+    expect(workflow).toContain("npm config set registry https://registry.npmjs.org/");
+    expect(workflow).toContain("cancel-in-progress: true");
     expect(workflow).toContain("postgres:");
     expect(workflow).toContain("npm ci");
     expect(workflow).toContain("npm run db:validate");
