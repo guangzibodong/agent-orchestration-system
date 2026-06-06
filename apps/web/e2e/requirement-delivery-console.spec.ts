@@ -346,6 +346,24 @@ test.describe("Requirement Delivery Console smoke", () => {
     const detail = page.locator(".requirementDetailShell");
     await expect(detail).toBeVisible();
     await expect(detail).toContainText(
+      "Review requirement evidence without mutating state.",
+    );
+    await expect(detail).toContainText("Viewer can read the requirement list.");
+    await expect(detail).toContainText(
+      "Viewer cannot create or modify requirements.",
+    );
+    await expect(detail).toContainText("apps/web/src/app/page.tsx");
+    await expect(detail).toContainText("Automatic PR creation");
+    await expect(detail).not.toContainText(
+      "Context paths pending requirement contract",
+    );
+    await expect(detail).not.toContainText(
+      "Frozen P0 scope, local repository safety first",
+    );
+    await expect(detail).not.toContainText(
+      "Quality-gated merge candidate evidence",
+    );
+    await expect(detail).toContainText(
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
     await expect(detail.getByLabel("Changed files under review")).toContainText(

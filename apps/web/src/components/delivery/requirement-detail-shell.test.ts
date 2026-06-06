@@ -25,6 +25,19 @@ const requirement: RequirementSummary = {
   nextAction: "Review merge candidate",
   nodeLabel: "2 tasks / 2 gates",
   updatedAt: "2026-06-06T10:10:00.000Z",
+  requirementContract: {
+    goal: "Prevent unauthorized admin access with reviewable evidence",
+    acceptanceCriteria: [
+      "Admin routes reject missing operator tokens",
+      "Reviewer can inspect the auth patch before approval",
+    ],
+    constraints: [
+      "No MAWO auto-merge; manual git apply outside MAWO",
+      "Keep changes inside auth middleware",
+    ],
+    nonGoals: ["Enterprise SSO/RBAC", "Automatic PR creation"],
+    contextPaths: ["apps/api/src/auth.ts", "apps/web/src/login.ts"],
+  },
   workflowRunHref: "/workflows/workflow-review",
   workflowRunId: "workflow-review",
   workflowRunStatus: "needs_review",
@@ -165,6 +178,17 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Isolated worktree");
     expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
     expect(html).toContain("Review merge candidate");
+    expect(html).toContain(
+      "Prevent unauthorized admin access with reviewable evidence"
+    );
+    expect(html).toContain("apps/api/src/auth.ts, apps/web/src/login.ts");
+    expect(html).toContain(
+      "Admin routes reject missing operator tokens, Reviewer can inspect the auth patch before approval"
+    );
+    expect(html).toContain(
+      "No MAWO auto-merge; manual git apply outside MAWO, Keep changes inside auth middleware"
+    );
+    expect(html).toContain("Enterprise SSO/RBAC, Automatic PR creation");
     expect(html).toContain("medium risk");
     expect(html).toContain("2 tasks / 2 gates");
     expect(html).toContain("Quality gates passed");
@@ -197,6 +221,9 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain(
       "Changed file summary appears in report evidence"
     );
+    expect(html).not.toContain("Context paths pending requirement contract");
+    expect(html).not.toContain("Frozen P0 scope, local repository safety first");
+    expect(html).not.toContain("Quality-gated merge candidate evidence");
     expect(html).not.toContain("Merge candidate ready for manual apply");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");

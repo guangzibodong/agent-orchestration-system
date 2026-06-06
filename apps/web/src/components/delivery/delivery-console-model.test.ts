@@ -102,11 +102,14 @@ describe("delivery console model", () => {
       title: "Confirm checkout plan",
       repositoryPath: "C:/work/shop",
       goal: "Ship checkout evidence",
-      acceptanceCriteria: ["Gate evidence is reviewable"],
+      acceptanceCriteria: [
+        "Gate evidence is reviewable",
+        "Reviewer can see changed files before approval"
+      ],
       constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
       nonGoals: ["Automatic PR creation"],
       riskLevel: "medium",
-      contextPaths: [],
+      contextPaths: ["apps/web/src/app/page.tsx"],
       tasks: [
         {
           id: "task-1",
@@ -137,6 +140,16 @@ describe("delivery console model", () => {
         allowedRootLabel: "Allowed root pending preflight",
         cleanStateLabel: "Clean state pending preflight"
       }),
+      requirementContract: {
+        goal: "Ship checkout evidence",
+        acceptanceCriteria: [
+          "Gate evidence is reviewable",
+          "Reviewer can see changed files before approval"
+        ],
+        constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+        nonGoals: ["Automatic PR creation"],
+        contextPaths: ["apps/web/src/app/page.tsx"]
+      },
       workflowRunStatusLabel: "No workflow run linked",
       availableActions: ["confirm-plan"]
     });

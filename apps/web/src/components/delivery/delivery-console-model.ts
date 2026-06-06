@@ -54,6 +54,14 @@ export type RequirementQualityGateDefinition = {
   required: boolean;
 };
 
+export type RequirementContractSummary = {
+  goal: string;
+  acceptanceCriteria: string[];
+  constraints: string[];
+  nonGoals: string[];
+  contextPaths: string[];
+};
+
 export type RequirementReviewEvidence = {
   evidenceSourceWorkflowId?: string;
   reportSummary?: string;
@@ -111,6 +119,7 @@ export type RequirementSummary = {
   workflowRunStatusLabel: string;
   reviewDecision?: "approved" | "rejected";
   artifactLinks?: RequirementArtifactLink[];
+  requirementContract?: RequirementContractSummary;
   qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
   workspaceCleanup?: RequirementWorkspaceCleanupSummary;
@@ -662,6 +671,13 @@ export function mapRequirementTicketToSummary(
     workflowRunStatusLabel: workflowStatus
       ? formatWorkflowStatus(workflowStatus)
       : "No workflow run linked",
+    requirementContract: {
+      goal: requirement.goal,
+      acceptanceCriteria: requirement.acceptanceCriteria,
+      constraints: requirement.constraints,
+      nonGoals: requirement.nonGoals,
+      contextPaths: requirement.contextPaths
+    },
     qualityGateDefinitions: requirement.qualityGates.map((gate, index) => ({
       id: gate.id ?? `gate-${index + 1}`,
       title: gate.title ?? `Gate ${index + 1}`,

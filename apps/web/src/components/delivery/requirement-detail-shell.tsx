@@ -532,11 +532,11 @@ function buildSectionRows(
       return [
         { label: "Title", value: requirement.title },
         { label: "Repository", value: requirement.repositoryLabel },
-        { label: "Business goal", value: requirement.title },
-        { label: "Context paths", value: "Context paths pending requirement contract" },
-        { label: "Constraints", value: "Frozen P0 scope, local repository safety first" },
-        { label: "Non-goals", value: "No auto merge, no automatic PR creation" },
-        { label: "Acceptance criteria", value: "Quality-gated merge candidate evidence" },
+        { label: "Business goal", value: buildRequirementBusinessGoal(requirement) },
+        { label: "Context paths", value: buildRequirementContextPaths(requirement) },
+        { label: "Constraints", value: buildRequirementConstraints(requirement) },
+        { label: "Non-goals", value: buildRequirementNonGoals(requirement) },
+        { label: "Acceptance criteria", value: buildRequirementAcceptanceCriteria(requirement) },
         { label: "Quality gates", value: requirement.nodeLabel },
         { label: "Risk notes", value: `${requirement.riskLevel} risk` }
       ];
@@ -598,6 +598,40 @@ function buildSectionRows(
     default:
       return [];
   }
+}
+
+function buildRequirementBusinessGoal(requirement: RequirementSummary): string {
+  return requirement.requirementContract?.goal ?? requirement.title;
+}
+
+function buildRequirementContextPaths(requirement: RequirementSummary): string {
+  return formatContractList(
+    requirement.requirementContract?.contextPaths,
+    "No context paths declared"
+  );
+}
+
+function buildRequirementConstraints(requirement: RequirementSummary): string {
+  return formatContractList(
+    requirement.requirementContract?.constraints,
+    "No constraints declared"
+  );
+}
+
+function buildRequirementNonGoals(requirement: RequirementSummary): string {
+  return formatContractList(
+    requirement.requirementContract?.nonGoals,
+    "No non-goals declared"
+  );
+}
+
+function buildRequirementAcceptanceCriteria(
+  requirement: RequirementSummary
+): string {
+  return formatContractList(
+    requirement.requirementContract?.acceptanceCriteria,
+    "No acceptance criteria declared"
+  );
 }
 
 function buildSectionEyebrow(title: string): string {
@@ -965,6 +999,14 @@ function formatDetailList(values: string[]): string {
   }
 
   return `${values.slice(0, 3).join(", ")} and ${values.length - 3} more`;
+}
+
+function formatContractList(values: string[] | undefined, fallback: string): string {
+  const cleanValues = (values ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return cleanValues.length ? formatDetailList(cleanValues) : fallback;
 }
 
 function formatChangedFileCount(count: number): string {
