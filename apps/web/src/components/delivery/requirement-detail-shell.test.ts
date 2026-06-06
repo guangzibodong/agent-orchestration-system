@@ -102,6 +102,42 @@ function renderDetail(viewerMode = false): string {
   );
 }
 
+const safetyBlockedRequirement: RequirementSummary = {
+  ...requirement,
+  id: "requirement-dirty",
+  title: "Run dirty repo safely",
+  repositoryLabel: "C:/work/shop",
+  repositorySafety: {
+    repositoryLabel: "C:/work/shop",
+    executionModeLabel: "Isolated worktree",
+    blocksExecution: true,
+    statusLabel: "Safety blocked",
+    statusTone: "danger",
+    branchLabel: "feature/checkout",
+    headLabel: "HEAD abc1234",
+    cleanStateLabel: "Dirty - mutating runs blocked",
+    allowedRootLabel: "Allowed root accepted by API",
+    mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
+    blockedReason:
+      "Repository has uncommitted changes; mutating requirement runs are blocked.",
+    recoveryAction:
+      "Commit, stash, or discard local changes before running mutating workflows."
+  },
+  requirementStage: "ready_to_run",
+  executionStatus: "ready",
+  riskLevel: "high",
+  nextAction:
+    "Commit, stash, or discard local changes before running mutating workflows.",
+  workflowRunId: undefined,
+  workflowRunHref: undefined,
+  workflowRunStatus: undefined,
+  workflowRunStatusLabel: "No workflow run linked",
+  reviewEvidence: undefined,
+  actionBlockReason:
+    "Repository safety blocks execution: Commit, stash, or discard local changes before running mutating workflows.",
+  availableActions: []
+};
+
 describe("RequirementDetailShell", () => {
   it("renders the frozen requirement detail sections around review evidence", () => {
     const html = renderDetail();
@@ -179,6 +215,29 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Reject");
     expect(html).toContain("Retry");
     expect(html).toContain("disabled");
+  });
+
+  it("explains repository safety blocked execution inside the detail shell", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: safetyBlockedRequirement,
+        artifacts: [],
+        onLifecycleAction: () => undefined
+      })
+    );
+
+    expect(html).toContain("Repository safety blocked");
+    expect(html).toContain(
+      "Repository safety blocks execution: Commit, stash, or discard local changes before running mutating workflows."
+    );
+    expect(html).toContain("Dirty - mutating runs blocked");
+    expect(html).toContain("Review evidence is pending");
+    const enqueueButtons =
+      html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
+    expect(enqueueButtons.length).toBeGreaterThan(0);
+    expect(enqueueButtons.every((button) => button.includes('disabled=""'))).toBe(
+      true
+    );
   });
 
   it("renders an empty shell without requiring a selected requirement", () => {

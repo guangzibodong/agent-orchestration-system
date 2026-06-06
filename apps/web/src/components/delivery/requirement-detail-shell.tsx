@@ -304,6 +304,12 @@ function RequirementDetailLifecycleActions({
 
   return (
     <div className="requirementDetailActions" aria-label="Requirement lifecycle actions">
+      {requirement?.actionBlockReason ? (
+        <p className="requirementDetailActionBlock errorText">
+          <strong>Repository safety blocked</strong>
+          <span>{requirement.actionBlockReason}</span>
+        </p>
+      ) : null}
       {(["confirm-plan", "enqueue", "retry"] as RequirementLifecycleAction[]).map(
         (action) => {
           const isLoading =
@@ -422,6 +428,10 @@ function buildSectionRows(
       return [
         { label: "Current job", value: buildLastExecutionResult(requirement) },
         { label: "State", value: stageLabels[requirement.requirementStage] },
+        {
+          label: "Repository clean state",
+          value: requirement.repositorySafety.cleanStateLabel
+        },
         { label: "Task progress", value: requirement.nodeLabel },
         { label: "Log access", value: "Open artifact drawer for stdout and stderr links" },
         { label: "Actions", value: requirement.nextAction }
