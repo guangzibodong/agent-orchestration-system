@@ -160,11 +160,13 @@ describe("deployment manifests", () => {
     const evidenceDoc = read("docs/LAUNCH_READINESS_EVIDENCE.md");
 
     expect(packageJson).toContain("\"launch:gate:local\"");
+    expect(packageJson).toContain("\"launch:gate:postgres\"");
     expect(wrapper).toContain("scripts/launch-gate-local.ts");
     expect(wrapper).toContain(".tools");
     expect(runner).toContain("buildLaunchGatePlan");
     expect(runner).toContain("output/launch-readiness");
     expect(runner).toContain("renderLaunchGateMarkdown");
     expect(evidenceDoc).toContain("npm.cmd run launch:gate:local");
+    expect(evidenceDoc).toContain("npm.cmd run launch:gate:postgres");
   });
 });

@@ -26,6 +26,11 @@ The API exposes the latest generated JSON at `GET /launch/evidence/latest`;
 the Requirement Delivery Console uses it only as a read-only launch health
 signal.
 
+For a Postgres-backed launch target, run `npm.cmd run launch:gate:postgres`.
+That command treats missing `DATABASE_URL`, migrations, and
+`smoke:api:postgres` evidence as required blockers instead of optional local
+blockers.
+
 The local file-backed runtime has passed the core P0 product proof:
 
 1. Real repo path can be registered and safety-checked.

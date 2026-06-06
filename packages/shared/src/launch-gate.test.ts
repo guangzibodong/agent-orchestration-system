@@ -56,6 +56,24 @@ describe("launch gate planning", () => {
       args: ["run", "smoke:api:postgres"],
     });
   });
+
+  it("treats missing Postgres verification as required when Postgres launch mode is required", () => {
+    const plan = buildLaunchGatePlan({
+      env: {},
+      npmCommand: "npm.cmd",
+      postgresMode: "required",
+    });
+
+    expect(plan.find((check) => check.id === "db_validate")).toMatchObject({
+      execution: "external-blocked",
+      required: true,
+      blockedReason: expect.stringContaining("DATABASE_URL"),
+    });
+    expect(plan.find((check) => check.id === "smoke_api_postgres")).toMatchObject({
+      execution: "external-blocked",
+      required: true,
+    });
+  });
 });
 
 describe("launch gate evidence", () => {
@@ -142,6 +160,30 @@ describe("launch gate evidence", () => {
     expect(renderLaunchGateMarkdown(evidence)).toContain(
       "| Test | passed | 0 | 4000 | npm.cmd run test |",
     );
+  });
+
+  it("fails the launch decision when a required external check is blocked", () => {
+    const evidence = buildLaunchGateEvidence({
+      generatedAt: "2026-06-06T16:20:35.069Z",
+      root: "C:/repo",
+      branch: "main",
+      commit: "abc1234",
+      dirtyFiles: [],
+      checks: [
+        {
+          id: "smoke_api_postgres",
+          label: "Postgres API smoke",
+          required: true,
+          command: "npm.cmd",
+          args: ["run", "smoke:api:postgres"],
+          status: "external-blocked",
+          blockedReason: "DATABASE_URL is not configured.",
+        },
+      ],
+    });
+
+    expect(evidence.localDecision).toBe("failed");
+    expect(evidence.productionDecision).toBe("blocked");
   });
 });
 

@@ -140,7 +140,13 @@ export function buildLaunchGatePlan(
     return [
       ...localChecks,
       ...postgresChecks.map(([id, label, script]) => ({
-        ...npmRunCheck(id, label, script, npmCommand, false),
+        ...npmRunCheck(
+          id,
+          label,
+          script,
+          npmCommand,
+          postgresMode === "required",
+        ),
         execution: "external-blocked" as const,
         blockedReason:
           "DATABASE_URL is not configured for Postgres launch verification.",
@@ -202,10 +208,12 @@ export function buildLaunchGateEvidence(
       (check) =>
         `${check.id}: ${check.blockedReason ?? "External dependency unavailable."}`,
     );
-  const hasRequiredFailure = input.checks.some(
-    (check) => check.required && check.status === "failed",
+  const hasRequiredBlockingCheck = input.checks.some(
+    (check) =>
+      check.required &&
+      (check.status === "failed" || check.status === "external-blocked"),
   );
-  const localDecision = hasRequiredFailure ? "failed" : "passed";
+  const localDecision = hasRequiredBlockingCheck ? "failed" : "passed";
   const productionDecision =
     failureSummaries.length > 0 || externalBlockers.length > 0
       ? "blocked"
