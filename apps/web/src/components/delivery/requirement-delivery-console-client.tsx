@@ -37,7 +37,7 @@ const apiTokenStorageKey = "mawo-api-token";
 const apiTokenRoleStorageKey = "mawo-api-token-role";
 const activeJobPollIntervalMs = 1500;
 const retryResetMessage =
-  "Retry reset to ready. Enqueue to run fresh evidence.";
+  "Retry reset to ready. Enqueue to run fresh evidence. Stale execution evidence is superseded.";
 
 type LoadState = "loading" | "ready" | "error";
 type TrackedRequirementJob = {

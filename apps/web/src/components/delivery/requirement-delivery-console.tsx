@@ -88,7 +88,7 @@ const successActionMessages: Record<
 };
 
 const retryResetMessage =
-  "Retry reset to ready. Enqueue to run fresh evidence.";
+  "Retry reset to ready. Enqueue to run fresh evidence. Stale execution evidence is superseded.";
 
 const reviewLoadingActionLabels: Record<RequirementReviewAction, string> = {
   approve: "Approving review",

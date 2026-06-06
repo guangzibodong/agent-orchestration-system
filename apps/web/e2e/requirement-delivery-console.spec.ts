@@ -1406,6 +1406,242 @@ test.describe("Requirement Delivery Console smoke", () => {
     ]);
   });
 
+  test("retry supersedes stale gate evidence before fresh review evidence", async ({
+    page,
+  }) => {
+    const workflows: WorkflowRun[] = [lifecycleFailedWorkflow];
+    const requirements: RequirementDeliveryTicket[] = [lifecycleRetryRequirement];
+    const reports: Record<string, unknown> = {
+      "requirement-retry": gateFailedEvidenceReport,
+    };
+    const mergeCandidates: Record<string, unknown> = {};
+    let jobPolls = 0;
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, workflows, {
+      mergeCandidates,
+      reports,
+      requirements,
+      onRequirementAction: ({ action, id }) => {
+        if (id !== "requirement-retry") {
+          throw new Error(`Unexpected requirement ${id}`);
+        }
+
+        if (action === "retry") {
+          const freshWorkflow: WorkflowRun = {
+            ...lifecycleFailedWorkflow,
+            id: "workflow-retry-fresh",
+            status: "ready",
+            createdAt: "2026-06-06T12:10:00.000Z",
+            updatedAt: "2026-06-06T12:10:00.000Z",
+            qualityGates: lifecycleFailedWorkflow.qualityGates.map((gate) => ({
+              ...gate,
+              status: "waiting",
+              result: undefined,
+            })),
+          };
+          workflows.push(freshWorkflow);
+          delete reports["requirement-retry"];
+
+          return {
+            requirement: updateRequirement(requirements, id, {
+              status: "ready_to_run",
+              currentWorkflowRunId: "workflow-retry-fresh",
+              runLinks: [
+                {
+                  workflowRunId: "workflow-failed",
+                  status: "gate_failed",
+                  linkedAt: "2026-06-06T10:58:00.000Z",
+                },
+                {
+                  workflowRunId: "workflow-retry-fresh",
+                  status: "ready",
+                  linkedAt: "2026-06-06T12:10:00.000Z",
+                },
+              ],
+              updatedAt: "2026-06-06T12:10:00.000Z",
+            }),
+            retry: {
+              previousStatus: "gate_failed",
+              status: "ready",
+            },
+            workflow: freshWorkflow,
+          };
+        }
+
+        if (action === "enqueue") {
+          workflows[1] = {
+            ...workflows[1]!,
+            status: "ready",
+            updatedAt: "2026-06-06T12:11:00.000Z",
+          };
+
+          return {
+            requirement: updateRequirement(requirements, id, {
+              status: "running",
+              currentWorkflowRunId: "workflow-retry-fresh",
+              runLinks: [
+                {
+                  workflowRunId: "workflow-failed",
+                  status: "gate_failed",
+                  linkedAt: "2026-06-06T10:58:00.000Z",
+                },
+                {
+                  workflowRunId: "workflow-retry-fresh",
+                  status: "ready",
+                  linkedAt: "2026-06-06T12:11:00.000Z",
+                },
+              ],
+              updatedAt: "2026-06-06T12:11:00.000Z",
+            }),
+            workflow: workflows[1],
+            job: {
+              id: "job-retry-fresh",
+              workflowId: "workflow-retry-fresh",
+              status: "queued",
+              createdAt: "2026-06-06T12:11:00.000Z",
+              updatedAt: "2026-06-06T12:11:00.000Z",
+            },
+          };
+        }
+
+        throw new Error(`Unexpected requirement action ${action}:${id}`);
+      },
+      onJobRequest: ({ id }) => {
+        if (id !== "job-retry-fresh") {
+          throw new Error(`Unexpected job poll ${id}`);
+        }
+
+        jobPolls += 1;
+
+        if (jobPolls < 2) {
+          return {
+            id,
+            workflowId: "workflow-retry-fresh",
+            status: "running",
+            createdAt: "2026-06-06T12:11:00.000Z",
+            updatedAt: "2026-06-06T12:11:01.000Z",
+          };
+        }
+
+        workflows[1] = {
+          ...workflows[1]!,
+          status: "needs_review",
+          updatedAt: "2026-06-06T12:12:00.000Z",
+        };
+        updateRequirement(requirements, "requirement-retry", {
+          status: "needs_review",
+          currentWorkflowRunId: "workflow-retry-fresh",
+          runLinks: [
+            {
+              workflowRunId: "workflow-failed",
+              status: "gate_failed",
+              linkedAt: "2026-06-06T10:58:00.000Z",
+            },
+            {
+              workflowRunId: "workflow-retry-fresh",
+              status: "needs_review",
+              linkedAt: "2026-06-06T12:12:00.000Z",
+            },
+          ],
+          updatedAt: "2026-06-06T12:12:00.000Z",
+        });
+        reports["requirement-retry"] = {
+          ...requirementEvidenceReport,
+          workflowId: "workflow-retry-fresh",
+          reportArtifactPath:
+            "C:/mawo/artifacts/workflow-retry-fresh/report.json",
+          summary: "Fresh retry task passed; required gate passed",
+        };
+        mergeCandidates["requirement-retry"] = {
+          ...requirementMergeCandidate,
+          workflowId: "workflow-retry-fresh",
+          summary: "Fresh retry merge candidate ready",
+          sourceBranches: ["mawo/workflow-retry-fresh/task-retry"],
+          patchArtifactPath:
+            "C:/mawo/artifacts/workflow-retry-fresh/merge-candidate.patch",
+          manifestArtifactPath:
+            "C:/mawo/artifacts/workflow-retry-fresh/merge-candidate.json",
+          applyCommand:
+            'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-retry-fresh/merge-candidate.patch"',
+          createdAt: "2026-06-06T12:12:00.000Z",
+        };
+
+        return {
+          id,
+          workflowId: "workflow-retry-fresh",
+          status: "completed",
+          createdAt: "2026-06-06T12:11:00.000Z",
+          updatedAt: "2026-06-06T12:12:00.000Z",
+          finishedAt: "2026-06-06T12:12:00.000Z",
+        };
+      },
+    });
+
+    await page.goto("/");
+
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Retry stale gate" });
+    const focusPanel = page.locator(".deliveryFocusPanel");
+    await expect(queueItem).toContainText("Needs rework");
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Gate blocked by required gate",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Copy checks failed (exit 1)",
+    );
+
+    await queueItem.getByRole("button", { exact: true, name: "Retry" }).click();
+    await expect(page.getByLabel("Workflow sync")).toContainText(
+      "Retry reset to ready. Enqueue to run fresh evidence. Stale execution evidence is superseded.",
+    );
+    await expect(queueItem).toContainText("Ready to run");
+    await expect(queueItem).toContainText("workflow-retry-fresh");
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Not review-ready",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
+      "Gate blocked by required gate",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
+      "Copy checks failed (exit 1)",
+    );
+
+    await queueItem.getByRole("button", { exact: true, name: "Enqueue" }).click();
+    await expect(queueItem).toContainText("Running");
+    await expect(queueItem).toContainText("Queued");
+    await expect
+      .poll(() => jobPolls, {
+        message: "wait for fresh retry job to poll",
+      })
+      .toBeGreaterThan(0);
+
+    await expect(queueItem).toContainText("Needs review");
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Review-ready merge candidate",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Fresh retry merge candidate ready",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Current workflow workflow-retry-fresh",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
+      "workflow-failed",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
+      "Gate blocked by required gate",
+    );
+    await expect(focusPanel).not.toContainText("Apply Candidate");
+  });
+
   test("operator can confirm, enqueue, and retry requirement lifecycle actions", async ({
     page,
   }) => {
