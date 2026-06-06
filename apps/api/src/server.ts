@@ -1274,6 +1274,18 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     await activeRunner.refreshFromStore();
+    const workflow = activeRunner.getWorkflow(requirement.currentWorkflowRunId);
+
+    if (!workflow || !hasCurrentRequirementReport(workflow)) {
+      return reply.code(409).send({
+        error: "requirement_report_not_ready",
+        message:
+          "Linked workflow report evidence is not current for this requirement.",
+        workflowRunId: requirement.currentWorkflowRunId,
+        status: requirement.status,
+        workflowStatus: workflow?.status,
+      });
+    }
 
     try {
       return activeRunner.getReport(requirement.currentWorkflowRunId);
@@ -1307,6 +1319,18 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     await activeRunner.refreshFromStore();
+    const workflow = activeRunner.getWorkflow(requirement.currentWorkflowRunId);
+
+    if (!workflow || !hasCurrentRequirementMergeCandidate(workflow)) {
+      return reply.code(409).send({
+        error: "requirement_merge_candidate_not_ready",
+        message:
+          "Linked workflow merge candidate evidence is not current for this requirement.",
+        workflowRunId: requirement.currentWorkflowRunId,
+        status: requirement.status,
+        workflowStatus: workflow?.status,
+      });
+    }
 
     try {
       return activeRunner.getMergeCandidate(requirement.currentWorkflowRunId);
@@ -2305,6 +2329,21 @@ function createWorkerHealthCheck(input: {
         : "External workers are optional for the active queue backend."
       : "Postgres queue backend requires at least one fresh workflow worker heartbeat.",
   };
+}
+
+function hasCurrentRequirementReport(workflow: WorkflowRun): boolean {
+  return (
+    workflow.status === "gate_failed" ||
+    workflow.status === "needs_review" ||
+    workflow.status === "completed" ||
+    workflow.status === "aborted" ||
+    workflow.status === "archived" ||
+    workflow.status === "failed"
+  );
+}
+
+function hasCurrentRequirementMergeCandidate(workflow: WorkflowRun): boolean {
+  return workflow.status === "needs_review" || workflow.status === "completed";
 }
 
 function isProductionApiToken(apiToken?: string): boolean {

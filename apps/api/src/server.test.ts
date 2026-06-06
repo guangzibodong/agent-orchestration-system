@@ -1168,12 +1168,24 @@ describe("runner API", () => {
       method: "GET",
       url: `/requirements/${requirement.id}`,
     });
+    const failedReportResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/report`,
+    });
 
     const retryResponse = await app.inject({
       method: "POST",
       url: `/requirements/${requirement.id}/retry`,
     });
     const retryBody = retryResponse.json();
+    const retryReportResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/report`,
+    });
+    const retryMergeCandidateResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/merge-candidate`,
+    });
 
     expect(runResponse.json()).toMatchObject({
       id: workflowId,
@@ -1194,6 +1206,11 @@ describe("runner API", () => {
           status: "gate_failed",
         }),
       ],
+    });
+    expect(failedReportResponse.statusCode).toBe(200);
+    expect(failedReportResponse.json()).toMatchObject({
+      workflowId,
+      recommendation: "fix_failed_gates",
     });
     expect(retryResponse.statusCode).toBe(200);
     expect(retryBody).toMatchObject({
@@ -1224,6 +1241,17 @@ describe("runner API", () => {
       },
     });
     expect(retryBody.workflow.qualityGates[0].result).toBeUndefined();
+    expect(retryReportResponse.statusCode).toBe(409);
+    expect(retryReportResponse.json()).toMatchObject({
+      error: "requirement_report_not_ready",
+      workflowRunId: workflowId,
+      status: "ready_to_run",
+    });
+    expect(retryMergeCandidateResponse.statusCode).toBe(409);
+    expect(retryMergeCandidateResponse.json()).toMatchObject({
+      error: "requirement_merge_candidate_not_ready",
+      workflowRunId: workflowId,
+    });
   });
 
   it("lists configured agents without exposing command templates", async () => {
