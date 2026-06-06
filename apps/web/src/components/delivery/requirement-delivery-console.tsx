@@ -601,7 +601,7 @@ function buildRequirementLifecycleSuccessMessage(
   requirementTitle: string,
 ): string {
   if (action === "cancel") {
-    return `Requirement job canceled: ${requirementTitle}. Run again for fresh evidence.`;
+    return `Requirement job canceled: ${requirementTitle}. Enqueue to run fresh evidence.`;
   }
 
   if (action === "retry") {

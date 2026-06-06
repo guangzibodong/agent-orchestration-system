@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { mkdir, rm, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type {
   LaunchGateEvidence,
   RepositorySafety,
@@ -10,6 +12,12 @@ import type {
 const API_ORIGIN = "http://127.0.0.1:4000";
 const apiTokenStorageKey = "mawo-api-token";
 const apiTokenRoleStorageKey = "mawo-api-token-role";
+const screenshotEvidenceDir = join(
+  process.cwd(),
+  "output",
+  "playwright",
+  "requirement-delivery-console",
+);
 
 test.describe("Requirement Delivery Console smoke", () => {
   test("renders empty delivery state from mocked workflows", async ({
@@ -294,12 +302,18 @@ test.describe("Requirement Delivery Console smoke", () => {
         headers,
         body: JSON.stringify({ title: "Viewer write attempt" }),
       });
+      const cancelResponse = await fetch(`${origin}/jobs/job-viewer/cancel`, {
+        method: "POST",
+        headers,
+      });
 
       return {
         readStatus: readResponse.status,
         readBody: await readResponse.json(),
         writeStatus: writeResponse.status,
         writeBody: await writeResponse.json(),
+        cancelStatus: cancelResponse.status,
+        cancelBody: await cancelResponse.json(),
       };
     }, API_ORIGIN);
 
@@ -307,6 +321,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     expect(viewerBoundary.readBody).toEqual(requirementTickets);
     expect(viewerBoundary.writeStatus).toBe(403);
     expect(viewerBoundary.writeBody).toMatchObject({
+      error: "forbidden",
+      role: "viewer",
+    });
+    expect(viewerBoundary.cancelStatus).toBe(403);
+    expect(viewerBoundary.cancelBody).toMatchObject({
       error: "forbidden",
       role: "viewer",
     });
@@ -813,6 +832,31 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Gate 2 timeout",
       "Create requirement draft",
     ]);
+  });
+
+  test("captures desktop and mobile screenshots for launch evidence", async ({
+    page,
+  }) => {
+    const desktopScreenshotPath = join(screenshotEvidenceDir, "desktop.png");
+    const mobileScreenshotPath = join(screenshotEvidenceDir, "mobile.png");
+    await resetScreenshotEvidence([
+      desktopScreenshotPath,
+      mobileScreenshotPath,
+    ]);
+    await mockApi(page, mobileStressWorkflows);
+
+    await page.goto("/");
+
+    await expect(
+      page.getByRole("heading", { name: "Requirement Delivery Console" }),
+    ).toBeVisible();
+    await captureScreenshotEvidence(page, desktopScreenshotPath);
+    await expectScreenshotEvidence(desktopScreenshotPath);
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expectNoHorizontalDocumentOverflow(page);
+    await captureScreenshotEvidence(page, mobileScreenshotPath);
+    await expectScreenshotEvidence(mobileScreenshotPath);
   });
 
   test("New Requirement flow creates a structured requirement request when available", async ({
@@ -1941,6 +1985,10 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(page.getByLabel("Workflow sync")).toContainText(
       "Requirement job canceled: Cancel active checkout evidence. Enqueue to run fresh evidence.",
     );
+    await expect(queueItem.getByRole("status")).toContainText(
+      "Requirement job canceled: Cancel active checkout evidence. Enqueue to run fresh evidence.",
+    );
+    await expect(queueItem.getByRole("status")).not.toContainText("Run again");
     await expect(queueItem).toContainText("Ready to run");
     await expect(queueItem).toContainText("Canceled");
     await expect(queueItem).toContainText("Enqueue");
@@ -2177,6 +2225,19 @@ async function mockApi(
 
     const jobCancelMatch = url.pathname.match(/^\/jobs\/([^/]+)\/cancel$/);
     if (request.method() === "POST" && jobCancelMatch) {
+      if (request.headers().authorization === "Bearer viewer-token") {
+        await route.fulfill({
+          status: 403,
+          json: {
+            error: "forbidden",
+            message: "This endpoint requires an operator token.",
+            requiredRole: "operator",
+            role: "viewer",
+          },
+        });
+        return;
+      }
+
       const id = decodeURIComponent(jobCancelMatch[1] ?? "");
       const job = options.onJobCancel?.({ id }) ?? {
         id,
@@ -2457,6 +2518,22 @@ async function expectNoHorizontalDocumentOverflow(page: Page) {
   expect(dimensions.bodyScrollWidth).toBeLessThanOrEqual(
     dimensions.documentClientWidth + 1,
   );
+}
+
+async function resetScreenshotEvidence(paths: string[]) {
+  await mkdir(screenshotEvidenceDir, { recursive: true });
+  await Promise.all(paths.map((path) => rm(path, { force: true })));
+}
+
+async function captureScreenshotEvidence(page: Page, path: string) {
+  await mkdir(dirname(path), { recursive: true });
+  await page.screenshot({ fullPage: true, path });
+}
+
+async function expectScreenshotEvidence(path: string) {
+  const evidence = await stat(path);
+  expect(evidence.size).toBeGreaterThan(10_000);
+  expect(dirname(path)).toBe(screenshotEvidenceDir);
 }
 
 async function expectLabelsInsideViewport(page: Page, labels: string[]) {
