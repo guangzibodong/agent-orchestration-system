@@ -5,6 +5,7 @@ import {
   createRepositoryWorkflowRequestSchema,
   repositoryRegistrationRequestSchema,
   repositoryRecordSchema,
+  operationsSnapshotSchema,
   readinessResponseSchema,
   workerHealthResponseSchema,
   mergeCandidateSchema,
@@ -386,6 +387,74 @@ describe("workflowRunSchema", () => {
     expect(health.summary.healthyWorkers).toBe(1);
     expect(health.workers[0]?.jobId).toBe("job-1");
     expect(health.workers[1]?.lastJobStatus).toBe("completed");
+  });
+
+  it("accepts operations snapshot responses", () => {
+    const snapshot = operationsSnapshotSchema.parse({
+      checkedAt: "2026-06-06T03:07:06.983Z",
+      repositoryId: "repo-1",
+      summary: {
+        queuedJobs: 1,
+        runningJobs: 1,
+        activeJobs: 2,
+        failedJobs: 1,
+        needsReviewWorkflows: 1,
+        blockedReadinessChecks: 0,
+        healthyWorkers: 1,
+        totalWorkers: 2
+      },
+      auditEvents: [
+        {
+          id: "audit-1",
+          type: "workflow.enqueued",
+          createdAt: "2026-06-06T03:07:00.000Z",
+          actor: "operator",
+          workflowId: "workflow-1"
+        }
+      ],
+      jobs: [
+        {
+          id: "job-1",
+          workflowId: "workflow-1",
+          status: "queued",
+          createdAt: "2026-06-06T03:07:00.000Z",
+          updatedAt: "2026-06-06T03:07:00.000Z"
+        }
+      ],
+      readiness: {
+        ok: true,
+        service: "mawo-api",
+        checkedAt: "2026-06-06T03:07:06.983Z",
+        deploymentMode: "production",
+        protectedByToken: true,
+        root: "C:/mawo",
+        activeJobs: 2,
+        checks: []
+      },
+      workerHealth: {
+        ok: false,
+        checkedAt: "2026-06-06T03:07:06.983Z",
+        staleAfterMs: 60000,
+        summary: {
+          totalWorkers: 2,
+          healthyWorkers: 1,
+          staleWorkers: 1
+        },
+        workers: [
+          {
+            workerId: "worker-a",
+            healthy: true,
+            status: "running",
+            lastSeenAt: "2026-06-06T03:07:00.000Z",
+            ageMs: 6983
+          }
+        ]
+      }
+    });
+
+    expect(snapshot.summary.activeJobs).toBe(2);
+    expect(snapshot.repositoryId).toBe("repo-1");
+    expect(snapshot.workerHealth.summary.staleWorkers).toBe(1);
   });
 
   it("accepts workflow review decisions", () => {

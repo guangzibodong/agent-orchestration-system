@@ -235,6 +235,28 @@ async function main() {
     );
     log("readiness endpoint reports production checks without leaking templates");
 
+    const operationsSnapshot = await request(
+      baseUrl,
+      "GET",
+      "/operations/snapshot?limit=4",
+    );
+    assert(
+      operationsSnapshot.status === 200,
+      `GET /operations/snapshot returned ${operationsSnapshot.status}`,
+    );
+    assert(
+      operationsSnapshot.body.readiness &&
+        operationsSnapshot.body.workerHealth &&
+        Array.isArray(operationsSnapshot.body.jobs) &&
+        Array.isArray(operationsSnapshot.body.auditEvents),
+      "Operations snapshot did not aggregate readiness, worker health, jobs, and audit events.",
+    );
+    assert(
+      Number((operationsSnapshot.body.summary as JsonObject)?.activeJobs ?? -1) >= 0,
+      "Operations snapshot did not include active job summary.",
+    );
+    log("operations snapshot aggregates deployment health and run history");
+
     const recoveredWorkflow = await request(
       baseUrl,
       "GET",

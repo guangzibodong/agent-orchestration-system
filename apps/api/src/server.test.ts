@@ -746,6 +746,151 @@ describe("runner API", () => {
     expect(deploymentTopology.maxSupportedApiReplicas).toBeGreaterThanOrEqual(2);
   });
 
+  it("returns an operations snapshot with scoped jobs audit readiness and worker health", async () => {
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-operations-snapshot-test-"));
+    tempRoots.push(demoRoot);
+    const now = new Date().toISOString();
+    const auditEvents: AuditEvent[] = [
+      {
+        id: "audit-1",
+        type: "workflow.enqueued",
+        createdAt: now,
+        actor: "operator",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          repositoryId: "repo-1"
+        }
+      },
+      {
+        id: "audit-2",
+        type: "workflow.enqueued",
+        createdAt: now,
+        actor: "operator",
+        workflowId: "workflow-2",
+        metadata: {
+          repositoryId: "repo-2"
+        }
+      },
+      {
+        id: "audit-worker",
+        type: "worker.heartbeat",
+        createdAt: now,
+        actor: "worker",
+        workflowId: "workflow-1",
+        jobId: "job-1",
+        metadata: {
+          workerId: "worker-a",
+          status: "running"
+        }
+      }
+    ];
+    const auditStore: AuditStore = {
+      list: vi.fn(async (filter) =>
+        auditEvents.filter((event) => {
+          if (filter?.type && event.type !== filter.type) {
+            return false;
+          }
+          if (filter?.repositoryId && event.metadata?.repositoryId !== filter.repositoryId) {
+            return false;
+          }
+          return true;
+        })
+      ),
+      append: vi.fn()
+    };
+    const jobs: WorkflowJob[] = [
+      {
+        id: "job-1",
+        workflowId: "workflow-1",
+        status: "queued",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: "job-2",
+        workflowId: "workflow-2",
+        status: "failed",
+        createdAt: now,
+        updatedAt: now
+      }
+    ];
+    const jobStore: JobStore = {
+      list: vi.fn(() => jobs),
+      save: vi.fn()
+    };
+    const storedWorkflows: LocalWorkflowRun[] = [
+      {
+        id: "workflow-1",
+        goal: "Review repo one",
+        status: "needs_review",
+        executionMode: "direct",
+        repositoryId: "repo-1",
+        createdAt: now,
+        updatedAt: now,
+        tasks: [],
+        qualityGates: []
+      },
+      {
+        id: "workflow-2",
+        goal: "Review repo two",
+        status: "needs_review",
+        executionMode: "direct",
+        repositoryId: "repo-2",
+        createdAt: now,
+        updatedAt: now,
+        tasks: [],
+        qualityGates: []
+      }
+    ];
+    const runner = new LocalRunner(undefined, {
+      runStore: {
+        list: vi.fn(async () => storedWorkflows),
+        save: vi.fn()
+      }
+    });
+    const app = buildApp(runner, {
+      demoRoot,
+      auditStore,
+      jobStore,
+      env: {
+        MAWO_WORKER_STALE_MS: "60000"
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/operations/snapshot?repositoryId=repo-1&limit=1"
+    });
+    const snapshot = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(snapshot).toMatchObject({
+      repositoryId: "repo-1",
+      summary: {
+        queuedJobs: 1,
+        runningJobs: 0,
+        activeJobs: 1,
+        failedJobs: 0,
+        needsReviewWorkflows: 1,
+        healthyWorkers: 1,
+        totalWorkers: 1
+      }
+    });
+    expect(snapshot.auditEvents).toHaveLength(1);
+    expect(snapshot.auditEvents[0]).toMatchObject({
+      id: "audit-1",
+      workflowId: "workflow-1"
+    });
+    expect(snapshot.jobs).toHaveLength(1);
+    expect(snapshot.jobs[0]).toMatchObject({
+      id: "job-1",
+      workflowId: "workflow-1"
+    });
+    expect(snapshot.readiness.activeJobs).toBe(1);
+    expect(snapshot.workerHealth.summary.healthyWorkers).toBe(1);
+  });
+
   it("creates, runs, and reports a demo workflow", async () => {
     const app = buildApp();
 

@@ -2,6 +2,72 @@ import { describe, expect, it } from "vitest";
 import { loadOperationsSnapshot } from "./operations-snapshot";
 
 describe("operations snapshot", () => {
+  it("loads the server-side operations snapshot when available", async () => {
+    const requests: string[] = [];
+    const snapshot = await loadOperationsSnapshot(async (path) => {
+      requests.push(path);
+      return {
+        checkedAt: "2026-06-06T03:07:06.983Z",
+        repositoryId: "repo 1",
+        summary: {
+          queuedJobs: 1,
+          runningJobs: 0,
+          activeJobs: 1,
+          failedJobs: 0,
+          needsReviewWorkflows: 1,
+          blockedReadinessChecks: 0,
+          healthyWorkers: 1,
+          totalWorkers: 1
+        },
+        auditEvents: [
+          {
+            id: "event-1",
+            type: "workflow.enqueued",
+            createdAt: "2026-06-05T11:03:11.135Z",
+            actor: "operator",
+            workflowId: "workflow-1"
+          }
+        ],
+        jobs: [
+          {
+            id: "job-1",
+            workflowId: "workflow-1",
+            status: "queued",
+            createdAt: "2026-06-05T11:03:11.135Z",
+            updatedAt: "2026-06-05T11:03:11.135Z"
+          }
+        ],
+        readiness: {
+          ok: true,
+          service: "mawo-api",
+          checkedAt: "2026-06-05T19:54:24.148Z",
+          deploymentMode: "development",
+          protectedByToken: false,
+          root: "C:/mawo",
+          activeJobs: 1,
+          checks: []
+        },
+        workerHealth: {
+          ok: true,
+          checkedAt: "2026-06-05T19:54:24.148Z",
+          staleAfterMs: 60000,
+          summary: {
+            totalWorkers: 1,
+            healthyWorkers: 1,
+            staleWorkers: 0
+          },
+          workers: []
+        }
+      };
+    }, { repositoryId: "repo 1" });
+
+    expect(requests).toEqual([
+      "/operations/snapshot?limit=8&repositoryId=repo+1"
+    ]);
+    expect(snapshot.summary.activeJobs).toBe(1);
+    expect(snapshot.auditEvents[0]?.type).toBe("workflow.enqueued");
+  });
+
   it("loads bounded audit and job history for the console", async () => {
     const requests: string[] = [];
     const snapshot = await loadOperationsSnapshot(async (path) => {
@@ -66,6 +132,7 @@ describe("operations snapshot", () => {
     });
 
     expect(requests).toEqual([
+      "/operations/snapshot?limit=8",
       "/audit-events?limit=8",
       "/jobs?limit=8",
       "/readiness",
@@ -115,6 +182,7 @@ describe("operations snapshot", () => {
     );
 
     expect(requests).toEqual([
+      "/operations/snapshot?limit=8&repositoryId=repo+1",
       "/audit-events?limit=8&repositoryId=repo+1",
       "/jobs?limit=8&repositoryId=repo+1",
       "/readiness",

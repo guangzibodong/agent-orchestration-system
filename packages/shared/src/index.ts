@@ -354,6 +354,25 @@ export const auditEventSchema = z.object({
   metadata: z.record(z.string(), z.string()).optional()
 });
 
+export const operationsSnapshotSchema = z.object({
+  checkedAt: z.string(),
+  repositoryId: z.string().optional(),
+  summary: z.object({
+    queuedJobs: z.number().int().nonnegative(),
+    runningJobs: z.number().int().nonnegative(),
+    activeJobs: z.number().int().nonnegative(),
+    failedJobs: z.number().int().nonnegative(),
+    needsReviewWorkflows: z.number().int().nonnegative(),
+    blockedReadinessChecks: z.number().int().nonnegative(),
+    healthyWorkers: z.number().int().nonnegative(),
+    totalWorkers: z.number().int().nonnegative()
+  }),
+  auditEvents: z.array(auditEventSchema),
+  jobs: z.array(workflowJobSchema),
+  readiness: readinessResponseSchema,
+  workerHealth: workerHealthResponseSchema
+});
+
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 export type WorkflowStatus = z.infer<typeof workflowStatusSchema>;
 export type WorkflowJobStatus = z.infer<typeof workflowJobStatusSchema>;
@@ -383,6 +402,7 @@ export type ReadinessCheck = z.infer<typeof readinessCheckSchema>;
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type WorkerHealth = z.infer<typeof workerHealthSchema>;
 export type WorkerHealthResponse = z.infer<typeof workerHealthResponseSchema>;
+export type OperationsSnapshot = z.infer<typeof operationsSnapshotSchema>;
 export type WorkflowReviewRequest = z.infer<
   typeof workflowReviewRequestSchema
 >;

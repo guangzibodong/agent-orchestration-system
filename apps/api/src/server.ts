@@ -6,6 +6,7 @@ import {
   workflowJobStatusSchema,
   workflowStatusSchema,
   workflowReviewRequestSchema,
+  type WorkflowJob,
   type AuditEvent
 } from "@mawo/shared";
 import Fastify from "fastify";
@@ -307,7 +308,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     };
   });
 
-  app.get("/readiness", async () => {
+  const buildReadinessResponse = async () => {
     const checkedAt = new Date().toISOString();
     const storeChecks = [
       createWritableDirectoryCheck("state_store", "State store", stateRoot),
@@ -384,7 +385,63 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       activeJobs,
       checks
     };
-  });
+  };
+
+  const listJobsForOperations = async (input: {
+    limit?: string;
+    repositoryId?: string;
+    status?: string;
+    workflowId?: string;
+  }): Promise<WorkflowJob[]> => {
+    const jobStatus = input.status
+      ? workflowJobStatusSchema.safeParse(input.status)
+      : undefined;
+
+    const jobs = (await queue.listJobs()).filter((job) => {
+      if (jobStatus?.success && job.status !== jobStatus.data) {
+        return false;
+      }
+
+      if (input.workflowId && job.workflowId !== input.workflowId) {
+        return false;
+      }
+
+      if (input.repositoryId) {
+        const workflow = activeRunner.getWorkflow(job.workflowId);
+        if (workflow?.repositoryId !== input.repositoryId) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return limitToRecent(jobs, input.limit);
+  };
+
+  const listAuditEventsForOperations = async (input: {
+    actor?: string;
+    jobId?: string;
+    limit?: string;
+    repositoryId?: string;
+    type?: string;
+    workflowId?: string;
+  }): Promise<AuditEvent[]> => {
+    const eventType = input.type
+      ? auditEventTypeSchema.safeParse(input.type)
+      : undefined;
+    const events = await auditStore.list({
+      ...(eventType?.success ? { type: eventType.data } : {}),
+      ...(input.actor ? { actor: input.actor } : {}),
+      ...(input.workflowId ? { workflowId: input.workflowId } : {}),
+      ...(input.jobId ? { jobId: input.jobId } : {}),
+      ...(input.repositoryId ? { repositoryId: input.repositoryId } : {})
+    });
+
+    return limitToRecent(events, input.limit);
+  };
+
+  app.get("/readiness", async () => buildReadinessResponse());
 
   app.get("/agents", async () => {
     return createAgentSummaries(cliAgents);
@@ -396,6 +453,51 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
 
   app.get("/workers/health", async () => {
     return getWorkerHealth();
+  });
+
+  app.get<{
+    Querystring: { limit?: string; repositoryId?: string };
+  }>("/operations/snapshot", async (request) => {
+    const repositoryId = request.query.repositoryId?.trim() || undefined;
+    const limit = request.query.limit || "8";
+    const [readiness, workerHealth, jobs, auditEvents] = await Promise.all([
+      buildReadinessResponse(),
+      getWorkerHealth(),
+      listJobsForOperations({ limit, repositoryId }),
+      listAuditEventsForOperations({ limit, repositoryId })
+    ]);
+    const scopedWorkflows = activeRunner.listWorkflows().filter((workflow) => {
+      if (repositoryId && workflow.repositoryId !== repositoryId) {
+        return false;
+      }
+
+      return true;
+    });
+    const queuedJobs = jobs.filter((job) => job.status === "queued").length;
+    const runningJobs = jobs.filter((job) => job.status === "running").length;
+
+    return {
+      checkedAt: new Date().toISOString(),
+      ...(repositoryId ? { repositoryId } : {}),
+      summary: {
+        queuedJobs,
+        runningJobs,
+        activeJobs: queuedJobs + runningJobs,
+        failedJobs: jobs.filter((job) => job.status === "failed").length,
+        needsReviewWorkflows: scopedWorkflows.filter(
+          (workflow) => workflow.status === "needs_review"
+        ).length,
+        blockedReadinessChecks: readiness.checks.filter(
+          (check) => check.status === "blocked" || check.status === "failed"
+        ).length,
+        healthyWorkers: workerHealth.summary.healthyWorkers,
+        totalWorkers: workerHealth.summary.totalWorkers
+      },
+      auditEvents,
+      jobs,
+      readiness,
+      workerHealth
+    };
   });
 
   app.get<{

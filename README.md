@@ -240,6 +240,7 @@ GET  /health
 GET  /readiness
 GET  /agents
 GET  /agents/health
+GET  /operations/snapshot
 GET  /workflows
 GET  /workflows?status=<status>&repositoryId=<repositoryId>&repositoryPath=<path>&limit=<n>
 GET  /repositories
