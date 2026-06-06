@@ -112,7 +112,8 @@ describe("PrismaRepositoryStore", () => {
         {
           id: "test",
           title: "Test gate",
-          command: "npm test"
+          command: "npm test",
+          required: true
         }
       ]
     });

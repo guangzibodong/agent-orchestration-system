@@ -16,6 +16,7 @@ const repositories: RepositoryRecord[] = [
         id: "test",
         title: "Tests",
         command: "npm test",
+        required: true,
         timeoutMs: 300000
       }
     ],

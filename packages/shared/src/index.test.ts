@@ -50,6 +50,7 @@ describe("workflowRunSchema", () => {
           id: "gate_1",
           title: "Unit tests",
           status: "passed",
+          required: false,
           result: {
             exitCode: 0,
             stdout: "ok",
@@ -60,6 +61,7 @@ describe("workflowRunSchema", () => {
     });
 
     expect(run.qualityGates[0]?.result?.stdout).toBe("ok");
+    expect(run.qualityGates[0]?.required).toBe(false);
   });
 
   it("keeps worktree workspace and diff artifacts from runner responses", () => {
@@ -173,6 +175,7 @@ describe("workflowRunSchema", () => {
           id: "gate_1",
           title: "Gate",
           status: "passed",
+          required: false,
           stdoutArtifactPath: "C:/artifacts/run_5/gates/gate_1/stdout.txt"
         }
       ]
@@ -181,6 +184,7 @@ describe("workflowRunSchema", () => {
     expect(report.reportArtifactPath).toContain("report.json");
     expect(report.taskResults[0]?.patchArtifactPath).toContain("patch.diff");
     expect(report.gateResults[0]?.stdoutArtifactPath).toContain("stdout.txt");
+    expect(report.gateResults[0]?.required).toBe(false);
   });
 
   it("accepts queued workflow job responses", () => {
@@ -263,6 +267,36 @@ describe("workflowRunSchema", () => {
     expect(request.tasks[0]?.timeoutMs).toBe(900000);
     expect(request.qualityGates[0]?.id).toBe("tests");
     expect(request.qualityGates[0]?.timeoutMs).toBe(300000);
+  });
+
+  it("defaults repository workflow quality gates to required and accepts optional gates", () => {
+    const request = createRepositoryWorkflowRequestSchema.parse({
+      goal: "Implement optional gate support",
+      repositoryPath: "C:/repo",
+      tasks: [
+        {
+          id: "implement",
+          agent: "shell",
+          command: "npm test"
+        }
+      ],
+      qualityGates: [
+        {
+          id: "optional-lint",
+          title: "Optional lint",
+          command: "npm run lint",
+          required: false
+        },
+        {
+          id: "unit",
+          title: "Unit tests",
+          command: "npm test"
+        }
+      ]
+    });
+
+    expect(request.qualityGates[0]?.required).toBe(false);
+    expect(request.qualityGates[1]?.required).toBe(true);
   });
 
   it("accepts repository workflow creation requests by registered repository id", () => {

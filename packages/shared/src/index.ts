@@ -62,6 +62,7 @@ export const qualityGateRunSchema = z.object({
   id: z.string(),
   title: z.string(),
   status: taskStatusSchema,
+  required: z.boolean().default(true),
   command: z.string().optional(),
   timeoutMs: z.number().int().positive().optional(),
   result: shellRunResultSchema.optional(),
@@ -108,6 +109,7 @@ export const qualityGateInputSchema = z.object({
   id: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   command: z.string().min(1),
+  required: z.boolean().default(true),
   timeoutMs: z.number().int().positive().optional(),
   cwd: z.string().min(1).optional(),
 });
@@ -405,6 +407,7 @@ export const runReportSchema = z.object({
       id: z.string(),
       title: z.string(),
       status: taskStatusSchema,
+      required: z.boolean().default(true),
       exitCode: z.number().optional(),
       stdout: z.string().optional(),
       stderr: z.string().optional(),

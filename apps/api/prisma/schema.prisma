@@ -64,6 +64,7 @@ model QualityGateRun {
   title         String
   status        String
   command       String
+  required      Boolean          @default(true)
   cwd           String?
   timeoutMs     Int?
   position      Int

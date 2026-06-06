@@ -24,7 +24,8 @@ const baseWorkflow: WorkflowRun = {
     {
       id: "gate-1",
       title: "Unit tests",
-      status: "waiting"
+      status: "waiting",
+      required: true
     }
   ]
 };
@@ -247,6 +248,7 @@ describe("delivery console model", () => {
             title: "Smoke tests",
             command: "npm run smoke:ui",
             status: "failed",
+            required: true,
             result: {
               command: "npm run smoke:ui",
               exitCode: 1,

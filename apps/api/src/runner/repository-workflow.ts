@@ -57,6 +57,7 @@ export async function createRepositoryWorkflowDefinition(
       id: gate.id ?? `gate-${index + 1}`,
       title: gate.title ?? `Gate ${index + 1}`,
       command: gate.command,
+      required: gate.required ?? true,
       timeoutMs: gate.timeoutMs,
       cwd: gate.cwd
     }))

@@ -54,6 +54,7 @@ export type PrismaQualityGateRunRow = {
   title: string;
   status: string;
   command: string;
+  required?: boolean | null;
   cwd: string | null;
   timeoutMs: number | null;
   position: number;
@@ -243,6 +244,7 @@ function toQualityGateRow(
     title: gate.title,
     status: gate.status,
     command: gate.command,
+    required: gate.required,
     cwd: gate.cwd ?? null,
     timeoutMs: gate.timeoutMs ?? null,
     position,
@@ -299,6 +301,7 @@ function toQualityGateRunRecord(
     id: row.gateId,
     title: row.title,
     command: row.command,
+    required: row.required ?? true,
     ...(row.cwd ? { cwd: row.cwd } : {}),
     ...(row.timeoutMs ? { timeoutMs: row.timeoutMs } : {}),
     status: row.status as RunnerTaskStatus,

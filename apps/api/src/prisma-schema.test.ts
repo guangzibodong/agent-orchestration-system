@@ -60,6 +60,7 @@ describe("Prisma runtime schema", () => {
     expect(schema).toMatch(/result\s+Json\?/);
     expect(schema).toMatch(/workspace\s+Json\?/);
     expect(schema).toMatch(/diff\s+Json\?/);
+    expect(schema).toMatch(/required\s+Boolean\s+@default\(true\)/);
     expect(schema).toMatch(/metadata\s+Json\?/);
     expect(schema).toMatch(/lockedBy\s+String\?/);
     expect(schema).toMatch(/lockedAt\s+DateTime\?/);
@@ -100,6 +101,9 @@ describe("Prisma runtime schema", () => {
     expect(migrations).toContain('ALTER TABLE "WorkflowJob" ADD COLUMN "attempts"');
     expect(migrations).toContain(
       'CREATE INDEX "WorkflowJob_status_leaseExpiresAt_idx"'
+    );
+    expect(migrations).toContain(
+      'ALTER TABLE "QualityGateRun" ADD COLUMN "required" BOOLEAN NOT NULL DEFAULT true'
     );
   });
 });

@@ -44,6 +44,7 @@ type GateRow = {
   title: string;
   status: string;
   command: string;
+  required?: boolean;
   cwd: string | null;
   timeoutMs: number | null;
   position: number;
@@ -154,6 +155,7 @@ describe("PrismaRunStore", () => {
           id: "test",
           title: "Tests",
           command: "npm test",
+          required: false,
           status: "passed",
           result: {
             command: "npm test",
@@ -193,6 +195,7 @@ describe("PrismaRunStore", () => {
           expect.objectContaining({
             gateId: "test",
             position: 0,
+            required: false,
             result: expect.objectContaining({
               exitCode: 0
             })
@@ -227,6 +230,60 @@ describe("PrismaRunStore", () => {
 
     await store.save(run);
 
+    await expect(store.list()).resolves.toEqual([run]);
+  });
+
+  it("persists and restores optional quality gate required flags", async () => {
+    const client = createRunClient();
+    const store = new PrismaRunStore(client);
+    const run: LocalWorkflowRun = {
+      id: "workflow-optional-gate",
+      goal: "Restore optional gate contract",
+      status: "needs_review",
+      executionMode: "direct",
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:01:00.000Z",
+      tasks: [],
+      qualityGates: [
+        {
+          id: "optional-lint",
+          title: "Optional lint",
+          command: "npm run lint",
+          required: false,
+          status: "failed",
+          result: {
+            command: "npm run lint",
+            status: "failed",
+            exitCode: 2,
+            stdout: "",
+            stderr: "lint warning",
+            durationMs: 1,
+            startedAt: "2026-06-05T00:00:30.000Z",
+            finishedAt: "2026-06-05T00:00:31.000Z"
+          }
+        },
+        {
+          id: "unit",
+          title: "Unit tests",
+          command: "npm test",
+          required: true,
+          status: "passed"
+        }
+      ]
+    };
+
+    await store.save(run);
+
+    expect(client.rows[0]?.qualityGates).toEqual([
+      expect.objectContaining({
+        gateId: "optional-lint",
+        required: false
+      }),
+      expect.objectContaining({
+        gateId: "unit",
+        required: true
+      })
+    ]);
     await expect(store.list()).resolves.toEqual([run]);
   });
 

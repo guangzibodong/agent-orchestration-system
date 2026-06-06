@@ -1304,6 +1304,7 @@ const baseWorkflow: WorkflowRun = {
       id: "gate-1",
       title: "Unit tests",
       status: "passed",
+      required: true,
     },
   ],
 };
@@ -1320,6 +1321,7 @@ const mixedWorkflows: WorkflowRun[] = [
         id: "gate-1",
         title: "Copy checks",
         status: "failed",
+        required: true,
       },
     ],
   },
@@ -1438,6 +1440,7 @@ const mobileStressWorkflows: WorkflowRun[] = [
         id: "gate-mobile-1",
         title: "Required smoke gate with long visible label",
         status: "failed",
+        required: true,
       },
     ],
   },
@@ -1463,6 +1466,7 @@ const lifecycleFailedWorkflow: WorkflowRun = {
       id: "gate-retry",
       title: "Unit tests",
       status: "failed",
+      required: true,
       result: {
         exitCode: 1,
         stderr: "failing gate",

@@ -51,6 +51,7 @@ export type QualityGateDefinition = {
   id: string;
   title: string;
   command: string;
+  required?: boolean;
   cwd?: string;
   timeoutMs?: number;
 };
@@ -81,6 +82,7 @@ export type TaskRunRecord = WorkflowTaskDefinition & {
 };
 
 export type QualityGateRunRecord = QualityGateDefinition & {
+  required: boolean;
   status: RunnerTaskStatus;
   result?: ShellRunResult;
 };
@@ -130,6 +132,7 @@ export type RunReport = {
     id: string;
     title: string;
     status: RunnerTaskStatus;
+    required: boolean;
     exitCode?: number;
     stdout?: string;
     stderr?: string;
@@ -360,6 +363,7 @@ export class LocalRunner {
       })),
       qualityGates: definition.qualityGates.map((gate) => ({
         ...gate,
+        required: gate.required ?? true,
         status: "waiting"
       }))
     };
@@ -778,7 +782,7 @@ export class LocalRunner {
         return run;
       }
 
-      if (gate.status === "failed") {
+      if (gate.status === "failed" && isRequiredQualityGate(gate)) {
         this.updateStatus(run, "gate_failed");
         return run;
       }
@@ -799,7 +803,11 @@ export class LocalRunner {
       )
       .map((task) => task.id);
     const failedGates = run.qualityGates
-      .filter((gate) => gate.status === "failed" || gate.status === "canceled")
+      .filter(
+        (gate) =>
+          isRequiredQualityGate(gate) &&
+          (gate.status === "failed" || gate.status === "canceled")
+      )
       .map((gate) => gate.id);
     const passedTasks = run.tasks.filter((task) => task.status === "passed");
     const passedGates = run.qualityGates.filter((gate) => gate.status === "passed");
@@ -834,6 +842,7 @@ export class LocalRunner {
         id: gate.id,
         title: gate.title,
         status: gate.status,
+        required: isRequiredQualityGate(gate),
         exitCode: gate.result?.exitCode,
         stdout: gate.result?.stdout,
         stderr: gate.result?.stderr
@@ -976,6 +985,10 @@ function workspaceCleanupBlockedReason(status: RunnerWorkflowStatus): string {
 
 function isMergeCandidateAllowed(status: RunnerWorkflowStatus): boolean {
   return ["needs_review", "completed"].includes(status);
+}
+
+function isRequiredQualityGate(gate: { required?: boolean }): boolean {
+  return gate.required ?? true;
 }
 
 function mergeCandidateApplyBlockedMessage(

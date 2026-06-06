@@ -1063,6 +1063,148 @@ describe("runner API", () => {
     });
   });
 
+  it("keeps optional failed requirement gates visible without blocking merge candidate evidence", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-optional-gate-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Review optional gate warning",
+        repositoryPath: repoPath,
+        goal: "Keep optional gate findings as non-blocking evidence",
+        acceptanceCriteria: ["Optional lint warning remains visible"],
+        tasks: [
+          {
+            id: "patch",
+            title: "Patch README",
+            agent: "shell",
+            command: `${node} -e "require('fs').appendFileSync('README.md','optional gate\\n')"`,
+          },
+        ],
+        qualityGates: [
+          {
+            id: "unit",
+            title: "Unit tests",
+            command: `${node} -e "process.exit(0)"`,
+          },
+          {
+            id: "optional-lint",
+            title: "Optional lint",
+            command: `${node} -e "console.error('optional lint warning'); process.exit(2)"`,
+            required: false,
+          },
+          {
+            id: "integration",
+            title: "Integration tests",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+    await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/confirm-plan`,
+    });
+    const enqueueResponse = await app.inject({
+      method: "POST",
+      url: `/requirements/${requirement.id}/enqueue`,
+    });
+    const enqueueBody = enqueueResponse.json();
+    const completedJobResponse = await waitForJobStatus(
+      app,
+      enqueueBody.job.id,
+      "completed",
+    );
+
+    const workflowResponse = await app.inject({
+      method: "GET",
+      url: `/workflows/${enqueueBody.workflow.id}`,
+    });
+    const requirementResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}`,
+    });
+    const reportResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/report`,
+    });
+    const mergeCandidateResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/merge-candidate`,
+    });
+    const workflow = workflowResponse.json();
+    const report = reportResponse.json();
+
+    expect(completedJobResponse.json()).toMatchObject({ status: "completed" });
+    expect(workflow).toMatchObject({
+      status: "needs_review",
+      qualityGates: [
+        expect.objectContaining({
+          id: "unit",
+          status: "passed",
+          required: true,
+        }),
+        expect.objectContaining({
+          id: "optional-lint",
+          status: "failed",
+          required: false,
+        }),
+        expect.objectContaining({
+          id: "integration",
+          status: "passed",
+          required: true,
+        }),
+      ],
+    });
+    expect(requirementResponse.json()).toMatchObject({
+      id: requirement.id,
+      status: "needs_review",
+      runLinks: [
+        expect.objectContaining({
+          workflowRunId: enqueueBody.workflow.id,
+          status: "needs_review",
+        }),
+      ],
+    });
+    expect(reportResponse.statusCode).toBe(200);
+    expect(report).toMatchObject({
+      workflowId: enqueueBody.workflow.id,
+      recommendation: "ready_for_review",
+      failedGates: [],
+      gateResults: [
+        expect.objectContaining({
+          id: "unit",
+          status: "passed",
+          required: true,
+        }),
+        expect.objectContaining({
+          id: "optional-lint",
+          status: "failed",
+          required: false,
+          stderr: expect.stringContaining("optional lint warning"),
+        }),
+        expect.objectContaining({
+          id: "integration",
+          status: "passed",
+          required: true,
+        }),
+      ],
+    });
+    expect(mergeCandidateResponse.statusCode).toBe(200);
+    expect(mergeCandidateResponse.json()).toMatchObject({
+      workflowId: enqueueBody.workflow.id,
+      status: "ready",
+      patch: expect.stringContaining("+optional gate"),
+    });
+  });
+
   it("rejects requirement enqueue when repository safety blocks execution", async () => {
     const demoRoot = await mkdtemp(
       join(tmpdir(), "mawo-requirement-dirty-test-"),

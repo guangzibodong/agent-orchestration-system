@@ -23,7 +23,8 @@ const workflows: WorkflowRun[] = [
       {
         id: "gate-1",
         title: "Tests",
-        status: "passed"
+        status: "passed",
+        required: true
       }
     ]
   },

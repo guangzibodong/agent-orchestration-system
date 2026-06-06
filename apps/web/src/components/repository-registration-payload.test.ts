@@ -23,6 +23,7 @@ describe("repository registration payload", () => {
           id: "registration-quality-gate",
           title: "Registration quality gate",
           command: "npm run test",
+          required: true,
           timeoutMs: 600000
         }
       ]

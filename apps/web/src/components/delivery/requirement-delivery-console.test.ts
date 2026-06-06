@@ -28,6 +28,7 @@ const workflow: WorkflowRun = {
       id: "gate-1",
       title: "Unit tests",
       status: "passed",
+      required: true,
     },
   ],
 };
@@ -126,6 +127,7 @@ describe("RequirementDeliveryConsole", () => {
             id: "gate-1",
             title: "Required unit tests",
             status: "failed",
+            required: true,
             result: {
               exitCode: 1,
               stdout: '{"internal":"raw-gate-log"}',

@@ -267,6 +267,72 @@ describe("LocalRunner", () => {
     expect(report.failedGates).toEqual(["lint"]);
   });
 
+  it("keeps optional failed gates visible without blocking review-ready reports", async () => {
+    const runner = new LocalRunner();
+
+    const run = runner.createWorkflow({
+      goal: "Surface optional gate evidence without blocking delivery",
+      tasks: [
+        {
+          id: "task",
+          title: "Do work",
+          agent: "shell",
+          command: `${node} -e "console.log('done')"`
+        }
+      ],
+      qualityGates: [
+        {
+          id: "unit",
+          title: "Unit tests",
+          command: `${node} -e "console.log('unit passed')"`
+        },
+        {
+          id: "optional-lint",
+          title: "Optional lint",
+          command: `${node} -e "console.error('lint warning'); process.exit(2)"`,
+          required: false
+        },
+        {
+          id: "integration",
+          title: "Integration tests",
+          command: `${node} -e "console.log('integration passed')"`
+        }
+      ]
+    });
+
+    const completed = await runner.runWorkflow(run.id);
+    const report = runner.getReport(run.id);
+
+    expect(completed.status).toBe("needs_review");
+    expect(completed.qualityGates.map((gate) => gate.status)).toEqual([
+      "passed",
+      "failed",
+      "passed"
+    ]);
+    expect(completed.qualityGates[0]).toMatchObject({ required: true });
+    expect(completed.qualityGates[1]).toMatchObject({ required: false });
+    expect(report.recommendation).toBe("ready_for_review");
+    expect(report.failedGates).toEqual([]);
+    expect(report.gateResults).toEqual([
+      expect.objectContaining({
+        id: "unit",
+        status: "passed",
+        required: true
+      }),
+      expect.objectContaining({
+        id: "optional-lint",
+        status: "failed",
+        required: false,
+        stderr: expect.stringContaining("lint warning")
+      }),
+      expect.objectContaining({
+        id: "integration",
+        status: "passed",
+        required: true
+      })
+    ]);
+  });
+
   it("fails workflow tasks that exceed their timeout", async () => {
     const runner = new LocalRunner();
 

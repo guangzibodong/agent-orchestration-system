@@ -57,7 +57,12 @@ describe("requirement delivery loader", () => {
             updatedAt: "2026-06-06T11:04:00.000Z",
             tasks: [{ id: "task-1", title: "Patch", status: "waiting" }],
             qualityGates: [
-              { id: "gate-1", title: "Unit tests", status: "waiting" }
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                status: "waiting",
+                required: true
+              }
             ]
           }
         ];
@@ -275,7 +280,12 @@ describe("requirement delivery loader", () => {
             updatedAt: "2026-06-06T11:07:00.000Z",
             tasks: [{ id: "task-1", title: "Patch", status: "waiting" }],
             qualityGates: [
-              { id: "gate-1", title: "Unit tests", status: "waiting" }
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                status: "waiting",
+                required: true
+              }
             ]
           }
         ]
