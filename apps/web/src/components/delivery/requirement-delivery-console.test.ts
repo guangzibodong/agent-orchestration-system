@@ -60,7 +60,32 @@ const validNewRequirementDraft: NewRequirementDraft = {
   contextPaths:
     "apps/web/src/components/delivery\napps/web/src/app/globals.css",
   riskLevel: "high",
-  tasks: ["Build form", "Wire submit callback", "", "", ""],
+  tasks: [
+    {
+      title: "Build form",
+      agent: "shell",
+      command: "npm run build:form",
+      instructions: "",
+      timeoutMs: "90000",
+      dependsOn: "",
+    },
+    {
+      title: "Wire submit callback",
+      agent: "codex",
+      command: "",
+      instructions: "Wire the callback through the client component",
+      timeoutMs: "",
+      dependsOn: "task-1",
+    },
+    {
+      title: "",
+      agent: "shell",
+      command: "",
+      instructions: "",
+      timeoutMs: "",
+      dependsOn: "",
+    },
+  ],
   qualityGates: "delivery vitest\nweb typecheck",
 };
 
@@ -189,6 +214,8 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Context paths");
     expect(html).toContain("Risk level");
     expect(html).toContain("Task 1");
+    expect(html).toContain("Task 1 command");
+    expect(html).toContain("Task 1 depends on");
     expect(html).toContain("Task 5");
     expect(html).toContain("Quality gates");
     expect(html).toContain("Create requirement draft");
@@ -217,14 +244,18 @@ describe("RequirementDeliveryConsole", () => {
         riskLevel: "high",
         tasks: [
           {
+            id: "task-1",
             title: "Build form",
             agent: "shell",
-            instructions: "Build form",
+            command: "npm run build:form",
+            timeoutMs: 90000,
           },
           {
+            id: "task-2",
             title: "Wire submit callback",
-            agent: "shell",
-            instructions: "Wire submit callback",
+            agent: "codex",
+            instructions: "Wire the callback through the client component",
+            dependsOn: ["task-1"],
           },
         ],
         qualityGates: [
@@ -256,14 +287,18 @@ describe("RequirementDeliveryConsole", () => {
         repositoryPath: "C:/work/mawo",
         tasks: [
           {
+            id: "task-1",
             title: "Build form",
             agent: "shell",
-            instructions: "Build form",
+            command: "npm run build:form",
+            timeoutMs: 90000,
           },
           {
+            id: "task-2",
             title: "Wire submit callback",
-            agent: "shell",
-            instructions: "Wire submit callback",
+            agent: "codex",
+            instructions: "Wire the callback through the client component",
+            dependsOn: ["task-1"],
           },
         ],
       }),
@@ -273,7 +308,7 @@ describe("RequirementDeliveryConsole", () => {
   it("rejects New Requirement payloads without 1-5 tasks or quality gates", () => {
     const result = buildNewRequirementPayload({
       ...validNewRequirementDraft,
-      tasks: ["", "", "", "", ""],
+      tasks: [],
       qualityGates: "",
     });
 

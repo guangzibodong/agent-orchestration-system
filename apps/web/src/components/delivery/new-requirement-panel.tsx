@@ -186,23 +186,84 @@ export function NewRequirementPanel({
         <fieldset className="newRequirementFieldset">
           <legend>Tasks</legend>
           <p className="newRequirementHint">
-            Add 1-5 manual tasks. Blank task slots are ignored.
+            Add 1-5 tasks with an execution adapter, command or instructions,
+            and optional dependency links.
           </p>
           <div className="newRequirementTasks">
             {taskSlots.map((slot) => (
-              <label className="field" key={slot}>
-                <span>Task {slot}</span>
-                <input
-                  name="tasks"
-                  placeholder={
-                    slot === 1
-                      ? "First required task"
-                      : "Optional follow-up task"
-                  }
-                  required={slot === 1}
-                  disabled={viewerMode}
-                />
-              </label>
+              <section
+                aria-label={`Task ${slot} contract`}
+                className="newRequirementTaskCard"
+                key={slot}
+              >
+                <div className="newRequirementTaskHeader">
+                  <strong>Task {slot}</strong>
+                  <span>{slot === 1 ? "required" : "optional"}</span>
+                </div>
+                <div className="newRequirementTaskGrid">
+                  <label className="field">
+                    <span>Task {slot} title</span>
+                    <input
+                      name="taskTitle"
+                      placeholder={
+                        slot === 1
+                          ? "First required task"
+                          : "Optional follow-up task"
+                      }
+                      required={slot === 1}
+                      disabled={viewerMode}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Task {slot} agent</span>
+                    <select
+                      name="taskAgent"
+                      defaultValue="shell"
+                      disabled={viewerMode}
+                    >
+                      <option value="shell">Shell</option>
+                      <option value="codex">Codex CLI</option>
+                      <option value="fake-agent">Fake CLI Agent</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Task {slot} command</span>
+                  <input
+                    name="taskCommand"
+                    placeholder="npm test or npm run patch"
+                    disabled={viewerMode}
+                  />
+                </label>
+                <label className="field">
+                  <span>Task {slot} instructions</span>
+                  <textarea
+                    name="taskInstructions"
+                    placeholder="Instructions for a CLI agent when no shell command is used"
+                    rows={2}
+                    disabled={viewerMode}
+                  />
+                </label>
+                <div className="newRequirementTaskGrid">
+                  <label className="field">
+                    <span>Task {slot} timeout</span>
+                    <input
+                      name="taskTimeoutMs"
+                      inputMode="numeric"
+                      placeholder="milliseconds"
+                      disabled={viewerMode}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Task {slot} depends on</span>
+                    <input
+                      name="taskDependsOn"
+                      placeholder="task-1, task-2"
+                      disabled={viewerMode}
+                    />
+                  </label>
+                </div>
+              </section>
             ))}
           </div>
         </fieldset>

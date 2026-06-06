@@ -412,7 +412,13 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await fillField(flow, /constraints/i, "No automatic merge.");
     await fillField(flow, /non-?goals/i, "No PR creation.");
-    await fillField(flow, /task/i, "Create the checkout copy patch.");
+    await fillField(flow, /task 1 title/i, "Create the checkout copy patch.");
+    await fillField(flow, /task 1 command/i, "npm run patch:checkout");
+    await fillField(flow, /task 1 timeout/i, "90000");
+    await fillField(flow, /task 2 title/i, "Review checkout evidence.");
+    await chooseTaskAgent(flow, /task 2 agent/i, "codex");
+    await fillField(flow, /task 2 instructions/i, "Review the generated patch.");
+    await fillField(flow, /task 2 depends/i, "task-1");
     await fillField(flow, /quality gate|gate/i, "npm test");
     await chooseRisk(flow, "medium");
 
@@ -439,7 +445,18 @@ test.describe("Requirement Delivery Console smoke", () => {
       nonGoals: expect.any(Array),
       tasks: expect.arrayContaining([
         expect.objectContaining({
+          id: "task-1",
           title: expect.stringMatching(/checkout copy patch/i),
+          agent: "shell",
+          command: "npm run patch:checkout",
+          timeoutMs: 90000,
+        }),
+        expect.objectContaining({
+          id: "task-2",
+          title: "Review checkout evidence.",
+          agent: "codex",
+          instructions: "Review the generated patch.",
+          dependsOn: ["task-1"],
         }),
       ]),
       qualityGates: expect.arrayContaining([
@@ -824,6 +841,12 @@ async function chooseRisk(scope: Locator, value: string) {
   await risk.selectOption(value).catch(async () => {
     await risk.fill(value);
   });
+}
+
+async function chooseTaskAgent(scope: Locator, label: RegExp, value: string) {
+  const agent = scope.getByLabel(label).first();
+  await expect(agent).toBeVisible();
+  await agent.selectOption(value);
 }
 
 async function expectNoHorizontalDocumentOverflow(page: Page) {

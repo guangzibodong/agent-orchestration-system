@@ -10,8 +10,17 @@ export type NewRequirementDraft = {
   nonGoals: string;
   contextPaths: string;
   riskLevel: string;
-  tasks: string[];
+  tasks: NewRequirementTaskDraft[];
   qualityGates: string;
+};
+
+export type NewRequirementTaskDraft = {
+  title: string;
+  agent: string;
+  command: string;
+  instructions: string;
+  timeoutMs: string;
+  dependsOn: string;
 };
 
 export type NewRequirementPayload = {
@@ -24,7 +33,15 @@ export type NewRequirementPayload = {
   nonGoals: string[];
   contextPaths: string[];
   riskLevel: NewRequirementRiskLevel;
-  tasks: Array<{ title: string; agent: "shell"; instructions: string }>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    agent: string;
+    command?: string;
+    instructions?: string;
+    timeoutMs?: number;
+    dependsOn?: string[];
+  }>;
   qualityGates: Array<{ title: string; command: string; required: true }>;
 };
 
@@ -45,7 +62,8 @@ export function buildNewRequirementPayload(
   const constraints = parseList(draft.constraints);
   const nonGoals = parseList(draft.nonGoals);
   const contextPaths = parseList(draft.contextPaths);
-  const tasks = draft.tasks.map(cleanListItem).filter(Boolean);
+  const taskCandidates = draft.tasks.map(buildTaskCandidate);
+  const tasks = taskCandidates.filter((task) => task.hasAnyValue);
   const qualityGates = parseList(draft.qualityGates);
   const riskLevel = normalizeRiskLevel(draft.riskLevel);
   const errors = new Array<string>();
@@ -68,6 +86,14 @@ export function buildNewRequirementPayload(
 
   if (tasks.length < 1 || tasks.length > 5) {
     errors.push("Add 1-5 tasks.");
+  }
+
+  if (tasks.some((task) => !task.title)) {
+    errors.push("Each task needs a title.");
+  }
+
+  if (tasks.some((task) => task.timeoutMs === "invalid")) {
+    errors.push("Task timeouts must be positive milliseconds.");
   }
 
   if (!qualityGates.length) {
@@ -94,10 +120,16 @@ export function buildNewRequirementPayload(
       nonGoals,
       contextPaths,
       riskLevel,
-      tasks: tasks.map((taskTitle) => ({
-        title: taskTitle,
-        agent: "shell",
-        instructions: taskTitle,
+      tasks: tasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        agent: task.agent,
+        ...(task.command ? { command: task.command } : {}),
+        ...(task.instructions ? { instructions: task.instructions } : {}),
+        ...(typeof task.timeoutMs === "number"
+          ? { timeoutMs: task.timeoutMs }
+          : {}),
+        ...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}),
       })),
       qualityGates: qualityGates.map((gateCommand) => ({
         title: gateCommand,
@@ -134,8 +166,69 @@ export function newRequirementDraftFromFormData(
     nonGoals: getFormValue(formData, "nonGoals"),
     contextPaths: getFormValue(formData, "contextPaths"),
     riskLevel: getFormValue(formData, "riskLevel"),
-    tasks: formData.getAll("tasks").map((value) => String(value)),
+    tasks: getTaskDraftsFromFormData(formData),
     qualityGates: getFormValue(formData, "qualityGates"),
+  };
+}
+
+function getTaskDraftsFromFormData(formData: FormData): NewRequirementTaskDraft[] {
+  const titles = formData.getAll("taskTitle").map((value) => String(value));
+
+  if (!titles.length) {
+    return formData.getAll("tasks").map((value) => ({
+      title: String(value),
+      agent: "shell",
+      command: "",
+      instructions: String(value),
+      timeoutMs: "",
+      dependsOn: "",
+    }));
+  }
+
+  const agents = formData.getAll("taskAgent").map((value) => String(value));
+  const commands = formData.getAll("taskCommand").map((value) => String(value));
+  const instructions = formData
+    .getAll("taskInstructions")
+    .map((value) => String(value));
+  const timeoutMs = formData
+    .getAll("taskTimeoutMs")
+    .map((value) => String(value));
+  const dependsOn = formData
+    .getAll("taskDependsOn")
+    .map((value) => String(value));
+
+  return titles.map((title, index) => ({
+    title,
+    agent: agents[index] ?? "shell",
+    command: commands[index] ?? "",
+    instructions: instructions[index] ?? "",
+    timeoutMs: timeoutMs[index] ?? "",
+    dependsOn: dependsOn[index] ?? "",
+  }));
+}
+
+function buildTaskCandidate(task: NewRequirementTaskDraft, index: number) {
+  const title = cleanListItem(task.title);
+  const agent = cleanValue(task.agent) || "shell";
+  const command = cleanValue(task.command);
+  const instructions = cleanValue(task.instructions);
+  const timeoutMs = parseOptionalPositiveInteger(task.timeoutMs);
+  const dependsOn = parseDependencyList(task.dependsOn);
+
+  return {
+    id: `task-${index + 1}`,
+    title,
+    agent,
+    command,
+    instructions: instructions || (!command && title ? title : ""),
+    timeoutMs,
+    dependsOn,
+    hasAnyValue:
+      Boolean(title) ||
+      Boolean(command) ||
+      Boolean(instructions) ||
+      Boolean(cleanValue(task.timeoutMs)) ||
+      dependsOn.length > 0,
   };
 }
 
@@ -150,6 +243,13 @@ function parseList(value: string): string[] {
     .filter(Boolean);
 }
 
+function parseDependencyList(value: string): string[] {
+  return value
+    .split(/[\r\n,]+/)
+    .map(cleanListItem)
+    .filter(Boolean);
+}
+
 function cleanListItem(value: string): string {
   return cleanValue(value)
     .replace(/^[-*]\s+/, "")
@@ -159,6 +259,24 @@ function cleanListItem(value: string): string {
 
 function cleanValue(value: string): string {
   return value.trim().replace(/\s+/g, " ");
+}
+
+function parseOptionalPositiveInteger(
+  value: string,
+): number | "invalid" | undefined {
+  const normalized = cleanValue(value);
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  const parsed = Number(normalized);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return "invalid";
+  }
+
+  return parsed;
 }
 
 function normalizeRiskLevel(value: string): NewRequirementRiskLevel | undefined {

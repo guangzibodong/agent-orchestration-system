@@ -155,7 +155,40 @@ button {
 }
 
 .newRequirementTasks {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  align-items: start;
+}
+
+.newRequirementTaskCard {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 12px;
+}
+
+.newRequirementTaskHeader,
+.newRequirementTaskGrid {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.newRequirementTaskHeader {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.newRequirementTaskHeader span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.newRequirementTaskGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .newRequirementFieldset {
@@ -884,7 +917,8 @@ button {
     width: 100%;
   }
 
-  .newRequirementFormGrid {
+  .newRequirementFormGrid,
+  .newRequirementTaskGrid {
     grid-template-columns: 1fr;
   }
 
