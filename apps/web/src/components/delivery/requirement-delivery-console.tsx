@@ -48,7 +48,9 @@ type RequirementDeliveryConsoleProps = {
     workflowRunId: string,
     action: RequirementReviewAction,
   ) => Promise<void> | void;
-  onNewRequirementSubmit?: (payload: NewRequirementPayload) => Promise<void> | void;
+  onNewRequirementSubmit?: (
+    payload: NewRequirementPayload,
+  ) => Promise<string | void> | string | void;
 };
 
 type RequirementActionState = {
@@ -139,8 +141,12 @@ export function RequirementDeliveryConsole({
     setNewRequirementMessage(`Creating requirement draft for ${payload.title}`);
 
     try {
-      await onNewRequirementSubmit?.(payload);
+      const createdRequirementId = await onNewRequirementSubmit?.(payload);
       setNewRequirementMessage(`Requirement draft submitted for ${payload.title}`);
+      if (createdRequirementId) {
+        setSelectedRequirementId(createdRequirementId);
+      }
+      setIsNewRequirementPanelOpen(false);
     } catch (error: unknown) {
       setNewRequirementMessage(
         error instanceof Error

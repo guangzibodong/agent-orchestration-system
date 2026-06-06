@@ -926,6 +926,216 @@ test.describe("Requirement Delivery Console smoke", () => {
     });
   });
 
+  test("New Requirement creation refreshes and focuses the created requirement workspace", async ({
+    page,
+  }) => {
+    const existingRequirement: RequirementDeliveryTicket = {
+      id: "requirement-existing",
+      title: "Existing review item",
+      repositoryPath: "C:/work/existing",
+      goal: "Keep the previous item available.",
+      acceptanceCriteria: ["Existing item stays in the queue."],
+      constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+      nonGoals: ["Automatic PR creation"],
+      riskLevel: "medium",
+      contextPaths: [],
+      tasks: [
+        {
+          id: "task-existing",
+          title: "Inspect existing evidence",
+          agent: "shell",
+          instructions: "Inspect evidence.",
+        },
+      ],
+      qualityGates: [
+        {
+          id: "gate-existing",
+          title: "Unit tests",
+          command: "npm test",
+          required: true,
+        },
+      ],
+      status: "running",
+      runLinks: [],
+      createdAt: "2026-06-06T10:20:00.000Z",
+      updatedAt: "2026-06-06T10:25:00.000Z",
+    };
+    const requirements: RequirementDeliveryTicket[] = [existingRequirement];
+    const createdRequests: unknown[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, mixedWorkflows, {
+      mergeCandidates: {
+        "requirement-existing": requirementMergeCandidate,
+      },
+      reports: {
+        "requirement-existing": requirementEvidenceReport,
+      },
+      repositorySafetyByRepositoryId: {
+        "repo-created": {
+          repositoryId: "repo-created",
+          path: "C:/work/created",
+          defaultBranch: "main",
+          currentBranch: "feature/new-requirement",
+          headShortSha: "def5678",
+          clean: true,
+          dirty: false,
+          allowedRoot: true,
+          noAutoMerge: true,
+          manualApplyPolicy:
+            "Manual review is required; MAWO never automatically merges repository changes.",
+        },
+      },
+      requirements,
+      onRequirementCreate: (payload) => {
+        createdRequests.push(payload);
+        const createdRequirement: RequirementDeliveryTicket = {
+          id: "requirement-created",
+          title: "Created checkout requirement",
+          repositoryId: "repo-created",
+          goal: "Refresh the requirement workspace after creation.",
+          acceptanceCriteria: [
+            "Created ticket appears in the requirement queue.",
+            "Decision queue shows plan confirmation.",
+          ],
+          constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+          nonGoals: ["Automatic PR creation"],
+          riskLevel: "high",
+          contextPaths: ["apps/web/src/app/page.tsx"],
+          tasks: [
+            {
+              id: "task-1",
+              title: "Patch checkout copy",
+              agent: "shell",
+              command: "npm run patch:checkout",
+            },
+          ],
+          qualityGates: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              command: "npm test",
+              required: true,
+            },
+          ],
+          status: "plan_review",
+          runLinks: [],
+          createdAt: "2026-06-06T11:20:00.000Z",
+          updatedAt: "2026-06-06T11:20:00.000Z",
+        };
+
+        requirements.push(createdRequirement);
+        return createdRequirement;
+      },
+    });
+
+    await page.goto("/");
+    await expect(
+      page.locator(".deliveryFocusPanel").getByRole("heading", {
+        name: "Existing review item",
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "New Requirement" }).click();
+    const flow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await fillField(flow, /title|requirement title/i, "Created checkout requirement");
+    await fillField(flow, /repository id/i, "repo-created");
+    await fillField(
+      flow,
+      /goal/i,
+      "Refresh the requirement workspace after creation.",
+    );
+    await fillField(
+      flow,
+      /acceptance criteria/i,
+      "Created ticket appears in the requirement queue.\nDecision queue shows plan confirmation.",
+    );
+    await fillField(flow, /constraints/i, "No MAWO auto-merge.");
+    await fillField(flow, /non-?goals/i, "Automatic PR creation.");
+    await fillField(flow, /context paths/i, "apps/web/src/app/page.tsx");
+    await fillField(flow, /task 1 title/i, "Patch checkout copy");
+    await fillField(flow, /task 1 command/i, "npm run patch:checkout");
+    await fillField(flow, /gate 1 command/i, "npm test");
+    await chooseRisk(flow, "high");
+
+    await flow
+      .getByRole("button", {
+        name: /create requirement|save requirement|create/i,
+      })
+      .click();
+
+    await expect
+      .poll(() => createdRequests.length, {
+        message: "wait for created requirement request",
+      })
+      .toBe(1);
+
+    const queue = page.locator(".requirementQueuePanel");
+    const createdQueueItem = queue
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Created checkout requirement" });
+    await expect(queue).toContainText("2 active");
+    await expect(createdQueueItem).toContainText("Plan review");
+    await expect(createdQueueItem).toContainText("Confirm plan");
+
+    const focusPanel = page.locator(".deliveryFocusPanel");
+    await expect(
+      focusPanel.getByRole("heading", {
+        name: "Created checkout requirement",
+      }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Stage Stepper")).toContainText("Plan");
+    await expect(page.locator(".decisionQueuePanel")).toContainText("1 waiting");
+    await expect(page.locator(".decisionQueuePanel")).toContainText(
+      "Confirm plan",
+    );
+    await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
+      "feature/new-requirement",
+    );
+    await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
+      "HEAD def5678",
+    );
+    await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
+      "Clean - mutating runs allowed",
+    );
+    await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
+      "Allowed root accepted by API",
+    );
+    await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
+      "No MAWO auto-merge; manual git apply outside MAWO",
+    );
+    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+      "Not review-ready",
+    );
+    await expect(focusPanel).not.toContainText("Apply Candidate");
+
+    await page.locator(".requirementDetailDisclosure > summary").click();
+    await expect(page.locator(".requirementDetailShell")).toContainText(
+      "No artifacts linked yet",
+    );
+    await expect(flow).toBeHidden();
+
+    await queue
+      .getByRole("button", {
+        name: "Select requirement Existing review item",
+      })
+      .click();
+    await expect(
+      focusPanel.getByRole("heading", {
+        level: 2,
+        name: "Existing review item",
+      }),
+    ).toBeVisible();
+  });
+
   test("operator can confirm, enqueue, and retry requirement lifecycle actions", async ({
     page,
   }) => {
@@ -1235,7 +1445,7 @@ async function mockApi(
   workflows: WorkflowRun[],
   options: {
     onWorkflowRequest?: (authorization: string | undefined) => void;
-    onRequirementCreate?: (payload: unknown) => void;
+    onRequirementCreate?: (payload: unknown) => unknown;
     onRequirementAction?: (request: {
       action: "confirm-plan" | "enqueue" | "retry";
       authorization: string | undefined;
@@ -1339,16 +1549,18 @@ async function mockApi(
       }
 
       const payload = request.postDataJSON();
-      options.onRequirementCreate?.(payload);
+      const created = options.onRequirementCreate?.(payload);
       await route.fulfill({
         status: 201,
-        json: {
-          id: "requirement-smoke-created",
-          status: "plan_review",
-          createdAt: "2026-06-06T10:30:00.000Z",
-          updatedAt: "2026-06-06T10:30:00.000Z",
-          ...(typeof payload === "object" && payload ? payload : {}),
-        },
+        json:
+          created ??
+          {
+            id: "requirement-smoke-created",
+            status: "plan_review",
+            createdAt: "2026-06-06T10:30:00.000Z",
+            updatedAt: "2026-06-06T10:30:00.000Z",
+            ...(typeof payload === "object" && payload ? payload : {}),
+          },
       });
       return;
     }

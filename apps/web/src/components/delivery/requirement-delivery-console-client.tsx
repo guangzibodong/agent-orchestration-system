@@ -87,10 +87,12 @@ export function RequirementDeliveryConsoleClient() {
   }
 
   async function handleNewRequirementSubmit(payload: NewRequirementPayload) {
-    await api("/requirements", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+    const createdRequirement = requirementDeliveryTicketSchema.parse(
+      await api("/requirements", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      })
+    );
 
     const nextModel = await loadRequirementDeliveryModel(
       api,
@@ -103,6 +105,7 @@ export function RequirementDeliveryConsoleClient() {
     setModel(nextModel);
     setLoadState("ready");
     setMessage(`Requirement draft saved: ${payload.title}`);
+    return createdRequirement.id;
   }
 
   async function handleRequirementLifecycleAction(
