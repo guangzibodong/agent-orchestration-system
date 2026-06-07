@@ -165,6 +165,29 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Archived");
   });
 
+  it("focuses the first active requirement when archived items sort first", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([
+          {
+            ...workflow,
+            id: "workflow-archived",
+            goal: "Archived checkout evidence",
+            status: "archived",
+            updatedAt: "2026-06-06T10:30:00.000Z",
+          },
+          workflow,
+        ]),
+      }),
+    );
+    const focusPanel = extractFocusPanel(html);
+
+    expect(focusPanel).toContain("Harden auth checks");
+    expect(focusPanel).toContain("Review merge candidate");
+    expect(focusPanel).not.toContain("Archived checkout evidence");
+    expect(focusPanel).not.toContain("View archived evidence");
+  });
+
   it("renders compact read-only health indicators in the topbar", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {
@@ -731,3 +754,13 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).not.toContain("Add 1-5 tasks with an execution adapter");
   });
 });
+
+function extractFocusPanel(html: string): string {
+  const start = html.indexOf('class="deliveryPanel deliveryFocusPanel"');
+  const end = html.indexOf('class="deliveryPanel decisionQueuePanel"');
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+}

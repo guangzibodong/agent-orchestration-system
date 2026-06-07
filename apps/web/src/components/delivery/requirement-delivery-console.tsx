@@ -128,10 +128,14 @@ export function RequirementDeliveryConsole({
     (requirement) => requirement.requirementStage !== "archived",
   ).length;
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
+  const defaultRequirement =
+    model.requirements.find(
+      (requirement) => requirement.requirementStage !== "archived",
+    ) ?? model.requirements[0];
   const selectedRequirement =
     model.requirements.find(
       (requirement) => requirement.id === selectedRequirementId,
-    ) ?? model.requirements[0];
+    ) ?? defaultRequirement;
   const stageSteps = buildRequirementStageStepper(
     selectedRequirement?.requirementStage ?? "draft",
   );
