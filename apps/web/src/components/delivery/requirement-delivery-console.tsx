@@ -332,9 +332,17 @@ export function RequirementDeliveryConsole({
               className="primaryButton"
               type="button"
               disabled={viewerMode}
+              aria-label={
+                viewerMode
+                  ? `New Requirement unavailable: ${viewerRequirementActionsDisabledReason}`
+                  : undefined
+              }
               aria-controls="new-requirement-panel"
               aria-expanded={isNewRequirementPanelOpen}
               onClick={() => setIsNewRequirementPanelOpen(true)}
+              title={
+                viewerMode ? viewerRequirementActionsDisabledReason : undefined
+              }
             >
               <Plus size={16} aria-hidden="true" />
               New Requirement

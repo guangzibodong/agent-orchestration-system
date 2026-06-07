@@ -547,6 +547,12 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Viewer mode");
     expect(html).toContain("Write actions are disabled");
     expect(html).toContain("disabled");
+    expect(html).toContain(
+      'aria-label="New Requirement unavailable: Viewer mode is read-only; switch to operator mode to run requirement actions."',
+    );
+    expect(html).toContain(
+      'title="Viewer mode is read-only; switch to operator mode to run requirement actions."',
+    );
   });
 
   it("names viewer-mode disabled queue actions", () => {
