@@ -71,6 +71,24 @@ const reviewReadyRequirement: RequirementSummary = {
 };
 
 describe("RequirementEvidencePanel display model", () => {
+  it("keeps unselected and pending evidence states factual", () => {
+    const unselected = buildRequirementEvidenceDisplay();
+    const pending = buildRequirementEvidenceDisplay({
+      ...reviewReadyRequirement,
+      executionStatus: "ready",
+      requirementStage: "ready_to_run",
+      nextAction: "Enqueue requirement",
+      reviewEvidence: undefined,
+    });
+
+    expect(unselected.summary).toBe("No selected requirement evidence.");
+    expect(unselected.summary).not.toContain("Create or select");
+    expect(pending.summary).toBe(
+      "No review decision evidence is available for the current stage.",
+    );
+    expect(pending.summary).not.toContain("will appear here");
+  });
+
   it("summarizes review evidence without forcing reviewers into raw artifacts", () => {
     const display = buildRequirementEvidenceDisplay(reviewReadyRequirement);
 

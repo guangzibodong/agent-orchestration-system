@@ -69,8 +69,7 @@ export function buildRequirementEvidenceDisplay(
       tone: "muted",
       title: "No requirement selected",
       statusLabel: "Evidence pending",
-      summary:
-        "Create or select a requirement to review quality gate and delivery evidence.",
+      summary: "No selected requirement evidence.",
       items: [
         {
           label: "Evidence scope",
@@ -202,7 +201,7 @@ export function buildRequirementEvidenceDisplay(
     title: "Evidence pending",
     statusLabel: "Not review-ready",
     summary:
-      "Quality gate and review evidence will appear here once the requirement reaches a decision point.",
+      "No review decision evidence is available for the current stage.",
     items: [
       {
         label: "Current stage",
