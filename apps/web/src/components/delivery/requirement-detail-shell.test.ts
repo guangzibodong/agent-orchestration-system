@@ -356,6 +356,8 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("Review required before manual apply");
+    expect(html).toContain("Apply unavailable until required gates pass");
+    expect(html).not.toContain("git apply &lt;merge-candidate.patch&gt;");
   });
 
   it("renders readable requirement audit history without raw audit streams", () => {

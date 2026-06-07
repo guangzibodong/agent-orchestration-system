@@ -406,10 +406,14 @@ function RequirementReviewAcceptance({
   const patchPath = artifacts.find(
     (artifact) => artifact.kind === "patch" && artifact.path,
   )?.path;
-  const applyCommand = requirement?.reviewEvidence?.mergeCandidate?.applyCommand
-    ?? (patchPath
-    ? `git apply "${patchPath}"`
-    : "git apply <merge-candidate.patch>");
+  const applyCommand = reviewReady
+    ? requirement?.reviewEvidence?.mergeCandidate?.applyCommand
+      ?? (patchPath ? `git apply "${patchPath}"` : undefined)
+    : undefined;
+  const applyStatus =
+    requirement?.executionStatus === "gate_failed"
+      ? "Apply unavailable until required gates pass"
+      : "Apply unavailable until review evidence is ready";
 
   return (
     <div className="requirementReviewAcceptance">
@@ -441,8 +445,8 @@ function RequirementReviewAcceptance({
             </div>
           ) : (
             <div>
-              <dt>Manual apply command</dt>
-              <dd>{applyCommand}</dd>
+              <dt>{applyCommand ? "Manual apply command" : "Apply status"}</dt>
+              <dd>{applyCommand ?? applyStatus}</dd>
             </div>
           )}
         </dl>

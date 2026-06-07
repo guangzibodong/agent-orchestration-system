@@ -762,6 +762,13 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(failedValueReport).not.toContainText(
       "RAW_GATE_STDOUT_SHOULD_NOT_RENDER",
     );
+    const reviewAcceptance = detail.getByLabel("Review acceptance");
+    await expect(reviewAcceptance).toContainText(
+      "Apply unavailable until required gates pass",
+    );
+    await expect(reviewAcceptance).not.toContainText(
+      "git apply <merge-candidate.patch>",
+    );
     await expect(detail.getByRole("button", { name: "Approve" })).toBeDisabled();
     await expect(detail.getByRole("button", { name: "Reject" })).toBeDisabled();
     expect(mutatingRequests).toEqual([]);
