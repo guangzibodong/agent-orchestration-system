@@ -13,6 +13,9 @@ import {
   canCleanupWorkflowStatus
 } from "../workflow-actions";
 
+const reviewManualApplyActionLabel =
+  "Review evidence / view manual git apply command";
+
 export type RequirementStage =
   | "draft"
   | "needs_clarification"
@@ -1077,7 +1080,7 @@ function buildDecisionQueue(workflows: WorkflowRun[]): DeliveryDecisionItem[] {
           id: `${workflow.id}:review`,
           requirementId: workflow.id,
           title: workflow.goal,
-          actionLabel: "Review merge candidate",
+          actionLabel: reviewManualApplyActionLabel,
           severity: "warning"
         }
       ];
@@ -1137,7 +1140,7 @@ function buildRequirementDecisionQueue(
           id: `${requirement.id}:review`,
           requirementId: requirement.id,
           title: requirement.title,
-          actionLabel: "Review merge candidate",
+          actionLabel: reviewManualApplyActionLabel,
           severity: "warning"
         }
       ];

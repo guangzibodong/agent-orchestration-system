@@ -117,6 +117,7 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).not.toContain("Branch, HEAD, clean/dirty state");
     expect(html).toContain("Stage Stepper");
     expect(html).toContain("Decision Queue");
+    expect(html).toContain("Review evidence / view manual git apply command");
     expect(html).toContain("Review merge candidate");
     expect(html).toContain("Legacy Run Console");
     expect(html).toContain("Secondary ops/debug");
@@ -598,7 +599,9 @@ describe("RequirementDeliveryConsole", () => {
     const decisionQueue = extractDecisionQueue(html);
 
     expect(decisionQueue).toContain("Operator token required");
-    expect(decisionQueue).not.toContain("Review merge candidate");
+    expect(decisionQueue).not.toContain(
+      "Review evidence / view manual git apply command",
+    );
     expect(decisionQueue).not.toContain("Retry failed gate");
   });
 

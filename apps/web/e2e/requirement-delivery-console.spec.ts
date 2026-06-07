@@ -114,13 +114,17 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(decisionQueue).toContainText("Blocking");
     await expect(decisionQueue).toContainText("Needs review");
     await expect(decisionQueue).toContainText("Retry failed gate");
-    await expect(decisionQueue).toContainText("Review merge candidate");
+    await expect(decisionQueue).toContainText(
+      "Review evidence / view manual git apply command",
+    );
 
     const focusPanel = page.locator(".deliveryFocusPanel");
     await expect(
       focusPanel.getByRole("heading", { name: "Update billing copy" }),
     ).toBeVisible();
-    await decisionQueue.getByText("Review merge candidate").click();
+    await decisionQueue
+      .getByText("Review evidence / view manual git apply command")
+      .click();
     await expect(
       focusPanel.getByRole("heading", { name: "Harden auth checks" }),
     ).toBeVisible();
@@ -161,6 +165,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(decisionQueue).toContainText("1 waiting");
     await expect(decisionQueue).toContainText("Retry failed gate");
     await expect(decisionQueue).not.toContainText("Review merge candidate");
+    await expect(decisionQueue).not.toContainText(
+      "Review evidence / view manual git apply command",
+    );
     await expect(
       focusPanel.getByRole("heading", { name: "Update billing copy" }),
     ).toBeVisible();
@@ -170,7 +177,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(requirementQueue).toContainText("Harden auth checks");
     await expect(requirementQueue).not.toContainText("Update billing copy");
     await expect(decisionQueue).toContainText("1 waiting");
-    await expect(decisionQueue).toContainText("Review merge candidate");
+    await expect(decisionQueue).toContainText(
+      "Review evidence / view manual git apply command",
+    );
     await expect(decisionQueue).not.toContainText("Retry failed gate");
     await expect(
       focusPanel.getByRole("heading", { name: "Harden auth checks" }),
@@ -410,7 +419,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Operator token required",
     );
     await expect(page.locator(".decisionQueuePanel")).not.toContainText(
-      "Review merge candidate",
+      "Review evidence / view manual git apply command",
     );
 
     await page.locator(".requirementDetailDisclosure > summary").click();
@@ -1151,7 +1160,7 @@ test.describe("Requirement Delivery Console smoke", () => {
 
     await expectMetric(page, "Waiting Review", "1");
     await expect(page.locator(".decisionQueuePanel")).toContainText(
-      "Review merge candidate",
+      "Review evidence / view manual git apply command",
     );
     await page.locator(".requirementDetailDisclosure > summary").click();
 
@@ -1181,7 +1190,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toContainText("Review approved: Viewer readable requirement");
     await expectMetric(page, "Waiting Review", "0");
     await expect(page.locator(".decisionQueuePanel")).not.toContainText(
-      "Review merge candidate",
+      "Review evidence / view manual git apply command",
     );
     await expect(page.getByLabel("Gate Result / Review Evidence")).toContainText(
       "Approved delivery",
@@ -1219,6 +1228,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Waiting Review",
       "Retry failed gate",
       "Review merge candidate",
+      "Review evidence / view manual git apply command",
     ]);
     await expectMobileSectionOrder(page, [
       {

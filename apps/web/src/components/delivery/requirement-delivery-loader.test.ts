@@ -45,7 +45,7 @@ describe("requirement delivery loader", () => {
     });
     expect(model.decisionQueue[0]).toMatchObject({
       requirementId: "workflow-review",
-      actionLabel: "Review merge candidate"
+      actionLabel: "Review evidence / view manual git apply command"
     });
   });
 

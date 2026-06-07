@@ -874,7 +874,7 @@ describe("delivery console model", () => {
         id: "workflow-review:review",
         requirementId: "workflow-review",
         title: "Harden auth checks",
-        actionLabel: "Review merge candidate",
+        actionLabel: "Review evidence / view manual git apply command",
         severity: "warning"
       }
     ]);
