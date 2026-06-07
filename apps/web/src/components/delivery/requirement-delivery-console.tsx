@@ -555,7 +555,7 @@ export function RequirementDeliveryConsole({
                 >
                   <span>{decision.severityLabel}</span>
                   <strong>{decision.title}</strong>
-                  <p>{decision.actionLabel}</p>
+                  <p>{buildDecisionActionLabel(decision.actionLabel, viewerMode)}</p>
                 </button>
               ))}
             </div>
@@ -608,6 +608,10 @@ function buildRequirementLifecycleSuccessMessage(
   }
 
   return `${successActionMessages[action]} for ${requirementTitle}`;
+}
+
+function buildDecisionActionLabel(actionLabel: string, viewerMode: boolean): string {
+  return viewerMode ? "Operator token required" : actionLabel;
 }
 
 function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {

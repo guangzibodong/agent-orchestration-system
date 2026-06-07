@@ -472,6 +472,28 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("disabled");
   });
 
+  it("renders decision queue actions as read-only in viewer mode", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([
+          workflow,
+          {
+            ...workflow,
+            id: "workflow-gate-failed",
+            goal: "Fix failed checkout gate",
+            status: "gate_failed",
+          },
+        ]),
+        viewerMode: true,
+      }),
+    );
+    const decisionQueue = extractDecisionQueue(html);
+
+    expect(decisionQueue).toContain("Operator token required");
+    expect(decisionQueue).not.toContain("Review merge candidate");
+    expect(decisionQueue).not.toContain("Retry failed gate");
+  });
+
   it("renders a New Requirement panel with the frozen ticket fields", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {
@@ -758,6 +780,16 @@ describe("RequirementDeliveryConsole", () => {
 function extractFocusPanel(html: string): string {
   const start = html.indexOf('class="deliveryPanel deliveryFocusPanel"');
   const end = html.indexOf('class="deliveryPanel decisionQueuePanel"');
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+}
+
+function extractDecisionQueue(html: string): string {
+  const start = html.indexOf('class="deliveryPanel decisionQueuePanel"');
+  const end = html.indexOf("</aside>", start);
 
   expect(start).toBeGreaterThanOrEqual(0);
   expect(end).toBeGreaterThan(start);

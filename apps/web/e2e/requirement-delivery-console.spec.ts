@@ -227,6 +227,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       }),
     ).toHaveCount(0);
     await expect(page.locator(".decisionQueuePanel")).toContainText(
+      "Operator token required",
+    );
+    await expect(page.locator(".decisionQueuePanel")).not.toContainText(
       "Review merge candidate",
     );
 
