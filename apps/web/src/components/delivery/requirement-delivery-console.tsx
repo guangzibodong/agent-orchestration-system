@@ -123,17 +123,32 @@ export function RequirementDeliveryConsole({
   const [requirementReviewActionState, setRequirementReviewActionState] =
     useState<RequirementReviewActionState>();
   const [selectedRequirementId, setSelectedRequirementId] = useState<string>();
-  const queueRows = buildRequirementQueueRows(model.requirements);
-  const activeQueueCount = model.requirements.filter(
+  const [searchQuery, setSearchQuery] = useState("");
+  const normalizedSearchQuery = normalizeDeliverySearchValue(searchQuery);
+  const visibleRequirements = normalizedSearchQuery
+    ? model.requirements.filter((requirement) =>
+        matchesRequirementSearch(requirement, normalizedSearchQuery),
+      )
+    : model.requirements;
+  const visibleRequirementIds = new Set(
+    visibleRequirements.map((requirement) => requirement.id),
+  );
+  const queueRows = buildRequirementQueueRows(visibleRequirements);
+  const activeQueueCount = visibleRequirements.filter(
     (requirement) => requirement.requirementStage !== "archived",
   ).length;
-  const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
+  const decisionRows = buildDecisionQueueDisplay(model.decisionQueue).filter(
+    (decision) =>
+      !normalizedSearchQuery ||
+      visibleRequirementIds.has(decision.requirementId) ||
+      matchesDecisionSearch(decision, normalizedSearchQuery),
+  );
   const defaultRequirement =
-    model.requirements.find(
+    visibleRequirements.find(
       (requirement) => requirement.requirementStage !== "archived",
-    ) ?? model.requirements[0];
+    ) ?? visibleRequirements[0];
   const selectedRequirement =
-    model.requirements.find(
+    visibleRequirements.find(
       (requirement) => requirement.id === selectedRequirementId,
     ) ?? defaultRequirement;
   const stageSteps = buildRequirementStageStepper(
@@ -271,7 +286,13 @@ export function RequirementDeliveryConsole({
           <div className="deliveryTopbarActions" aria-label="Primary actions">
             <label className="deliverySearch">
               <Search size={16} aria-hidden="true" />
-              <span>Search requirements, repos, reports</span>
+              <input
+                aria-label="Search requirements, repos, reports"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search requirements, repos, reports"
+                type="search"
+                value={searchQuery}
+              />
             </label>
             <button
               className="primaryButton"
@@ -416,7 +437,11 @@ export function RequirementDeliveryConsole({
             </div>
           ) : (
             <div className="deliveryEmptyState">
-              <strong>No requirements yet</strong>
+              <strong>
+                {normalizedSearchQuery
+                  ? "No matching requirements"
+                  : "No requirements yet"}
+              </strong>
             </div>
           )}
         </aside>
@@ -602,7 +627,11 @@ export function RequirementDeliveryConsole({
             </div>
           ) : (
             <div className="deliveryEmptyState">
-              <strong>No decisions waiting</strong>
+              <strong>
+                {normalizedSearchQuery
+                  ? "No matching decisions"
+                  : "No decisions waiting"}
+              </strong>
             </div>
           )}
         </aside>
@@ -653,6 +682,56 @@ function buildRequirementLifecycleSuccessMessage(
 
 function buildDecisionActionLabel(actionLabel: string, viewerMode: boolean): string {
   return viewerMode ? "Operator token required" : actionLabel;
+}
+
+function normalizeDeliverySearchValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function matchesRequirementSearch(
+  requirement: RequirementSummary,
+  query: string,
+): boolean {
+  return [
+    requirement.title,
+    requirement.repositoryLabel,
+    requirement.nextAction,
+    requirement.nodeLabel,
+    requirement.riskLevel,
+    requirement.workflowRunId,
+    requirement.workflowRunStatusLabel,
+    requirement.repositorySafety.repositoryLabel,
+    requirement.repositorySafety.branchLabel,
+    requirement.repositorySafety.headLabel,
+    requirement.repositorySafety.cleanStateLabel,
+    requirement.repositorySafety.allowedRootLabel,
+    requirement.repositorySafety.mergePolicyLabel,
+    requirement.repositorySafety.blockedReason,
+    requirement.repositorySafety.recoveryAction,
+    requirement.reviewEvidence?.reportSummary,
+    requirement.reviewEvidence?.reportRecommendation,
+    requirement.reviewEvidence?.evidenceSourceWorkflowId,
+    requirement.reviewEvidence?.mergeCandidate?.summary,
+    ...(requirement.requirementContract?.contextPaths ?? []),
+    ...(requirement.requirementContract?.acceptanceCriteria ?? []),
+    ...(requirement.requirementContract?.constraints ?? []),
+    ...(requirement.requirementContract?.nonGoals ?? []),
+    ...(requirement.reviewEvidence?.changedFiles ?? []),
+    ...(requirement.reviewEvidence?.patchArtifactPaths ?? []),
+    ...(requirement.artifactLinks?.map((artifact) => artifact.label) ?? []),
+    ...(requirement.artifactLinks?.map((artifact) => artifact.path) ?? []),
+  ].some((value) => value?.toLowerCase().includes(query));
+}
+
+function matchesDecisionSearch(
+  decision: ReturnType<typeof buildDecisionQueueDisplay>[number],
+  query: string,
+): boolean {
+  return [
+    decision.title,
+    decision.actionLabel,
+    decision.severityLabel,
+  ].some((value) => value.toLowerCase().includes(query));
 }
 
 function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {

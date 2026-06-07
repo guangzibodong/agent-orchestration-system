@@ -102,6 +102,56 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toBeVisible();
   });
 
+  test("filters requirement and decision queues from the topbar search", async ({
+    page,
+  }) => {
+    const mutatingRequests: string[] = [];
+
+    await mockApi(page, mixedWorkflows, {
+      onMutatingRequest: ({ method, pathname }) => {
+        mutatingRequests.push(`${method} ${pathname}`);
+      },
+    });
+
+    await page.goto("/");
+
+    const consoleShell = page.locator("main.deliveryShell");
+    const search = consoleShell.getByLabel("Search requirements, repos, reports");
+    const requirementQueue = page.locator(".requirementQueuePanel");
+    const decisionQueue = page.locator(".decisionQueuePanel");
+    const focusPanel = page.locator(".deliveryFocusPanel");
+
+    await search.fill("billing");
+    await expect(requirementQueue).toContainText("1 active");
+    await expect(requirementQueue).toContainText("Update billing copy");
+    await expect(requirementQueue).not.toContainText("Harden auth checks");
+    await expect(decisionQueue).toContainText("1 waiting");
+    await expect(decisionQueue).toContainText("Retry failed gate");
+    await expect(decisionQueue).not.toContainText("Review merge candidate");
+    await expect(
+      focusPanel.getByRole("heading", { name: "Update billing copy" }),
+    ).toBeVisible();
+
+    await search.fill("auth-service");
+    await expect(requirementQueue).toContainText("1 active");
+    await expect(requirementQueue).toContainText("Harden auth checks");
+    await expect(requirementQueue).not.toContainText("Update billing copy");
+    await expect(decisionQueue).toContainText("1 waiting");
+    await expect(decisionQueue).toContainText("Review merge candidate");
+    await expect(decisionQueue).not.toContainText("Retry failed gate");
+    await expect(
+      focusPanel.getByRole("heading", { name: "Harden auth checks" }),
+    ).toBeVisible();
+
+    await search.fill("no matching requirement");
+    await expect(requirementQueue).toContainText("0 active");
+    await expect(requirementQueue).toContainText("No matching requirements");
+    await expect(decisionQueue).toContainText("0 waiting");
+    await expect(decisionQueue).toContainText("No matching decisions");
+    await expect(focusPanel).toContainText("No requirement selected");
+    expect(mutatingRequests).toEqual([]);
+  });
+
   test("surfaces stale launch gate evidence in delivery health", async ({
     page,
   }) => {

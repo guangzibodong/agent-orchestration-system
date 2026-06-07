@@ -105,6 +105,8 @@ describe("RequirementDeliveryConsole", () => {
 
     expect(html).toContain("Requirement Delivery Console");
     expect(html).toContain("New Requirement");
+    expect(html).toContain('type="search"');
+    expect(html).toContain('aria-label="Search requirements, repos, reports"');
     expect(html).toContain("Requirement Queue");
     expect(html).toContain("Repository Safety");
     expect(html).toContain("C:/work/api");
