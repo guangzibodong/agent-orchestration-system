@@ -92,6 +92,10 @@ export function buildNewRequirementPayload(
     errors.push("Add a repository path or ID.");
   }
 
+  if (repositoryPath && repositoryId) {
+    errors.push("Choose either repository path or ID, not both.");
+  }
+
   if (!goal) {
     errors.push("Goal is required.");
   }

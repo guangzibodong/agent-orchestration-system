@@ -905,6 +905,19 @@ describe("RequirementDeliveryConsole", () => {
     });
   });
 
+  it("rejects ambiguous New Requirement repository drafts with both path and ID", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      repositoryPath: "C:/work/shop",
+      repositoryId: "repo-shop",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Choose either repository path or ID, not both."],
+    });
+  });
+
   it("requires at least one blocking quality gate even when optional gates are present", () => {
     const result = buildNewRequirementPayload({
       ...validNewRequirementDraft,
