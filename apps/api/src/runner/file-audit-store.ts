@@ -15,6 +15,7 @@ export type AuditEventInput = Omit<AuditEvent, "id" | "createdAt"> & {
 export type AuditEventFilter = {
   actor?: string;
   jobId?: string;
+  requirementId?: string;
   repositoryId?: string;
   type?: AuditEventType;
   workflowId?: string;
@@ -61,6 +62,13 @@ export class FileAuditStore implements AuditStore {
       if (
         filter.repositoryId &&
         event.metadata?.repositoryId !== filter.repositoryId
+      ) {
+        return false;
+      }
+
+      if (
+        filter.requirementId &&
+        event.metadata?.requirementId !== filter.requirementId
       ) {
         return false;
       }

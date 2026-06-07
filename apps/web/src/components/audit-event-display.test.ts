@@ -199,6 +199,27 @@ describe("audit event display", () => {
     expect(event?.metadataLabel.length).toBeLessThanOrEqual(150);
   });
 
+  it("omits raw output metadata from readable audit rows", () => {
+    const [event] = buildAuditEventDisplay([
+      {
+        id: "event-raw-output",
+        type: "workflow.gate_completed",
+        createdAt: "2026-06-05T10:36:10.513Z",
+        actor: "system",
+        workflowId: "workflow-raw",
+        metadata: {
+          status: "failed",
+          stdout: "RAW_STDOUT_SHOULD_NOT_RENDER",
+          diff: "diff --git a/app.ts b/app.ts"
+        }
+      }
+    ]);
+
+    expect(event?.metadataLabel).toBe("status=failed");
+    expect(event?.metadataLabel).not.toContain("RAW_STDOUT_SHOULD_NOT_RENDER");
+    expect(event?.metadataLabel).not.toContain("diff --git");
+  });
+
   it("summarizes retry cleanup metadata as an operator-ready audit row", () => {
     const [event] = buildAuditEventDisplay([
       {

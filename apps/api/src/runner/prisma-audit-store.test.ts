@@ -166,4 +166,34 @@ describe("PrismaAuditStore", () => {
       })
     ).resolves.toEqual([jobEvent]);
   });
+
+  it("filters audit events by requirement metadata for requirement audit history", async () => {
+    const client = createAuditClient();
+    const store = new PrismaAuditStore(client);
+
+    const requirementEvent = await store.append({
+      type: "workflow.created",
+      actor: "operator",
+      workflowId: "workflow-1",
+      metadata: {
+        requirementId: "requirement-1",
+        status: "ready"
+      }
+    });
+    await store.append({
+      type: "workflow.created",
+      actor: "operator",
+      workflowId: "workflow-2",
+      metadata: {
+        requirementId: "requirement-2",
+        status: "ready"
+      }
+    });
+
+    await expect(
+      store.list({
+        requirementId: "requirement-1"
+      })
+    ).resolves.toEqual([requirementEvent]);
+  });
 });

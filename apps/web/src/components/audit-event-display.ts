@@ -66,7 +66,9 @@ function formatMetadata(
   type: AuditEventType,
   metadata?: Record<string, string>
 ): string {
-  const entries = Object.entries(metadata ?? {});
+  const entries = Object.entries(metadata ?? {}).filter(
+    ([key]) => !isRawOutputMetadataKey(key)
+  );
 
   if (entries.length === 0) {
     return "No metadata";
@@ -79,6 +81,18 @@ function formatMetadata(
   return entries
     .map(([key, value]) => `${key}=${compactMetadataValue(value)}`)
     .join(", ");
+}
+
+function isRawOutputMetadataKey(key: string): boolean {
+  return [
+    "diff",
+    "log",
+    "output",
+    "patch",
+    "raw",
+    "stderr",
+    "stdout"
+  ].includes(key.toLowerCase());
 }
 
 function formatRetryMetadata(metadata: Record<string, string>): string {

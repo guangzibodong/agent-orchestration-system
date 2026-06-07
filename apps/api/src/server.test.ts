@@ -3085,6 +3085,92 @@ describe("runner API", () => {
     });
   });
 
+  it("filters audit events by requirement metadata for requirement detail history", async () => {
+    const now = "2026-06-06T11:00:00.000Z";
+    const auditEvents: AuditEvent[] = [
+      {
+        id: "audit-requirement-created",
+        type: "workflow.created",
+        actor: "operator",
+        workflowId: "workflow-linked",
+        createdAt: now,
+        metadata: {
+          requirementId: "requirement-linked",
+          status: "ready",
+        },
+      },
+      {
+        id: "audit-requirement-enqueued",
+        type: "workflow.enqueued",
+        actor: "operator",
+        workflowId: "workflow-linked",
+        jobId: "job-linked",
+        createdAt: "2026-06-06T11:01:00.000Z",
+        metadata: {
+          requirementId: "requirement-linked",
+          status: "queued",
+        },
+      },
+      {
+        id: "audit-other-requirement",
+        type: "workflow.created",
+        actor: "operator",
+        workflowId: "workflow-other",
+        createdAt: "2026-06-06T11:02:00.000Z",
+        metadata: {
+          requirementId: "requirement-other",
+          status: "ready",
+        },
+      },
+    ];
+    const auditStore: AuditStore = {
+      list: vi.fn(async (filter) =>
+        auditEvents.filter((event) => {
+          const requirementId = (
+            filter as { requirementId?: string } | undefined
+          )?.requirementId;
+
+          if (
+            requirementId &&
+            event.metadata?.requirementId !== requirementId
+          ) {
+            return false;
+          }
+
+          return true;
+        }),
+      ),
+      append: vi.fn(),
+    };
+    const app = buildApp(undefined, { auditStore });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/audit-events?requirementId=requirement-linked&limit=8",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(auditStore.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requirementId: "requirement-linked",
+      }),
+    );
+    expect(response.json()).toEqual([
+      expect.objectContaining({
+        id: "audit-requirement-created",
+        metadata: expect.objectContaining({
+          requirementId: "requirement-linked",
+        }),
+      }),
+      expect.objectContaining({
+        id: "audit-requirement-enqueued",
+        metadata: expect.objectContaining({
+          requirementId: "requirement-linked",
+        }),
+      }),
+    ]);
+  });
+
   it("restores completed job history when the API is rebuilt", async () => {
     const demoRoot = await mkdtemp(
       join(tmpdir(), "mawo-api-job-persist-test-"),

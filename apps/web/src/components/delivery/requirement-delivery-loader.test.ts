@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AuditEvent } from "@mawo/shared";
 import { loadRequirementDeliveryModel } from "./requirement-delivery-loader";
 
 describe("requirement delivery loader", () => {
@@ -31,7 +32,9 @@ describe("requirement delivery loader", () => {
       "/requirements",
       "/agents/health",
       "/workflows/workflow-review/report",
-      "/workflows/workflow-review/merge-candidate"
+      "/workflows/workflow-review/merge-candidate",
+      "/audit-events?requirementId=workflow-review&limit=8",
+      "/audit-events?workflowId=workflow-review&limit=8"
     ]);
     expect(model.requirements).toHaveLength(1);
     expect(model.requirements[0]).toMatchObject({
@@ -686,5 +689,113 @@ describe("requirement delivery loader", () => {
         })
       ])
     );
+  });
+
+  it("loads requirement audit trail from requirement and linked workflow events", async () => {
+    const requests: string[] = [];
+    const requirementAuditEvent: AuditEvent = {
+      id: "audit-requirement-created",
+      type: "workflow.created",
+      actor: "operator",
+      workflowId: "workflow-linked",
+      createdAt: "2026-06-06T11:00:00.000Z",
+      metadata: {
+        requirementId: "requirement-linked",
+        status: "ready"
+      }
+    };
+    const workflowAuditEvent: AuditEvent = {
+      id: "audit-workflow-reviewed",
+      type: "workflow.reviewed",
+      actor: "operator",
+      workflowId: "workflow-linked",
+      createdAt: "2026-06-06T11:02:00.000Z",
+      metadata: {
+        decision: "approved"
+      }
+    };
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [
+          {
+            id: "workflow-linked",
+            goal: "Workflow evidence",
+            repositoryPath: "C:/work/shop",
+            status: "needs_review",
+            updatedAt: "2026-06-06T11:04:00.000Z",
+            tasks: [{ id: "task-1", title: "Patch", status: "passed" }],
+            qualityGates: [
+              { id: "gate-1", title: "Unit tests", status: "passed" }
+            ]
+          }
+        ];
+      }
+
+      if (path === "/requirements") {
+        return [
+          {
+            id: "requirement-linked",
+            title: "Run checkout ticket",
+            repositoryPath: "C:/work/shop",
+            goal: "Run checkout evidence",
+            acceptanceCriteria: ["Evidence is reviewable"],
+            constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "medium",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch",
+                agent: "shell",
+                instructions: "Patch"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "needs_review",
+            currentWorkflowRunId: "workflow-linked",
+            runLinks: [
+              {
+                workflowRunId: "workflow-linked",
+                status: "needs_review",
+                linkedAt: "2026-06-06T11:05:00.000Z"
+              }
+            ],
+            createdAt: "2026-06-06T11:00:00.000Z",
+            updatedAt: "2026-06-06T11:05:00.000Z"
+          }
+        ];
+      }
+
+      if (path === "/audit-events?requirementId=requirement-linked&limit=8") {
+        return [requirementAuditEvent];
+      }
+
+      if (path === "/audit-events?workflowId=workflow-linked&limit=8") {
+        return [workflowAuditEvent, requirementAuditEvent];
+      }
+
+      return [];
+    });
+
+    expect(requests).toContain(
+      "/audit-events?requirementId=requirement-linked&limit=8"
+    );
+    expect(requests).toContain(
+      "/audit-events?workflowId=workflow-linked&limit=8"
+    );
+    expect(model.requirements[0]?.auditTrail).toEqual({
+      events: [workflowAuditEvent, requirementAuditEvent]
+    });
   });
 });

@@ -816,6 +816,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
       actor?: string;
       jobId?: string;
       limit?: string;
+      requirementId?: string;
       repositoryId?: string;
       type?: string;
       workflowId?: string;
@@ -835,6 +836,7 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     const events = await auditStore.list({
       actor: request.query.actor,
       jobId: request.query.jobId,
+      requirementId: request.query.requirementId,
       repositoryId: request.query.repositoryId,
       type: eventType?.data,
       workflowId: request.query.workflowId,

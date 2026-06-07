@@ -1,4 +1,5 @@
 import type {
+  AuditEvent,
   AgentHealth,
   RequirementDeliveryTicket,
   RepositorySafety,
@@ -134,6 +135,10 @@ export type RequirementWorkspaceCleanupSummary = {
   }>;
 };
 
+export type RequirementAuditTrail = {
+  events: AuditEvent[];
+};
+
 export type RequirementSummary = {
   id: string;
   source?: "requirement" | "workflow";
@@ -157,6 +162,7 @@ export type RequirementSummary = {
   taskDefinitions?: RequirementTaskDefinition[];
   qualityGateDefinitions?: RequirementQualityGateDefinition[];
   reviewEvidence?: RequirementReviewEvidence;
+  auditTrail?: RequirementAuditTrail;
   workspaceCleanup?: RequirementWorkspaceCleanupSummary;
   agentAvailability?: RequirementAgentAvailabilitySummary;
   actionBlockKind?: "repository-safety" | "agent-availability";

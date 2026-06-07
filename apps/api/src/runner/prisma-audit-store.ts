@@ -65,13 +65,27 @@ export class PrismaAuditStore implements AuditStore {
     });
     const events = rows.map(toAuditEvent);
 
-    if (!filter.repositoryId) {
+    if (!filter.repositoryId && !filter.requirementId) {
       return events;
     }
 
-    return events.filter(
-      (event) => event.metadata?.repositoryId === filter.repositoryId
-    );
+    return events.filter((event) => {
+      if (
+        filter.repositoryId &&
+        event.metadata?.repositoryId !== filter.repositoryId
+      ) {
+        return false;
+      }
+
+      if (
+        filter.requirementId &&
+        event.metadata?.requirementId !== filter.requirementId
+      ) {
+        return false;
+      }
+
+      return true;
+    });
   }
 
   async append(input: AuditEventInput): Promise<AuditEvent> {

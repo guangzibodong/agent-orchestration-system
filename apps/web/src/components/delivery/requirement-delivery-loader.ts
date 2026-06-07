@@ -1,5 +1,6 @@
 import {
   agentHealthSchema,
+  auditEventSchema,
   mergeCandidateSchema,
   requirementDeliveryTicketSchema,
   repositorySafetySchema,
@@ -7,6 +8,7 @@ import {
 } from "@mawo/shared";
 import type {
   AgentHealth,
+  AuditEvent,
   MergeCandidate,
   RepositorySafety,
   RequirementDeliveryTicket,
@@ -16,6 +18,7 @@ import type {
 import type {
   DeliveryConsoleModel,
   RequirementArtifactLink,
+  RequirementAuditTrail,
   RequirementReviewEvidence,
   RequirementSummary
 } from "./delivery-console-model";
@@ -198,16 +201,32 @@ async function loadRequirementArtifactEvidence(
   model: DeliveryConsoleModel
 ): Promise<DeliveryConsoleModel> {
   const evidenceResults = await Promise.allSettled(
-    model.requirements.map(async (requirement) => ({
-      ...(await loadRequirementReviewEvidence(api, requirement)),
-      id: requirement.id
-    }))
+    model.requirements.map(async (requirement) => {
+      const [reviewResult, auditResult] = await Promise.allSettled([
+        loadRequirementReviewEvidence(api, requirement),
+        loadRequirementAuditTrail(api, requirement)
+      ]);
+      const reviewEvidence =
+        reviewResult.status === "fulfilled"
+          ? reviewResult.value
+          : { artifactLinks: [] };
+
+      return {
+        ...reviewEvidence,
+        auditTrail:
+          auditResult.status === "fulfilled"
+            ? auditResult.value
+            : undefined,
+        id: requirement.id
+      };
+    })
   );
   const linksByRequirementId = new Map<string, RequirementArtifactLink[]>();
   const reviewEvidenceByRequirementId = new Map<
     string,
     RequirementReviewEvidence
   >();
+  const auditTrailByRequirementId = new Map<string, RequirementAuditTrail>();
 
   for (const result of evidenceResults) {
     if (
@@ -223,9 +242,20 @@ async function loadRequirementArtifactEvidence(
         result.value.reviewEvidence
       );
     }
+
+    if (
+      result.status === "fulfilled" &&
+      result.value.auditTrail?.events.length
+    ) {
+      auditTrailByRequirementId.set(result.value.id, result.value.auditTrail);
+    }
   }
 
-  if (!linksByRequirementId.size && !reviewEvidenceByRequirementId.size) {
+  if (
+    !linksByRequirementId.size &&
+    !reviewEvidenceByRequirementId.size &&
+    !auditTrailByRequirementId.size
+  ) {
     return model;
   }
 
@@ -234,16 +264,71 @@ async function loadRequirementArtifactEvidence(
     requirements: model.requirements.map((requirement) => {
       const artifactLinks = linksByRequirementId.get(requirement.id);
       const reviewEvidence = reviewEvidenceByRequirementId.get(requirement.id);
+      const auditTrail = auditTrailByRequirementId.get(requirement.id);
 
-      return artifactLinks || reviewEvidence
+      return artifactLinks || reviewEvidence || auditTrail
         ? {
             ...requirement,
             ...(artifactLinks ? { artifactLinks } : {}),
-            ...(reviewEvidence ? { reviewEvidence } : {})
+            ...(reviewEvidence ? { reviewEvidence } : {}),
+            ...(auditTrail ? { auditTrail } : {})
           }
         : requirement;
     })
   };
+}
+
+async function loadRequirementAuditTrail(
+  api: ApiClient,
+  requirement: RequirementSummary
+): Promise<RequirementAuditTrail | undefined> {
+  const paths = buildRequirementAuditPaths(requirement);
+
+  if (!paths.length) {
+    return undefined;
+  }
+
+  const results = await Promise.allSettled(
+    paths.map(async (path) => auditEventSchema.array().parse(await api(path)))
+  );
+  const events = dedupeAuditEvents(
+    results.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : []
+    )
+  ).sort(compareAuditEventsNewestFirst);
+
+  return events.length ? { events: events.slice(0, 8) } : undefined;
+}
+
+function buildRequirementAuditPaths(requirement: RequirementSummary): string[] {
+  return distinctStrings([
+    buildAuditPath("requirementId", requirement.id),
+    requirement.workflowRunId
+      ? buildAuditPath("workflowId", requirement.workflowRunId)
+      : undefined
+  ]);
+}
+
+function buildAuditPath(
+  key: "requirementId" | "workflowId",
+  value: string
+): string {
+  const params = new URLSearchParams();
+  params.set(key, value);
+  params.set("limit", "8");
+
+  return `/audit-events?${params.toString()}`;
+}
+
+function dedupeAuditEvents(events: AuditEvent[]): AuditEvent[] {
+  return [...new Map(events.map((event) => [event.id, event])).values()];
+}
+
+function compareAuditEventsNewestFirst(
+  left: AuditEvent,
+  right: AuditEvent
+): number {
+  return Date.parse(right.createdAt) - Date.parse(left.createdAt);
 }
 
 async function loadRequirementReviewEvidence(

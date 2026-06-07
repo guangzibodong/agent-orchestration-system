@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
+  AuditEvent,
   LaunchGateEvidence,
   RepositorySafety,
   RequirementDeliveryTicket,
@@ -401,6 +402,42 @@ test.describe("Requirement Delivery Console smoke", () => {
     page,
   }) => {
     await mockApi(page, mixedWorkflows, {
+      auditEvents: [
+        {
+          id: "audit-requirement-enqueued",
+          type: "workflow.enqueued",
+          actor: "operator",
+          workflowId: "workflow-needs-review",
+          jobId: "job-needs-review",
+          createdAt: "2026-06-06T11:06:00.000Z",
+          metadata: {
+            requirementId: "requirement-viewer-readable",
+            status: "queued",
+          },
+        },
+        {
+          id: "audit-workflow-reviewed",
+          type: "workflow.reviewed",
+          actor: "operator",
+          workflowId: "workflow-needs-review",
+          createdAt: "2026-06-06T11:08:00.000Z",
+          metadata: {
+            decision: "approved",
+          },
+        },
+        {
+          id: "audit-retry-requested",
+          type: "workflow.retry_requested",
+          actor: "operator",
+          workflowId: "workflow-needs-review",
+          createdAt: "2026-06-06T11:07:00.000Z",
+          metadata: {
+            previousStatus: "gate_failed",
+            status: "ready",
+            cleanedCount: "1",
+          },
+        },
+      ],
       mergeCandidates: {
         "requirement-viewer-readable": requirementMergeCandidate,
       },
@@ -547,6 +584,16 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(valueReport).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(detail).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
     await expect(detail).not.toContainText("diff --git");
+    const auditHistory = detail.getByLabel("Requirement audit history");
+    await expect(auditHistory).toContainText("Audit history");
+    await expect(auditHistory).toContainText("Workflow Reviewed");
+    await expect(auditHistory).toContainText("Retry Requested");
+    await expect(auditHistory).toContainText("Workflow Enqueued");
+    await expect(auditHistory).toContainText("operator");
+    await expect(auditHistory).toContainText("decision=approved");
+    await expect(auditHistory).toContainText("gate_failed -> ready");
+    await expect(auditHistory).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
+    await expect(auditHistory).not.toContainText("diff --git");
     const detailDrawer = page.locator(".requirementDetailShell .artifactDrawer");
     await detailDrawer.getByText("Artifacts", { exact: true }).click();
     await expect(
@@ -2243,6 +2290,7 @@ async function mockApi(
     onJobCancel?: (request: { id: string }) => WorkflowJob | unknown;
     onJobRequest?: (request: { id: string }) => WorkflowJob | unknown;
     launchGateEvidence?: LaunchGateEvidence;
+    auditEvents?: AuditEvent[];
     mergeCandidates?: Record<string, unknown>;
     reports?: Record<string, unknown>;
     repositorySafetyByRequirementId?: Record<string, RepositorySafety>;
@@ -2271,6 +2319,30 @@ async function mockApi(
 
     if (request.method() === "GET" && url.pathname === "/requirements") {
       await route.fulfill({ json: options.requirements ?? [] });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/audit-events") {
+      const requirementId = url.searchParams.get("requirementId");
+      const workflowId = url.searchParams.get("workflowId");
+      const auditEvents = options.auditEvents ?? [];
+
+      await route.fulfill({
+        json: auditEvents.filter((event) => {
+          if (
+            requirementId &&
+            event.metadata?.requirementId !== requirementId
+          ) {
+            return false;
+          }
+
+          if (workflowId && event.workflowId !== workflowId) {
+            return false;
+          }
+
+          return true;
+        }),
+      });
       return;
     }
 

@@ -104,6 +104,32 @@ const requirement: RequirementSummary = {
       createdAt: "2026-06-06T11:06:00.000Z"
     }
   },
+  auditTrail: {
+    events: [
+      {
+        id: "audit-workflow-reviewed",
+        type: "workflow.reviewed",
+        actor: "operator",
+        workflowId: "workflow-review",
+        createdAt: "2026-06-06T11:08:00.000Z",
+        metadata: {
+          decision: "approved"
+        }
+      },
+      {
+        id: "audit-retry-requested",
+        type: "workflow.retry_requested",
+        actor: "operator",
+        workflowId: "workflow-review",
+        createdAt: "2026-06-06T11:07:00.000Z",
+        metadata: {
+          previousStatus: "gate_failed",
+          status: "ready",
+          cleanedCount: "1"
+        }
+      }
+    ]
+  },
   availableActions: []
 };
 
@@ -330,6 +356,22 @@ describe("RequirementDetailShell", () => {
     expect(valueReportHtml).not.toContain("Review required before manual apply");
   });
 
+  it("renders readable requirement audit history without raw audit streams", () => {
+    const html = renderDetail();
+    const auditHtml = extractAuditSection(html);
+
+    expect(auditHtml).toContain("Audit history");
+    expect(auditHtml).toContain("Workflow Reviewed");
+    expect(auditHtml).toContain("Retry Requested");
+    expect(auditHtml).toContain("operator");
+    expect(auditHtml).toContain("workflow-r");
+    expect(auditHtml).toContain("decision=approved");
+    expect(auditHtml).toContain("gate_failed -&gt; ready");
+    expect(auditHtml).toContain("cleaned 1 workspace");
+    expect(auditHtml).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
+    expect(auditHtml).not.toContain("diff --git");
+  });
+
   it("keeps optional gate issues visible without blocking review in value reports", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDetailShell, {
@@ -490,4 +532,12 @@ function extractValueReportSection(html: string): string {
   expect(end).toBeGreaterThan(start);
 
   return html.slice(start, end);
+}
+
+function extractAuditSection(html: string): string {
+  const start = html.indexOf('id="requirement-detail-audit"');
+
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  return html.slice(start);
 }

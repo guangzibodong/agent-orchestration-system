@@ -14,6 +14,7 @@ import type {
   RequirementSummary
 } from "./delivery-console-model";
 import { ArtifactDrawer, type ArtifactDrawerLink } from "./artifact-drawer";
+import { buildAuditEventDisplay } from "../audit-event-display";
 
 type RequirementDetailShellProps = {
   actionState?: {
@@ -190,9 +191,72 @@ export function RequirementDetailShell({
                 viewerMode={viewerMode}
               />
             ) : null}
+
+            {section.title === "Audit" ? (
+              <RequirementAuditHistory requirement={requirement} />
+            ) : null}
           </section>
         ))}
       </div>
+    </section>
+  );
+}
+
+function RequirementAuditHistory({
+  requirement,
+}: {
+  requirement?: RequirementSummary;
+}) {
+  const events = requirement?.auditTrail?.events ?? [];
+  const displayEvents = buildAuditEventDisplay(events);
+
+  return (
+    <section
+      className="requirementAuditHistory"
+      aria-label="Requirement audit history"
+    >
+      <div>
+        <p className="eyebrow">Audit history</p>
+        <strong>
+          {displayEvents.length
+            ? `${displayEvents.length} linked events`
+            : "No audit events linked yet"}
+        </strong>
+      </div>
+      {displayEvents.length ? (
+        <ul className="requirementAuditHistoryList">
+          {displayEvents.map((event) => (
+            <li key={event.id}>
+              <div>
+                <strong>{event.label}</strong>
+                <span>{event.createdAt}</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>Actor</dt>
+                  <dd>{event.actor}</dd>
+                </div>
+                {event.workflowLabel ? (
+                  <div>
+                    <dt>Workflow</dt>
+                    <dd>{event.workflowLabel}</dd>
+                  </div>
+                ) : null}
+                {event.jobLabel ? (
+                  <div>
+                    <dt>Job</dt>
+                    <dd>{event.jobLabel}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Metadata</dt>
+                  <dd>{event.metadataLabel}</dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

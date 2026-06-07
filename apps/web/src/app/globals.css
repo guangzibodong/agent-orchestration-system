@@ -933,6 +933,92 @@ button {
   overflow-wrap: anywhere;
 }
 
+.requirementAuditHistory {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+  background: #f8fbfc;
+  padding: 12px;
+}
+
+.requirementAuditHistory > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.requirementAuditHistory strong {
+  overflow-wrap: anywhere;
+}
+
+.requirementAuditHistory > div > strong {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.requirementAuditHistoryList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requirementAuditHistoryList li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+}
+
+.requirementAuditHistoryList li > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.requirementAuditHistoryList li > div span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.requirementAuditHistoryList dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.requirementAuditHistoryList dl div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.requirementAuditHistoryList dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.requirementAuditHistoryList dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .requirementReviewAcceptance {
   display: grid;
   gap: 10px;

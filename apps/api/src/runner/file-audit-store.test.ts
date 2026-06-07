@@ -60,4 +60,37 @@ describe("FileAuditStore", () => {
       })
     ).toEqual([jobEvent]);
   });
+
+  it("filters events by requirement metadata for requirement audit history", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mawo-audit-requirement-test-"));
+    tempRoots.push(root);
+    const store = new FileAuditStore({
+      stateFile: join(root, "state", "audit-events.json")
+    });
+
+    const requirementEvent = store.append({
+      type: "workflow.created",
+      actor: "operator",
+      workflowId: "workflow-1",
+      metadata: {
+        requirementId: "requirement-1",
+        status: "ready"
+      }
+    });
+    store.append({
+      type: "workflow.created",
+      actor: "operator",
+      workflowId: "workflow-2",
+      metadata: {
+        requirementId: "requirement-2",
+        status: "ready"
+      }
+    });
+
+    expect(
+      store.list({
+        requirementId: "requirement-1"
+      })
+    ).toEqual([requirementEvent]);
+  });
 });
