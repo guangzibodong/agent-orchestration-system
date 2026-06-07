@@ -30,4 +30,21 @@ describe("requirement stage stepper", () => {
       { id: "delivered", label: "Delivered", state: "upcoming" }
     ]);
   });
+
+  it("keeps archived requirements distinct from delivered requirements", () => {
+    expect(buildRequirementStageStepper("archived")).toEqual([
+      { id: "draft", label: "Draft", state: "complete" },
+      { id: "clarify", label: "Clarify", state: "complete" },
+      { id: "plan", label: "Plan", state: "complete" },
+      { id: "run", label: "Run", state: "complete" },
+      { id: "gates", label: "Gates", state: "complete" },
+      { id: "review", label: "Review", state: "complete" },
+      {
+        id: "delivered",
+        label: "Delivered",
+        state: "upcoming",
+        reason: "Archived without active delivery"
+      }
+    ]);
+  });
 });

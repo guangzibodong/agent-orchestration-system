@@ -49,10 +49,18 @@ export function buildRequirementStageStepper(
       };
     }
 
-    if (stage === "delivered" || stage === "archived") {
+    if (stage === "delivered") {
       return {
         ...step,
         state: "complete"
+      };
+    }
+
+    if (stage === "archived" && step.id === "delivered") {
+      return {
+        ...step,
+        state: "upcoming",
+        reason: "Archived without active delivery"
       };
     }
 
