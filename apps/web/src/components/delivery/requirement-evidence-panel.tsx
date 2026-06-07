@@ -80,6 +80,39 @@ export function buildRequirementEvidenceDisplay(
     };
   }
 
+  if (
+    requirement.requirementStage === "archived" ||
+    requirement.executionStatus === "archived"
+  ) {
+    return {
+      tone: "muted",
+      title: "Archived evidence",
+      statusLabel: "Archived",
+      summary:
+        "Requirement is archived and no longer active; available evidence remains read-only.",
+      items: [
+        {
+          label: "Archive status",
+          value: "No longer active",
+        },
+        {
+          label: "Evidence action",
+          value: requirement.nextAction,
+        },
+        {
+          label: "Last evidence update",
+          value: requirement.updatedAt,
+        },
+        ...buildReviewEvidenceSummaryItems(requirement, {
+          includeManualApplyCommand: false,
+        }),
+      ],
+      artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
+        includeMergeCandidate: false,
+      }),
+    };
+  }
+
   if (requirement.executionStatus === "gate_failed") {
     return {
       tone: "danger",
@@ -220,6 +253,7 @@ export function buildRequirementEvidenceDisplay(
 
 function buildReviewEvidenceSummaryItems(
   requirement: RequirementSummary,
+  options: { includeManualApplyCommand?: boolean } = {},
 ): RequirementEvidenceItem[] {
   const evidence = requirement.reviewEvidence;
 
@@ -256,7 +290,7 @@ function buildReviewEvidenceSummaryItems(
     evidence.mergeCandidate?.applyCommand ??
     (patchArtifactPath ? `git apply "${patchArtifactPath}"` : undefined);
 
-  if (applyCommand) {
+  if (options.includeManualApplyCommand !== false && applyCommand) {
     items.push({
       label: "Manual apply command",
       value: applyCommand,

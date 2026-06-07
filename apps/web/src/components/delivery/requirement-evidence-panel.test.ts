@@ -129,4 +129,47 @@ describe("RequirementEvidencePanel display model", () => {
     );
     expect(display.items.some((item) => item.value.includes("{"))).toBe(false);
   });
+
+  it("treats archived requirement evidence as inactive read-only evidence", () => {
+    const display = buildRequirementEvidenceDisplay({
+      ...reviewReadyRequirement,
+      requirementStage: "archived",
+      executionStatus: "archived",
+      nextAction: "View archived evidence",
+      workflowRunStatus: "archived",
+      workflowRunStatusLabel: "Archived",
+    });
+
+    expect(display.tone).toBe("muted");
+    expect(display.title).toBe("Archived evidence");
+    expect(display.statusLabel).toBe("Archived");
+    expect(display.summary).toBe(
+      "Requirement is archived and no longer active; available evidence remains read-only.",
+    );
+    expect(display.items).toEqual(
+      expect.arrayContaining([
+        {
+          label: "Archive status",
+          value: "No longer active",
+        },
+        {
+          label: "Evidence action",
+          value: "View archived evidence",
+        },
+        {
+          label: "Last evidence update",
+          value: "2026-06-06T11:05:00.000Z",
+        },
+      ]),
+    );
+    expect(display.items.some((item) => item.label === "Manual apply command")).toBe(
+      false,
+    );
+    expect(display.artifactLinks.map((artifact) => artifact.label)).toEqual(
+      expect.arrayContaining(["Current workflow", "Requirement report"]),
+    );
+    expect(display.artifactLinks.map((artifact) => artifact.label)).not.toContain(
+      "Merge candidate evidence",
+    );
+  });
 });
