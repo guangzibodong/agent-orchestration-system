@@ -398,6 +398,7 @@ function RequirementReviewAcceptance({
   const reviewReady =
     requirement?.executionStatus === "needs_review" &&
     Boolean(requirement.workflowRunId);
+  const archived = isArchivedRequirement(requirement);
   const reviewLoading =
     reviewActionState?.status === "loading" &&
     reviewActionState.requirementId === requirement?.id;
@@ -433,10 +434,17 @@ function RequirementReviewAcceptance({
             <dt>Workflow run</dt>
             <dd>{requirement?.workflowRunId ?? "No workflow run linked"}</dd>
           </div>
-          <div>
-            <dt>Manual apply command</dt>
-            <dd>{applyCommand}</dd>
-          </div>
+          {archived ? (
+            <div>
+              <dt>Review mode</dt>
+              <dd>Archived requirement; evidence is read-only</dd>
+            </div>
+          ) : (
+            <div>
+              <dt>Manual apply command</dt>
+              <dd>{applyCommand}</dd>
+            </div>
+          )}
         </dl>
       </section>
 
@@ -831,6 +839,10 @@ function buildLastExecutionResult(requirement: RequirementSummary): string {
 }
 
 function buildGateSummary(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived gate evidence retained";
+  }
+
   if (requirement.executionStatus === "gate_failed") {
     return "Required gate failed";
   }
@@ -850,6 +862,10 @@ function buildGateSummary(requirement: RequirementSummary): string {
 }
 
 function buildGateBlockingRule(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived requirement is no longer active";
+  }
+
   if (requirement.executionStatus === "gate_failed") {
     return "Failed required gate blocks merge approval";
   }
@@ -893,6 +909,10 @@ function formatGateEvidenceDetail(
 }
 
 function buildMergeCandidateStatus(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "No active merge candidate";
+  }
+
   if (
     requirement.executionStatus === "needs_review" ||
     requirement.executionStatus === "completed"
@@ -908,6 +928,10 @@ function buildMergeCandidateStatus(requirement: RequirementSummary): string {
 }
 
 function buildReviewSummary(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived requirement; evidence is read-only";
+  }
+
   if (requirement.reviewEvidence?.mergeCandidate?.summary) {
     return requirement.reviewEvidence.mergeCandidate.summary;
   }
@@ -957,6 +981,10 @@ function buildReviewDecisionState(
     return "No selected requirement for review";
   }
 
+  if (isArchivedRequirement(requirement)) {
+    return "Archived requirement; evidence is read-only";
+  }
+
   if (viewerMode) {
     return "Viewer read-only; operator token required";
   }
@@ -982,6 +1010,10 @@ function buildReviewDecisionState(
 }
 
 function buildValueStatus(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived evidence retained";
+  }
+
   if (requirement.executionStatus === "completed") {
     return "Goal achieved after review";
   }
@@ -1002,6 +1034,10 @@ function buildValueReportSummary(requirement: RequirementSummary): string {
 }
 
 function buildValueReportOutcome(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived requirement; evidence retained for audit";
+  }
+
   if (requirement.executionStatus === "gate_failed") {
     return "Required gate failed";
   }
@@ -1040,6 +1076,10 @@ function buildValueReportTimeSpent(requirement: RequirementSummary): string {
 }
 
 function buildValueReportResidualRisks(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived requirement; evidence retained for audit";
+  }
+
   const gateResults = requirement.reviewEvidence?.gateResults ?? [];
 
   if (!gateResults.length) {
@@ -1119,6 +1159,10 @@ function formatGateRiskTitle(
 }
 
 function formatReportRecommendation(requirement: RequirementSummary): string {
+  if (isArchivedRequirement(requirement)) {
+    return "Archived";
+  }
+
   const recommendation = requirement.reviewEvidence?.reportRecommendation;
 
   if (!recommendation) {
@@ -1180,4 +1224,13 @@ function formatContractList(values: string[] | undefined, fallback: string): str
 
 function formatChangedFileCount(count: number): string {
   return `${count} ${count === 1 ? "file" : "files"} changed`;
+}
+
+function isArchivedRequirement(
+  requirement: RequirementSummary | undefined
+): boolean {
+  return (
+    requirement?.requirementStage === "archived" ||
+    requirement?.executionStatus === "archived"
+  );
 }

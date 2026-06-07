@@ -429,6 +429,42 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Reject");
   });
 
+  it("keeps archived detail evidence read-only without manual apply language", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          requirementStage: "archived",
+          executionStatus: "archived",
+          nextAction: "View archived evidence",
+          workflowRunStatus: "archived",
+          workflowRunStatusLabel: "Archived",
+          availableActions: [],
+        },
+        artifacts,
+        onLifecycleAction: () => undefined,
+        onReviewAction: () => undefined,
+      }),
+    );
+    const valueReportHtml = extractValueReportSection(html);
+
+    expect(html).toContain("Archived");
+    expect(html).toContain("Archived requirement; evidence is read-only");
+    expect(valueReportHtml).toContain("Archived evidence retained");
+    expect(valueReportHtml).toContain(
+      "Archived requirement; evidence retained for audit",
+    );
+    expect(valueReportHtml).not.toContain("Review required before manual apply");
+    expect(valueReportHtml).not.toContain("manual review still required");
+    expect(html).not.toContain("Manual apply command");
+    expect(html).not.toContain(
+      "git -C &quot;C:/work/api&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;",
+    );
+    expect(html).toContain("Approve");
+    expect(html).toContain("Reject");
+    expect(html).toContain("disabled");
+  });
+
   it("keeps artifacts discoverable but collapsed inside the detail shell", () => {
     const html = renderDetail();
 
