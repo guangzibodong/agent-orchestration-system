@@ -69,7 +69,7 @@ describe("delivery topbar health", () => {
       expect.objectContaining({
         id: "launch",
         label: "Launch",
-        value: "Development ready",
+        value: "Ready",
         detail: "Development readiness has no blockers",
         severity: "healthy",
       }),
@@ -116,7 +116,7 @@ describe("delivery topbar health", () => {
 
     expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
       expect.objectContaining({
-        value: "Production blocked",
+        value: "Blocked",
         detail: "1 readiness check blocks launch",
         severity: "danger",
       }),
@@ -145,7 +145,7 @@ describe("delivery topbar health", () => {
 
     expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
       expect.objectContaining({
-        value: "Local passed / Prod blocked",
+        value: "Blocked",
         detail:
           "Postgres launch verification blocked: DATABASE_URL is not configured for Postgres launch verification. 2 more external blockers. Generated 2026-06-06T16:35:25.938Z",
         severity: "warning",
@@ -176,7 +176,7 @@ describe("delivery topbar health", () => {
 
     expect(indicators.find((indicator) => indicator.id === "launch")).toEqual(
       expect.objectContaining({
-        value: "Evidence stale",
+        value: "Stale",
         detail: "Evidence commit 24418a0 does not match HEAD 10de896.",
         severity: "danger",
       }),

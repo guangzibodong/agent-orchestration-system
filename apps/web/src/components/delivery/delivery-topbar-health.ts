@@ -76,22 +76,30 @@ function buildLaunchValue(
   launchEvidence?: LaunchGateEvidence,
 ): string {
   if (launchEvidence?.fresh === false) {
-    return "Evidence stale";
+    return "Stale";
   }
 
   if (launchEvidence) {
-    return `Local ${launchEvidence.localDecision} / Prod ${launchEvidence.productionDecision}`;
+    if (launchEvidence.localDecision === "failed") {
+      return "Failed";
+    }
+
+    if (launchEvidence.productionDecision === "blocked") {
+      return "Blocked";
+    }
+
+    return "Ready";
   }
 
   if (readiness.blockedChecks > 0) {
-    return `${readiness.deploymentLabel} blocked`;
+    return "Blocked";
   }
 
   if (readiness.degradedChecks > 0) {
-    return `${readiness.deploymentLabel} degraded`;
+    return "Degraded";
   }
 
-  return `${readiness.deploymentLabel} ready`;
+  return "Ready";
 }
 
 function buildLaunchDetail(

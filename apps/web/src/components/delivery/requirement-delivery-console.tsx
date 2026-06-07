@@ -706,6 +706,7 @@ function DeliveryHealthIndicators({
           aria-label={`${indicator.label} ${indicator.value}: ${indicator.detail}`}
           className={`deliveryHealthIndicator ${indicator.severity}`}
           key={indicator.id}
+          title={indicator.detail}
         >
           <span>{indicator.label}</span>{" "}
           <strong>{indicator.value}</strong>

@@ -243,9 +243,9 @@ describe("RequirementDeliveryConsole", () => {
           {
             id: "launch",
             label: "Launch",
-            value: "Development ready",
-            detail: "Development readiness has no blockers",
-            severity: "healthy",
+            value: "Blocked",
+            detail: "Production launch verification blocked by DATABASE_URL",
+            severity: "warning",
           },
           {
             id: "worker",
@@ -269,7 +269,13 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("API");
     expect(html).toContain("Ready");
     expect(html).toContain("Launch");
-    expect(html).toContain("Development ready");
+    expect(html).toContain("Blocked");
+    expect(html).toContain(
+      'aria-label="Launch Blocked: Production launch verification blocked by DATABASE_URL"',
+    );
+    expect(html).toContain(
+      'title="Production launch verification blocked by DATABASE_URL"',
+    );
     expect(html).toContain("Worker");
     expect(html).toContain("1/1");
     expect(html).toContain("Queue");

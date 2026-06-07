@@ -40,7 +40,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     const deliveryHealth = consoleShell.getByLabel("Delivery health");
     await expect(deliveryHealth).toContainText("API Ready");
-    await expect(deliveryHealth).toContainText("Launch Development ready");
+    await expect(deliveryHealth).toContainText("Launch Ready");
     await expect(deliveryHealth).toContainText("Worker No Workers");
     await expect(deliveryHealth).toContainText("Queue 0");
     await expect(consoleShell.getByText("No requirements yet")).toBeVisible();
@@ -288,19 +288,19 @@ test.describe("Requirement Delivery Console smoke", () => {
     const deliveryHealth = page
       .locator("main.deliveryShell")
       .getByLabel("Delivery health");
-    await expect(deliveryHealth).toContainText("Launch Evidence stale");
+    await expect(deliveryHealth).toContainText("Launch Stale");
     await expect(deliveryHealth).toContainText(
       "Queue 0",
     );
     await expect(
       deliveryHealth.getByLabel(
-        "Launch Evidence stale: Evidence commit 847c137 does not match HEAD next-head.",
+        "Launch Stale: Evidence commit 847c137 does not match HEAD next-head.",
       ),
     ).toBeVisible();
     await expect(
       deliveryHealth.locator(".deliveryHealthIndicator.danger"),
     ).toContainText(
-      "Evidence stale",
+      "Stale",
     );
   });
 
@@ -332,12 +332,10 @@ test.describe("Requirement Delivery Console smoke", () => {
     const deliveryHealth = page
       .locator("main.deliveryShell")
       .getByLabel("Delivery health");
-    await expect(deliveryHealth).toContainText(
-      "Launch Local passed / Prod blocked",
-    );
+    await expect(deliveryHealth).toContainText("Launch Blocked");
     await expect(
       deliveryHealth.getByLabel(
-        "Launch Local passed / Prod blocked: Postgres launch verification blocked: DATABASE_URL is not configured for Postgres launch verification. 2 more external blockers. Generated 2026-06-06T17:56:06.605Z",
+        "Launch Blocked: Postgres launch verification blocked: DATABASE_URL is not configured for Postgres launch verification. 2 more external blockers. Generated 2026-06-06T17:56:06.605Z",
       ),
     ).toBeVisible();
   });
