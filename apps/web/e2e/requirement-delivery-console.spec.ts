@@ -1747,6 +1747,75 @@ test.describe("Requirement Delivery Console smoke", () => {
     expect(createdRequests).toEqual([]);
   });
 
+  test("New Requirement blocks skipped quality gate slots before create", async ({
+    page,
+  }) => {
+    const createdRequests: unknown[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, [], {
+      onRequirementCreate: (payload) => {
+        createdRequests.push(payload);
+      },
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "New Requirement" }).click();
+
+    const flow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await expect(flow.getByLabel(/gate 1 requirement/i)).toHaveValue(
+      "required",
+    );
+    await expect(flow.getByLabel(/gate 2 requirement/i)).toHaveValue(
+      "optional",
+    );
+    await expect(flow.getByLabel(/gate 3 requirement/i)).toHaveValue(
+      "optional",
+    );
+
+    await fillField(flow, /title|requirement title/i, "Gate gap guard");
+    await fillField(flow, /repository path/i, "C:/work/shop");
+    await fillField(
+      flow,
+      /goal/i,
+      "Keep manually submitted quality gate ids contiguous.",
+    );
+    await fillField(
+      flow,
+      /acceptance criteria/i,
+      "Quality gate slots are filled in order.",
+    );
+    await fillField(flow, /task 1 title/i, "Patch checkout copy");
+    await fillField(
+      flow,
+      /task 1 objective/i,
+      "Patch checkout copy in an isolated worktree.",
+    );
+    await fillField(flow, /task 1 acceptance/i, "Patch is reviewable.");
+    await fillField(flow, /task 1 command/i, "npm run patch:checkout");
+    await fillField(flow, /gate 2 command/i, "");
+    await fillField(flow, /gate 3 command/i, "npm run smoke:ui");
+
+    await flow
+      .getByRole("button", {
+        name: /create requirement|save requirement|create/i,
+      })
+      .click();
+
+    await expect(flow.getByRole("alert")).toContainText(
+      "Fill quality gate slots in order without gaps.",
+    );
+    expect(createdRequests).toEqual([]);
+  });
+
   test("New Requirement creation refreshes and focuses the created requirement workspace", async ({
     page,
   }) => {
