@@ -366,9 +366,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.goto("/");
 
     const consoleShell = page.locator("main.deliveryShell");
-    await expect(consoleShell.getByLabel("Viewer mode")).toContainText(
-      "Write actions are disabled",
-    );
+    await expect(
+      consoleShell.getByRole("region", { name: "Viewer mode" }),
+    ).toContainText("Write actions are disabled");
     await expect(
       consoleShell.getByRole("button", { name: "New Requirement" }),
     ).toBeDisabled();
@@ -511,9 +511,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.goto("/");
 
     const consoleShell = page.locator("main.deliveryShell");
-    await expect(consoleShell.getByLabel("Viewer mode")).toContainText(
-      "Write actions are disabled",
-    );
+    await expect(
+      consoleShell.getByRole("region", { name: "Viewer mode" }),
+    ).toContainText("Write actions are disabled");
 
     const queueAction = page
       .locator(".requirementQueuePanel")
@@ -532,9 +532,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       .getByRole("button", { name: "Approve" });
     await invokeReactButtonClick(approveButton);
 
-    await expect(consoleShell.getByLabel("Review decision")).toContainText(
-      "Viewer mode prevents review decisions.",
-    );
+    await expect(
+      consoleShell.getByRole("alert", { name: "Review decision" }),
+    ).toContainText("Viewer mode prevents review decisions.");
     expect(mutatingRequests).toEqual([]);
   });
 
@@ -1147,9 +1147,9 @@ test.describe("Requirement Delivery Console smoke", () => {
           workflowId: "workflow-needs-review",
         },
       ]);
-    await expect(page.getByLabel("Review decision")).toContainText(
-      "Review approved: Viewer readable requirement",
-    );
+    await expect(
+      page.getByRole("status", { name: "Review decision" }),
+    ).toContainText("Review approved: Viewer readable requirement");
     await expectMetric(page, "Waiting Review", "0");
     await expect(page.locator(".decisionQueuePanel")).not.toContainText(
       "Review merge candidate",
@@ -1264,6 +1264,8 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       page.getByRole("heading", { name: "Requirement Delivery Console" }),
     ).toBeVisible();
+    await expectNoHorizontalDocumentOverflow(page);
+    await expectElementsInsideViewport(page, page.locator("main.deliveryShell"));
     await captureScreenshotEvidence(page, desktopScreenshotPath);
     await expectScreenshotEvidence(desktopScreenshotPath);
 

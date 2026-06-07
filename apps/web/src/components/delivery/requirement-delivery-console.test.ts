@@ -549,6 +549,31 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("disabled");
   });
 
+  it("names viewer-mode disabled queue actions", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([
+          {
+            ...workflow,
+            id: "workflow-gate-failed",
+            goal: "Fix failed checkout gate",
+            status: "gate_failed",
+          },
+        ]),
+        viewerMode: true,
+      }),
+    );
+
+    const requirementQueue = extractRequirementQueue(html);
+
+    expect(requirementQueue).toContain(
+      'aria-label="Retry unavailable: Viewer mode is read-only; switch to operator mode to run requirement actions."',
+    );
+    expect(requirementQueue).toContain(
+      'title="Viewer mode is read-only; switch to operator mode to run requirement actions."',
+    );
+  });
+
   it("renders decision queue actions as read-only in viewer mode", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {
@@ -1016,6 +1041,16 @@ describe("RequirementDeliveryConsole", () => {
 function extractFocusPanel(html: string): string {
   const start = html.indexOf('class="deliveryPanel deliveryFocusPanel"');
   const end = html.indexOf('class="deliveryPanel decisionQueuePanel"');
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+}
+
+function extractRequirementQueue(html: string): string {
+  const start = html.indexOf('class="deliveryPanel requirementQueuePanel"');
+  const end = html.indexOf('class="deliveryPanel deliveryFocusPanel"');
 
   expect(start).toBeGreaterThanOrEqual(0);
   expect(end).toBeGreaterThan(start);

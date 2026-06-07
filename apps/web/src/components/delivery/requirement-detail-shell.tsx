@@ -83,6 +83,12 @@ const lifecycleLoadingLabels: Record<RequirementLifecycleAction, string> = {
   retry: "Retrying"
 };
 
+const viewerRequirementActionsDisabledReason =
+  "Viewer mode is read-only; switch to operator mode to run requirement actions.";
+
+const viewerReviewDecisionsDisabledReason =
+  "Viewer mode is read-only; switch to operator mode to record review decisions.";
+
 export function RequirementDetailShell({
   actionState,
   reviewActionState,
@@ -188,6 +194,7 @@ export function RequirementDetailShell({
                   disabled={actionDisabled || !onLifecycleAction}
                   onAction={onLifecycleAction}
                   requirement={requirement}
+                  viewerMode={viewerMode}
                 />
               </>
             ) : null}
@@ -443,7 +450,23 @@ function RequirementReviewAcceptance({
   const reviewLoading =
     reviewActionState?.status === "loading" &&
     reviewActionState.requirementId === requirement?.id;
-  const reviewDisabled = disabled || !onReviewAction || !reviewReady || reviewLoading;
+  const reviewDisabledReason = buildReviewDecisionDisabledReason({
+    onReviewAction,
+    requirement,
+    reviewLoading,
+    reviewReady,
+    viewerMode,
+  });
+  const reviewDisabled = reviewLoading || Boolean(reviewDisabledReason);
+  const retryDisabledReason = buildRequirementActionDisabledReason({
+    action: "retry",
+    available: Boolean(requirement?.availableActions.includes("retry")),
+    isLoading: false,
+    onAction: onLifecycleAction,
+    requirement,
+    viewerMode,
+  });
+  const retryDisabled = disabled || Boolean(retryDisabledReason);
   const patchPath = artifacts.find(
     (artifact) => artifact.kind === "patch" && artifact.path,
   )?.path;
@@ -508,7 +531,13 @@ function RequirementReviewAcceptance({
         <button
           className="secondaryButton"
           disabled={reviewDisabled}
+          aria-label={
+            reviewDisabledReason
+              ? `Approve unavailable: ${reviewDisabledReason}`
+              : undefined
+          }
           onClick={() => onReviewAction?.("approve")}
+          title={reviewDisabledReason}
           type="button"
         >
           <Check size={16} aria-hidden="true" />
@@ -519,7 +548,13 @@ function RequirementReviewAcceptance({
         <button
           className="secondaryButton dangerButton"
           disabled={reviewDisabled}
+          aria-label={
+            reviewDisabledReason
+              ? `Reject unavailable: ${reviewDisabledReason}`
+              : undefined
+          }
           onClick={() => onReviewAction?.("reject")}
+          title={reviewDisabledReason}
           type="button"
         >
           <X size={16} aria-hidden="true" />
@@ -529,12 +564,14 @@ function RequirementReviewAcceptance({
         </button>
         <button
           className="secondaryButton"
-          disabled={
-            disabled ||
-            !onLifecycleAction ||
-            !requirement?.availableActions.includes("retry")
+          disabled={retryDisabled}
+          aria-label={
+            retryDisabledReason
+              ? `Retry unavailable: ${retryDisabledReason}`
+              : undefined
           }
           onClick={() => onLifecycleAction?.("retry")}
+          title={retryDisabledReason}
           type="button"
         >
           <RefreshCw size={16} aria-hidden="true" />
@@ -550,11 +587,13 @@ function RequirementDetailLifecycleActions({
   disabled,
   onAction,
   requirement,
+  viewerMode,
 }: {
   actionState?: RequirementDetailShellProps["actionState"];
   disabled: boolean;
   onAction?: (action: RequirementLifecycleAction) => void;
   requirement?: RequirementSummary;
+  viewerMode: boolean;
 }) {
   const availableActions = requirement?.availableActions ?? [];
 
@@ -572,6 +611,17 @@ function RequirementDetailLifecycleActions({
             actionState?.status === "loading" &&
             actionState.requirementId === requirement?.id &&
             actionState.action === action;
+          const label = isLoading
+            ? lifecycleLoadingLabels[action]
+            : lifecycleActionLabels[action];
+          const disabledReason = buildRequirementActionDisabledReason({
+            action,
+            available: availableActions.includes(action),
+            isLoading,
+            onAction,
+            requirement,
+            viewerMode,
+          });
 
           return (
             <button
@@ -581,20 +631,106 @@ function RequirementDetailLifecycleActions({
                   : "secondaryButton"
               }
               disabled={disabled || !availableActions.includes(action) || isLoading}
+              aria-label={
+                disabledReason
+                  ? `${lifecycleActionLabels[action]} unavailable: ${disabledReason}`
+                  : undefined
+              }
               key={action}
               onClick={() => onAction?.(action)}
+              title={disabledReason}
               type="button"
             >
               <RequirementDetailActionIcon action={action} spinning={isLoading} />
-              {isLoading
-                ? lifecycleLoadingLabels[action]
-                : lifecycleActionLabels[action]}
+              {label}
             </button>
           );
         },
       )}
     </div>
   );
+}
+
+function buildReviewDecisionDisabledReason({
+  onReviewAction,
+  requirement,
+  reviewLoading,
+  reviewReady,
+  viewerMode,
+}: {
+  onReviewAction?: (action: RequirementReviewAction) => void;
+  requirement?: RequirementSummary;
+  reviewLoading: boolean;
+  reviewReady: boolean;
+  viewerMode: boolean;
+}): string | undefined {
+  if (reviewLoading) {
+    return undefined;
+  }
+
+  if (viewerMode) {
+    return viewerReviewDecisionsDisabledReason;
+  }
+
+  if (!requirement) {
+    return "Select a requirement before recording review decisions.";
+  }
+
+  if (!onReviewAction) {
+    return "Review decisions are unavailable in this view.";
+  }
+
+  if (!reviewReady) {
+    if (buildSupersededEvidenceLabel(requirement)) {
+      return "Current workflow evidence must be fresh before review decisions.";
+    }
+
+    if (requirement.executionStatus === "gate_failed") {
+      return "Required gates must pass before recording review decisions.";
+    }
+
+    return "Review decisions unlock after quality gates pass.";
+  }
+
+  return undefined;
+}
+
+function buildRequirementActionDisabledReason({
+  action,
+  available,
+  isLoading,
+  onAction,
+  requirement,
+  viewerMode,
+}: {
+  action: RequirementLifecycleAction;
+  available: boolean;
+  isLoading: boolean;
+  onAction?: (action: RequirementLifecycleAction) => void;
+  requirement?: RequirementSummary;
+  viewerMode: boolean;
+}): string | undefined {
+  if (isLoading) {
+    return undefined;
+  }
+
+  if (viewerMode) {
+    return viewerRequirementActionsDisabledReason;
+  }
+
+  if (!requirement) {
+    return "Select a requirement before running requirement actions.";
+  }
+
+  if (!onAction) {
+    return "Requirement actions are unavailable in this view.";
+  }
+
+  if (!available) {
+    return `${lifecycleActionLabels[action]} is unavailable for the current requirement stage.`;
+  }
+
+  return undefined;
 }
 
 function RequirementDetailActionIcon({

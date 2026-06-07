@@ -671,6 +671,37 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("disabled");
   });
 
+  it("names viewer-mode disabled review and lifecycle actions", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          availableActions: ["retry"],
+        },
+        artifacts,
+        viewerMode: true,
+        onLifecycleAction: () => undefined,
+        onReviewAction: () => undefined,
+      }),
+    );
+
+    expect(html).toContain(
+      'aria-label="Approve unavailable: Viewer mode is read-only; switch to operator mode to record review decisions."',
+    );
+    expect(html).toContain(
+      'title="Viewer mode is read-only; switch to operator mode to record review decisions."',
+    );
+    expect(html).toContain(
+      'aria-label="Reject unavailable: Viewer mode is read-only; switch to operator mode to record review decisions."',
+    );
+    expect(html).toContain(
+      'aria-label="Retry unavailable: Viewer mode is read-only; switch to operator mode to run requirement actions."',
+    );
+    expect(html).toContain(
+      'title="Viewer mode is read-only; switch to operator mode to run requirement actions."',
+    );
+  });
+
   it("explains repository safety blocked execution inside the detail shell", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDetailShell, {

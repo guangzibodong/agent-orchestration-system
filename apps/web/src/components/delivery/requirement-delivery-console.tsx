@@ -94,6 +94,9 @@ const successActionMessages: Record<
 const retryResetMessage =
   "Retry reset to ready. Enqueue to run fresh evidence. Stale execution evidence is superseded.";
 
+const viewerRequirementActionsDisabledReason =
+  "Viewer mode is read-only; switch to operator mode to run requirement actions.";
+
 const reviewLoadingActionLabels: Record<RequirementReviewAction, string> = {
   approve: "Approving review",
   reject: "Rejecting review",
@@ -466,6 +469,11 @@ export function RequirementDeliveryConsole({
                       viewerMode ||
                       !onRequirementLifecycleAction ||
                       requirementActionState?.status === "loading"
+                    }
+                    disabledReason={
+                      viewerMode
+                        ? viewerRequirementActionsDisabledReason
+                        : undefined
                     }
                     onAction={(action) =>
                       handleRequirementLifecycleAction(row.id, action)
@@ -848,11 +856,13 @@ function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {
 function RequirementQueueActions({
   actionState,
   disabled,
+  disabledReason,
   onAction,
   row,
 }: {
   actionState?: RequirementActionState;
   disabled: boolean;
+  disabledReason?: string;
   onAction: (action: RequirementLifecycleAction) => void;
   row: RequirementQueueRow;
 }) {
@@ -889,8 +899,14 @@ function RequirementQueueActions({
                 : "secondaryButton"
             }
             disabled={disabled || isLoading}
+            aria-label={
+              disabled && disabledReason
+                ? `${actionLabels[action]} unavailable: ${disabledReason}`
+                : undefined
+            }
             key={action}
             onClick={() => onAction(action)}
+            title={disabled && disabledReason ? disabledReason : undefined}
             type="button"
           >
             <ActionIcon action={action} spinning={isLoading} />
