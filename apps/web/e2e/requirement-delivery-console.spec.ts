@@ -1801,10 +1801,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       "required",
     );
     await expect(flow.getByLabel(/gate 2 requirement/i)).toHaveValue(
-      "optional",
+      "required",
     );
     await expect(flow.getByLabel(/gate 3 requirement/i)).toHaveValue(
-      "optional",
+      "required",
     );
 
     await fillField(flow, /title|requirement title/i, "Gate gap guard");

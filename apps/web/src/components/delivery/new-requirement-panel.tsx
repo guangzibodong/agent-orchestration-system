@@ -300,7 +300,7 @@ export function NewRequirementPanel({
               >
                 <div className="newRequirementTaskHeader">
                   <strong>Gate {slot}</strong>
-                  <span>{slot === 1 ? "required" : "optional"}</span>
+                  <span>required</span>
                 </div>
                 <label className="field">
                   <span>Gate {slot} command</span>
@@ -317,7 +317,7 @@ export function NewRequirementPanel({
                     <span>Gate {slot} requirement</span>
                     <select
                       name="gateRequired"
-                      defaultValue={slot === 1 ? "required" : "optional"}
+                      defaultValue="required"
                       disabled={viewerMode}
                     >
                       <option value="required">Required</option>
