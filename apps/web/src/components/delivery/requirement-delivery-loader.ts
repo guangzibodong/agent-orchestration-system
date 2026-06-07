@@ -364,6 +364,20 @@ async function loadRequirementReviewEvidence(
     : undefined;
 
   if (!currentReport && !currentMergeCandidate) {
+    const supersededWorkflowId = findSupersededEvidenceWorkflowId(
+      requirement,
+      report,
+      mergeCandidate
+    );
+
+    if (supersededWorkflowId) {
+      return {
+        artifactLinks: [],
+        reviewEvidence:
+          buildSupersededRequirementReviewEvidence(supersededWorkflowId)
+      };
+    }
+
     return { artifactLinks: [] };
   }
 
@@ -399,6 +413,35 @@ function matchesCurrentWorkflowEvidence(
   }
 
   return evidence.workflowId === requirement.workflowRunId;
+}
+
+function findSupersededEvidenceWorkflowId(
+  requirement: RequirementSummary,
+  report: RunReport | undefined,
+  mergeCandidate: MergeCandidate | undefined
+): string | undefined {
+  for (const evidence of [mergeCandidate, report]) {
+    if (
+      evidence &&
+      !matchesCurrentWorkflowEvidence(requirement, evidence) &&
+      evidence.workflowId
+    ) {
+      return evidence.workflowId;
+    }
+  }
+
+  return undefined;
+}
+
+function buildSupersededRequirementReviewEvidence(
+  evidenceSourceWorkflowId: string
+): RequirementReviewEvidence {
+  return {
+    evidenceSourceWorkflowId,
+    changedFiles: [],
+    patchArtifactPaths: [],
+    gateResults: []
+  };
 }
 
 async function loadRequirementReport(

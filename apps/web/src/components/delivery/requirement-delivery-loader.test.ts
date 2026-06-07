@@ -691,7 +691,7 @@ describe("requirement delivery loader", () => {
     );
   });
 
-  it("ignores stale review evidence when report and merge candidate belong to a previous workflow", async () => {
+  it("marks stale review evidence as superseded when report and merge candidate belong to a previous workflow", async () => {
     const requests: string[] = [];
 
     const model = await loadRequirementDeliveryModel(async (path) => {
@@ -766,7 +766,7 @@ describe("requirement delivery loader", () => {
           workflowId: "workflow-stale",
           reportArtifactPath: "C:/mawo/artifacts/workflow-stale/report.json",
           summary: "Stale failed gate report",
-          recommendation: "needs_rework",
+          recommendation: "fix_failed_gates",
           failedTasks: [],
           failedGates: ["gate-1"],
           taskResults: [
@@ -820,7 +820,134 @@ describe("requirement delivery loader", () => {
       executionStatus: "needs_review",
       nextAction: "Review merge candidate"
     });
-    expect(model.requirements[0]?.reviewEvidence).toBeUndefined();
+    expect(model.requirements[0]?.reviewEvidence).toEqual({
+      evidenceSourceWorkflowId: "workflow-stale",
+      changedFiles: [],
+      patchArtifactPaths: [],
+      gateResults: []
+    });
+    expect(model.requirements[0]?.artifactLinks).toBeUndefined();
+  });
+
+  it("marks stale report-only evidence as superseded without stale artifacts", async () => {
+    const requests: string[] = [];
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [
+          {
+            id: "workflow-current-report",
+            goal: "Retry report-only ticket",
+            repositoryPath: "C:/work/shop",
+            status: "gate_failed",
+            updatedAt: "2026-06-06T11:20:00.000Z",
+            tasks: [{ id: "task-1", title: "Patch", status: "passed" }],
+            qualityGates: [
+              { id: "gate-1", title: "Unit tests", status: "failed" }
+            ]
+          }
+        ];
+      }
+
+      if (path === "/requirements") {
+        return [
+          {
+            id: "requirement-report-only",
+            title: "Retry report-only ticket",
+            repositoryPath: "C:/work/shop",
+            goal: "Retry without stale report artifacts",
+            acceptanceCriteria: ["Current failed gate owns review evidence"],
+            constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "medium",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch",
+                agent: "shell",
+                instructions: "Patch"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "needs_rework",
+            currentWorkflowRunId: "workflow-current-report",
+            runLinks: [
+              {
+                workflowRunId: "workflow-stale-report",
+                status: "gate_failed",
+                linkedAt: "2026-06-06T11:12:00.000Z"
+              },
+              {
+                workflowRunId: "workflow-current-report",
+                status: "gate_failed",
+                linkedAt: "2026-06-06T11:20:00.000Z"
+              }
+            ],
+            createdAt: "2026-06-06T11:10:00.000Z",
+            updatedAt: "2026-06-06T11:20:00.000Z"
+          }
+        ];
+      }
+
+      if (path === "/requirements/requirement-report-only/report") {
+        return {
+          workflowId: "workflow-stale-report",
+          reportArtifactPath:
+            "C:/mawo/artifacts/workflow-stale-report/report.json",
+          summary: "Stale report-only gate result",
+          recommendation: "fix_failed_gates",
+          failedTasks: [],
+          failedGates: ["gate-1"],
+          taskResults: [
+            {
+              id: "task-1",
+              title: "Patch",
+              status: "passed",
+              patchArtifactPath:
+                "C:/mawo/artifacts/workflow-stale-report/tasks/task-1/patch.diff"
+            }
+          ],
+          gateResults: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              status: "failed",
+              exitCode: 1,
+              stdoutArtifactPath:
+                "C:/mawo/artifacts/workflow-stale-report/gates/gate-1/stdout.txt"
+            }
+          ]
+        };
+      }
+
+      return [];
+    });
+
+    expect(requests).toContain("/requirements/requirement-report-only/report");
+    expect(requests).not.toContain(
+      "/requirements/requirement-report-only/merge-candidate"
+    );
+    expect(model.requirements[0]).toMatchObject({
+      id: "requirement-report-only",
+      workflowRunId: "workflow-current-report",
+      executionStatus: "gate_failed"
+    });
+    expect(model.requirements[0]?.reviewEvidence).toEqual({
+      evidenceSourceWorkflowId: "workflow-stale-report",
+      changedFiles: [],
+      patchArtifactPaths: [],
+      gateResults: []
+    });
     expect(model.requirements[0]?.artifactLinks).toBeUndefined();
   });
 

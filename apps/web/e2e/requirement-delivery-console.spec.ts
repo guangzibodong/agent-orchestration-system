@@ -159,6 +159,104 @@ test.describe("Requirement Delivery Console smoke", () => {
     expect(mutatingRequests).toEqual([]);
   });
 
+  test("does not match superseded review artifacts in topbar search", async ({
+    page,
+  }) => {
+    const supersededRequirement: RequirementDeliveryTicket = {
+      ...(requirementTickets[0] as RequirementDeliveryTicket),
+      id: "requirement-stale-search",
+      title: "Retry search freshness",
+      currentWorkflowRunId: "workflow-current-search",
+      runLinks: [
+        {
+          workflowRunId: "workflow-stale-search",
+          status: "needs_review",
+          linkedAt: "2026-06-06T10:20:00.000Z",
+        },
+        {
+          workflowRunId: "workflow-current-search",
+          status: "needs_review",
+          linkedAt: "2026-06-06T10:30:00.000Z",
+        },
+      ],
+    };
+
+    await mockApi(
+      page,
+      [
+        {
+          ...baseWorkflow,
+          id: "workflow-current-search",
+          goal: "Retry search freshness",
+          status: "needs_review",
+          repositoryPath: "C:/work/search-freshness",
+          updatedAt: "2026-06-06T10:30:00.000Z",
+        },
+      ],
+      {
+        mergeCandidates: {
+          "requirement-stale-search": {
+            ...requirementMergeCandidate,
+            workflowId: "workflow-stale-search",
+            summary: "Stale search merge candidate ready",
+            patchArtifactPath:
+              "C:/mawo/artifacts/workflow-stale-search/merge-candidate.patch",
+            applyCommand:
+              'git -C "C:/work/search-freshness" apply "C:/mawo/artifacts/workflow-stale-search/merge-candidate.patch"',
+          },
+        },
+        reports: {
+          "requirement-stale-search": {
+            ...requirementEvidenceReport,
+            workflowId: "workflow-stale-search",
+            summary: "Stale search report ready",
+            reportArtifactPath:
+              "C:/mawo/artifacts/workflow-stale-search/report.json",
+            taskResults: [
+              {
+                ...requirementEvidenceReport.taskResults[0],
+                patchArtifactPath:
+                  "C:/mawo/artifacts/workflow-stale-search/tasks/task-view/stale-search.patch",
+                patch: [
+                  "diff --git a/apps/web/src/stale-search-page.tsx b/apps/web/src/stale-search-page.tsx",
+                  "index 1111111..2222222 100644",
+                  "--- a/apps/web/src/stale-search-page.tsx",
+                  "+++ b/apps/web/src/stale-search-page.tsx",
+                ].join("\n"),
+                stdoutArtifactPath:
+                  "C:/mawo/artifacts/workflow-stale-search/tasks/task-view/stdout.txt",
+              },
+            ],
+          },
+        },
+        requirements: [supersededRequirement],
+      },
+    );
+
+    await page.goto("/");
+
+    const consoleShell = page.locator("main.deliveryShell");
+    const search = consoleShell.getByLabel("Search requirements, repos, reports");
+    const requirementQueue = page.locator(".requirementQueuePanel");
+    const evidence = page.getByLabel("Gate Result / Review Evidence");
+
+    await expect(evidence).toContainText(
+      "Superseded evidence from workflow-stale-search",
+    );
+
+    await search.fill("workflow-current-search");
+    await expect(requirementQueue).toContainText("1 active");
+    await expect(requirementQueue).toContainText("Retry search freshness");
+
+    await search.fill("stale-search-page");
+    await expect(requirementQueue).toContainText("0 active");
+    await expect(requirementQueue).toContainText("No matching requirements");
+
+    await search.fill("workflow-stale-search/merge-candidate.patch");
+    await expect(requirementQueue).toContainText("0 active");
+    await expect(requirementQueue).toContainText("No matching requirements");
+  });
+
   test("surfaces stale launch gate evidence in delivery health", async ({
     page,
   }) => {
