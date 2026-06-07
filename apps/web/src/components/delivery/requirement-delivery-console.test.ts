@@ -143,6 +143,28 @@ describe("RequirementDeliveryConsole", () => {
     );
   });
 
+  it("does not count archived requirements as active queue items", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDeliveryConsole, {
+        model: buildDeliveryConsoleModel([
+          workflow,
+          {
+            ...workflow,
+            id: "workflow-archived",
+            goal: "Archived checkout evidence",
+            status: "archived",
+            updatedAt: "2026-06-06T10:30:00.000Z",
+          },
+        ]),
+      }),
+    );
+
+    expect(html).toContain("1 active");
+    expect(html).not.toContain("2 active");
+    expect(html).toContain("Archived checkout evidence");
+    expect(html).toContain("Archived");
+  });
+
   it("renders compact read-only health indicators in the topbar", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {

@@ -124,6 +124,9 @@ export function RequirementDeliveryConsole({
     useState<RequirementReviewActionState>();
   const [selectedRequirementId, setSelectedRequirementId] = useState<string>();
   const queueRows = buildRequirementQueueRows(model.requirements);
+  const activeQueueCount = model.requirements.filter(
+    (requirement) => requirement.requirementStage !== "archived",
+  ).length;
   const decisionRows = buildDecisionQueueDisplay(model.decisionQueue);
   const selectedRequirement =
     model.requirements.find(
@@ -354,7 +357,7 @@ export function RequirementDeliveryConsole({
         <aside className="deliveryPanel requirementQueuePanel">
           <div className="deliveryPanelHeader">
             <h2>Requirement Queue</h2>
-            <span>{queueRows.length} active</span>
+            <span>{activeQueueCount} active</span>
           </div>
           {queueRows.length ? (
             <div className="requirementQueueList">
