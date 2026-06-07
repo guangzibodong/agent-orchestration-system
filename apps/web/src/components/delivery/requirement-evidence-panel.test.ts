@@ -130,6 +130,71 @@ describe("RequirementEvidencePanel display model", () => {
     expect(display.items.some((item) => item.value.includes("{"))).toBe(false);
   });
 
+  it("marks superseded review evidence without exposing stale merge candidates", () => {
+    const display = buildRequirementEvidenceDisplay({
+      ...reviewReadyRequirement,
+      workflowRunHref: "/workflows/workflow-current",
+      workflowRunId: "workflow-current",
+      workflowRunStatus: "needs_review",
+      workflowRunStatusLabel: "Needs review",
+      reviewEvidence: {
+        ...reviewReadyRequirement.reviewEvidence!,
+        evidenceSourceWorkflowId: "workflow-stale",
+        reportSummary: "Stale merge candidate ready",
+        changedFiles: ["apps/web/src/stale-page.tsx"],
+        patchArtifactPaths: [
+          "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+        ],
+        mergeCandidate: {
+          ...reviewReadyRequirement.reviewEvidence!.mergeCandidate!,
+          summary: "Stale merge candidate ready",
+          patchArtifactPath:
+            "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+          applyCommand:
+            'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-stale/merge-candidate.patch"',
+        },
+      },
+    });
+
+    expect(display.title).toBe("Superseded review evidence");
+    expect(display.statusLabel).toBe("Superseded");
+    expect(display.summary).toBe(
+      "Superseded evidence from workflow-stale; current workflow workflow-current needs fresh review evidence",
+    );
+    expect(display.items).toEqual(
+      expect.arrayContaining([
+        {
+          label: "Evidence source",
+          value:
+            "Superseded evidence from workflow-stale; current workflow workflow-current needs fresh review evidence",
+        },
+        {
+          label: "Merge candidate",
+          value:
+            "Superseded merge candidate hidden until current workflow reports fresh evidence",
+        },
+      ]),
+    );
+    expect(display.items.some((item) => item.label === "Manual apply command")).toBe(
+      false,
+    );
+    expect(display.items.some((item) => item.label === "Patch artifact")).toBe(
+      false,
+    );
+    expect(display.items.some((item) => item.label === "Changed files")).toBe(
+      false,
+    );
+    expect(display.items.some((item) => item.value.includes("workflow-stale/merge-candidate"))).toBe(
+      false,
+    );
+    expect(display.artifactLinks.map((artifact) => artifact.label)).toEqual(
+      expect.arrayContaining(["Current workflow", "Requirement report"]),
+    );
+    expect(display.artifactLinks.map((artifact) => artifact.label)).not.toContain(
+      "Merge candidate evidence",
+    );
+  });
+
   it("does not show manual apply commands for failed required gate evidence", () => {
     const display = buildRequirementEvidenceDisplay({
       ...reviewReadyRequirement,

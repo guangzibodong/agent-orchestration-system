@@ -113,6 +113,38 @@ export function buildRequirementEvidenceDisplay(
     };
   }
 
+  const supersededEvidence = buildSupersededEvidenceLabel(requirement);
+  if (supersededEvidence) {
+    return {
+      tone: "warning",
+      title: "Superseded review evidence",
+      statusLabel: "Superseded",
+      summary: supersededEvidence,
+      items: [
+        {
+          label: "Evidence source",
+          value: supersededEvidence,
+        },
+        {
+          label: "Current workflow",
+          value: requirement.workflowRunId ?? "No current workflow linked",
+        },
+        {
+          label: "Merge candidate",
+          value:
+            "Superseded merge candidate hidden until current workflow reports fresh evidence",
+        },
+        {
+          label: "Next decision",
+          value: requirement.nextAction,
+        },
+      ],
+      artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
+        includeMergeCandidate: false,
+      }),
+    };
+  }
+
   if (requirement.executionStatus === "gate_failed") {
     return {
       tone: "danger",
@@ -426,4 +458,26 @@ export function buildRequirementEvidenceArtifactLinks(
   }
 
   return [...links, ...(requirement.artifactLinks ?? [])];
+}
+
+function buildSupersededEvidenceLabel(
+  requirement: RequirementSummary,
+): string | undefined {
+  const canReviewCurrentEvidence =
+    requirement.executionStatus === "needs_review" ||
+    requirement.executionStatus === "completed";
+  const evidenceSourceWorkflowId =
+    requirement.reviewEvidence?.evidenceSourceWorkflowId;
+  const currentWorkflowId = requirement.workflowRunId;
+
+  if (
+    canReviewCurrentEvidence &&
+    evidenceSourceWorkflowId &&
+    currentWorkflowId &&
+    evidenceSourceWorkflowId !== currentWorkflowId
+  ) {
+    return `Superseded evidence from ${evidenceSourceWorkflowId}; current workflow ${currentWorkflowId} needs fresh review evidence`;
+  }
+
+  return undefined;
 }
