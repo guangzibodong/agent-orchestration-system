@@ -485,7 +485,7 @@ export function RequirementDeliveryConsole({
             <div className="deliveryPanelHeader compact">
               <h2>Stage Stepper</h2>
               <span>
-                {selectedRequirement?.nextAction ?? "Complete requirement"}
+                {selectedRequirement?.nextAction ?? "No active requirement stage"}
               </span>
             </div>
             <ol className="stageStepper">
