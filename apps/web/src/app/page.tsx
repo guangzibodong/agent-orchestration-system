@@ -1,14 +1,11 @@
 import { RequirementDeliveryConsoleClient } from "@/components/delivery/requirement-delivery-console-client";
-import { RunConsole } from "@/components/run-console";
+import { LegacyRunConsolePanel } from "@/components/legacy-run-console-panel";
 
 export default function Home() {
   return (
     <>
       <RequirementDeliveryConsoleClient />
-      <details className="legacyConsolePanel" id="legacy-run-console">
-        <summary>Legacy Run Console</summary>
-        <RunConsole />
-      </details>
+      <LegacyRunConsolePanel />
     </>
   );
 }
