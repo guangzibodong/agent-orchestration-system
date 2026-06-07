@@ -305,9 +305,16 @@ export function RequirementDeliveryConsole({
               <Plus size={16} aria-hidden="true" />
               New Requirement
             </button>
-            <a className="secondaryButton" href="#legacy-run-console">
+            <a
+              aria-label="Legacy Run Console secondary ops/debug"
+              className="secondaryButton deliveryLegacyLink"
+              href="#legacy-run-console"
+            >
               <Settings size={16} aria-hidden="true" />
-              Legacy Run Console
+              <span>
+                <strong>Legacy Run Console</strong>
+                <em>Secondary ops/debug</em>
+              </span>
             </a>
           </div>
         </div>

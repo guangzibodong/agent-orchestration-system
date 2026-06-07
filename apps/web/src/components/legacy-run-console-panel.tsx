@@ -15,7 +15,10 @@ const ClientRunConsole = dynamic(
 export function LegacyRunConsolePanel() {
   return (
     <details className="legacyConsolePanel" id="legacy-run-console">
-      <summary>Legacy Run Console</summary>
+      <summary aria-label="Legacy Run Console secondary ops/debug">
+        <span>Legacy Run Console</span>
+        <em>Secondary ops/debug</em>
+      </summary>
       <ClientRunConsole />
     </details>
   );

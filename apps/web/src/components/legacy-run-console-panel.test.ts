@@ -12,6 +12,8 @@ describe("LegacyRunConsolePanel", () => {
     const html = renderToStaticMarkup(createElement(LegacyRunConsolePanel));
 
     expect(html).toContain("Legacy Run Console");
+    expect(html).toContain("Secondary ops/debug");
+    expect(html).toContain('aria-label="Legacy Run Console secondary ops/debug"');
     expect(html).toContain('id="legacy-run-console"');
     expect(html).toContain('class="legacyConsoleHydrationSlot"');
     expect(html).not.toContain("API token");

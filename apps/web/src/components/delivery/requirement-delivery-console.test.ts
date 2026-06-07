@@ -118,6 +118,10 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Decision Queue");
     expect(html).toContain("Review merge candidate");
     expect(html).toContain("Legacy Run Console");
+    expect(html).toContain("Secondary ops/debug");
+    expect(html).toContain(
+      'aria-label="Legacy Run Console secondary ops/debug"',
+    );
     expect(html).toContain("href=\"#legacy-run-console\"");
     expect(html).toContain("1 task / 1 gate / 2026-06-06T10:10:00.000Z");
     expect(html).not.toContain("Shell Run");

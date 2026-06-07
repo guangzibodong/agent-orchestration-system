@@ -163,6 +163,25 @@ button {
   color: var(--muted);
 }
 
+.deliveryLegacyLink span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  text-align: left;
+}
+
+.deliveryLegacyLink strong,
+.deliveryLegacyLink em {
+  overflow-wrap: anywhere;
+}
+
+.deliveryLegacyLink em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .viewerModeBanner {
   gap: 10px;
   border: 1px solid #c9d4de;
@@ -1388,10 +1407,20 @@ button {
 }
 
 .legacyConsolePanel > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   cursor: pointer;
+  gap: 8px;
   color: var(--muted);
   font-weight: 700;
   padding: 14px 16px;
+  overflow-wrap: anywhere;
+}
+
+.legacyConsolePanel > summary em {
+  font-size: 12px;
+  font-style: normal;
 }
 
 @media (max-width: 1100px) {

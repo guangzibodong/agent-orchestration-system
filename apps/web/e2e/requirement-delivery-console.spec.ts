@@ -46,11 +46,18 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(consoleShell.getByText("No requirements yet")).toBeVisible();
     await expect(consoleShell.getByText("No decisions waiting")).toBeVisible();
     await expect(
-      consoleShell.getByRole("link", { name: "Legacy Run Console" }),
+      consoleShell.getByRole("link", {
+        name: "Legacy Run Console secondary ops/debug",
+      }),
     ).toHaveClass(/secondaryButton/);
     await expect(
-      consoleShell.getByRole("link", { name: "Legacy Run Console" }),
+      consoleShell.getByRole("link", {
+        name: "Legacy Run Console secondary ops/debug",
+      }),
     ).toHaveAttribute("href", /#legacy-run-console$/);
+    await expect(
+      page.locator("#legacy-run-console > summary"),
+    ).toContainText("Secondary ops/debug");
   });
 
   test("renders KPI, queue, and decision items for mixed workflow states", async ({
