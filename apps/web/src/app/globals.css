@@ -61,7 +61,10 @@ button {
 .deliveryPanelHeader,
 .repositorySafetyHeader,
 .repositorySafetyHeader > div,
-.requirementQueueMeta {
+.requirementQueueMeta,
+.artifactDrawerSummary,
+.artifactDrawerSummaryTitle,
+.artifactDrawerSummaryGroups {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -1216,6 +1219,7 @@ button {
 }
 
 .artifactDrawerSummary {
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 10px;
   cursor: pointer;
@@ -1226,12 +1230,30 @@ button {
   display: none;
 }
 
-.artifactDrawerSummary span {
+.artifactDrawerSummaryTitle {
   gap: 8px;
 }
 
+.artifactDrawerSummaryGroups {
+  flex: 1 1 180px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.artifactDrawerSummaryPill {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
 .artifactDrawerSummary strong,
-.artifactDrawerSummary em {
+.artifactDrawerSummary em,
+.artifactDrawerSummaryPill {
   overflow-wrap: anywhere;
 }
 

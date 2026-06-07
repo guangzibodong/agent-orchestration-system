@@ -38,7 +38,7 @@ const artifactOrder: ArtifactDrawerKind[] = [
   "stderr",
   "patch",
   "report",
-  "audit"
+  "audit",
 ];
 
 const artifactGroupTitles: Record<ArtifactDrawerKind, string> = {
@@ -46,7 +46,7 @@ const artifactGroupTitles: Record<ArtifactDrawerKind, string> = {
   stderr: "Errors",
   patch: "Patches",
   report: "Reports",
-  audit: "Audit"
+  audit: "Audit",
 };
 
 function formatArtifactLinkCount(count: number): string {
@@ -54,7 +54,7 @@ function formatArtifactLinkCount(count: number): string {
 }
 
 export function buildArtifactDrawerGroups(
-  artifacts: ArtifactDrawerLink[]
+  artifacts: ArtifactDrawerLink[],
 ): ArtifactDrawerGroup[] {
   return artifactOrder.flatMap((kind) => {
     const links = artifacts.filter((artifact) => artifact.kind === kind);
@@ -68,23 +68,23 @@ export function buildArtifactDrawerGroups(
         kind,
         title: artifactGroupTitles[kind],
         countLabel: formatArtifactLinkCount(links.length),
-        links
-      }
+        links,
+      },
     ];
   });
 }
 
 export function buildArtifactDrawerMetadata(
-  artifact: ArtifactDrawerLink
+  artifact: ArtifactDrawerLink,
 ): ArtifactDrawerMetadata | undefined {
   const sourceWorkflow = buildArtifactSourceWorkflowLabel(artifact.href);
   const visibleParts = [
     artifact.meta,
     sourceWorkflow,
-    artifact.path ? compactArtifactPath(artifact.path) : undefined
+    artifact.path ? compactArtifactPath(artifact.path) : undefined,
   ].filter(isPresent);
   const fullParts = [artifact.meta, sourceWorkflow, artifact.path].filter(
-    isPresent
+    isPresent,
   );
 
   if (!fullParts.length) {
@@ -93,24 +93,37 @@ export function buildArtifactDrawerMetadata(
 
   return {
     visibleLabel: visibleParts.join(" / "),
-    fullLabel: fullParts.join(" / ")
+    fullLabel: fullParts.join(" / "),
   };
 }
 
 export function ArtifactDrawer({
   artifacts,
-  title = "Artifacts"
+  title = "Artifacts",
 }: ArtifactDrawerProps) {
   const groups = buildArtifactDrawerGroups(artifacts);
   const linkLabel = formatArtifactLinkCount(artifacts.length);
+  const summaryLabels = buildArtifactDrawerSummaryLabels(groups);
+  const summaryAriaLabel = [`${title}: ${linkLabel}`, ...summaryLabels].join(
+    "; ",
+  );
 
   return (
     <details className="artifactDrawer">
-      <summary className="artifactDrawerSummary">
-        <span>
+      <summary aria-label={summaryAriaLabel} className="artifactDrawerSummary">
+        <span className="artifactDrawerSummaryTitle">
           <FileText size={16} aria-hidden="true" />
           <strong>{title}</strong>
         </span>
+        {summaryLabels.length ? (
+          <span className="artifactDrawerSummaryGroups" aria-hidden="true">
+            {summaryLabels.map((label) => (
+              <span className="artifactDrawerSummaryPill" key={label}>
+                {label}
+              </span>
+            ))}
+          </span>
+        ) : null}
         <em>{linkLabel}</em>
       </summary>
 
@@ -159,6 +172,12 @@ export function ArtifactDrawer({
 
 function isPresent(value: string | undefined): value is string {
   return Boolean(value);
+}
+
+function buildArtifactDrawerSummaryLabels(
+  groups: ArtifactDrawerGroup[],
+): string[] {
+  return groups.map((group) => `${group.title} ${group.links.length}`);
 }
 
 function compactArtifactPath(path: string): string {
