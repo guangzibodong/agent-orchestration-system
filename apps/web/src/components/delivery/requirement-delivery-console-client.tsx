@@ -165,7 +165,9 @@ export function RequirementDeliveryConsoleClient() {
   }
 
   async function handleRequirementJobCancel(requirementId: string) {
-    const trackedJob = activeJobsByRequirementId[requirementId];
+    const trackedJob =
+      activeJobsByRequirementId[requirementId] ??
+      buildTrackedRequirementJobFromModel(model, requirementId);
 
     if (!trackedJob) {
       throw new Error("Active job is required before canceling a requirement");
@@ -340,6 +342,15 @@ export function RequirementDeliveryConsoleClient() {
     };
   }, [activeJobsByRequirementId, jobStatusByRequirementId, workflowOverridesById]);
 
+  function hydrateActiveJobsFromModel(nextModel: DeliveryConsoleModel) {
+    setActiveJobsByRequirementId((current) =>
+      mergeHydratedActiveJobs(current, nextModel)
+    );
+    setJobStatusByRequirementId((current) =>
+      mergeHydratedJobStatuses(current, nextModel)
+    );
+  }
+
   useEffect(() => {
     let canceled = false;
 
@@ -366,6 +377,7 @@ export function RequirementDeliveryConsoleClient() {
         }
 
         setModel(nextModel);
+        hydrateActiveJobsFromModel(nextModel);
         setLoadState("ready");
         if (!hasReportedInitialLoadRef.current) {
           setMessage(
@@ -519,6 +531,97 @@ function parseRequirementLifecycleResult(value: unknown): {
 
 function isActiveJobStatus(status: WorkflowJobStatus): boolean {
   return status === "queued" || status === "running";
+}
+
+function buildTrackedRequirementJobFromModel(
+  model: DeliveryConsoleModel,
+  requirementId: string
+): TrackedRequirementJob | undefined {
+  const currentJob = model.requirements.find(
+    (requirement) => requirement.id === requirementId
+  )?.currentJob;
+
+  if (!currentJob || !isActiveJobStatus(currentJob.status)) {
+    return undefined;
+  }
+
+  return {
+    jobId: currentJob.id,
+    workflowId: currentJob.workflowId,
+    status: currentJob.status
+  };
+}
+
+function mergeHydratedActiveJobs(
+  current: Record<string, TrackedRequirementJob | undefined>,
+  model: DeliveryConsoleModel
+): Record<string, TrackedRequirementJob | undefined> {
+  const next = { ...current };
+
+  for (const requirement of model.requirements) {
+    const trackedJob = buildTrackedRequirementJobFromModel(
+      model,
+      requirement.id
+    );
+
+    if (trackedJob) {
+      next[requirement.id] = trackedJob;
+    }
+  }
+
+  return areTrackedJobsEqual(current, next) ? current : next;
+}
+
+function mergeHydratedJobStatuses(
+  current: Record<string, WorkflowJobStatus | undefined>,
+  model: DeliveryConsoleModel
+): Record<string, WorkflowJobStatus | undefined> {
+  const next = { ...current };
+
+  for (const requirement of model.requirements) {
+    if (requirement.currentJob && isActiveJobStatus(requirement.currentJob.status)) {
+      next[requirement.id] = requirement.currentJob.status;
+    }
+  }
+
+  return areJobStatusesEqual(current, next) ? current : next;
+}
+
+function areTrackedJobsEqual(
+  left: Record<string, TrackedRequirementJob | undefined>,
+  right: Record<string, TrackedRequirementJob | undefined>
+): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+
+  for (const key of keys) {
+    const leftJob = left[key];
+    const rightJob = right[key];
+
+    if (
+      leftJob?.jobId !== rightJob?.jobId ||
+      leftJob?.workflowId !== rightJob?.workflowId ||
+      leftJob?.status !== rightJob?.status
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areJobStatusesEqual(
+  left: Record<string, WorkflowJobStatus | undefined>,
+  right: Record<string, WorkflowJobStatus | undefined>
+): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+
+  for (const key of keys) {
+    if (left[key] !== right[key]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function buildWorkflowOverrides(

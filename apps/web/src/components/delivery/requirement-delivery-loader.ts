@@ -4,7 +4,8 @@ import {
   mergeCandidateSchema,
   requirementDeliveryTicketSchema,
   repositorySafetySchema,
-  runReportSchema
+  runReportSchema,
+  workflowJobSchema
 } from "@mawo/shared";
 import type {
   AgentHealth,
@@ -13,12 +14,14 @@ import type {
   RepositorySafety,
   RequirementDeliveryTicket,
   RunReport,
+  WorkflowJob,
   WorkflowRun
 } from "@mawo/shared";
 import type {
   DeliveryConsoleModel,
   RequirementArtifactLink,
   RequirementAuditTrail,
+  RequirementCurrentJob,
   RequirementReviewEvidence,
   RequirementSummary
 } from "./delivery-console-model";
@@ -55,6 +58,16 @@ export async function loadRequirementDeliveryModel(
     requirementResult.status === "fulfilled"
       ? await loadRepositorySafetyForRequirements(api, requirements)
       : {};
+  const currentJobByRequirementId =
+    requirementResult.status === "fulfilled"
+      ? await loadActiveJobsForRequirements(api, requirements)
+      : {};
+  const jobStatusByRequirementId = Object.fromEntries(
+    Object.entries(currentJobByRequirementId).map(([requirementId, job]) => [
+      requirementId,
+      job?.status
+    ])
+  );
 
   if (
     workflowResult.status === "rejected" &&
@@ -70,6 +83,14 @@ export async function loadRequirementDeliveryModel(
     {
       ...context,
       agentHealth: context.agentHealth ?? agentHealth,
+      currentJobByRequirementId: {
+        ...currentJobByRequirementId,
+        ...context.currentJobByRequirementId
+      },
+      jobStatusByRequirementId: {
+        ...jobStatusByRequirementId,
+        ...context.jobStatusByRequirementId
+      },
       repositorySafetyByRepositoryId: {
         ...repositorySafetyByRepositoryId,
         ...context.repositorySafetyByRepositoryId
@@ -91,6 +112,70 @@ async function loadRequirementTickets(
 ) {
   const value = await api(buildRequirementListPath(options));
   return requirementDeliveryTicketSchema.array().parse(value);
+}
+
+async function loadActiveJobsForRequirements(
+  api: ApiClient,
+  requirements: RequirementDeliveryTicket[]
+): Promise<Record<string, RequirementCurrentJob | undefined>> {
+  const activeJobRequests = requirements.flatMap((requirement) =>
+    requirement.status === "running" && requirement.currentWorkflowRunId
+      ? [
+          {
+            requirementId: requirement.id,
+            workflowId: requirement.currentWorkflowRunId
+          }
+        ]
+      : []
+  );
+
+  if (!activeJobRequests.length) {
+    return {};
+  }
+
+  const results = await Promise.allSettled(
+    activeJobRequests.map(async ({ requirementId, workflowId }) => ({
+      requirementId,
+      job: selectNewestActiveJob(
+        workflowJobSchema.array().parse(
+          await api(buildActiveJobsPath(workflowId))
+        )
+      )
+    }))
+  );
+
+  return Object.fromEntries(
+    results.flatMap((result) =>
+      result.status === "fulfilled" && result.value.job
+        ? [[result.value.requirementId, toRequirementCurrentJob(result.value.job)]]
+        : []
+    )
+  );
+}
+
+function buildActiveJobsPath(workflowId: string): string {
+  const params = new URLSearchParams();
+  params.set("workflowId", workflowId);
+  params.set("limit", "5");
+
+  return `/jobs?${params.toString()}`;
+}
+
+function selectNewestActiveJob(jobs: WorkflowJob[]): WorkflowJob | undefined {
+  return jobs
+    .filter((job) => job.status === "queued" || job.status === "running")
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .at(0);
+}
+
+function toRequirementCurrentJob(job: WorkflowJob): RequirementCurrentJob {
+  return {
+    createdAt: job.createdAt,
+    id: job.id,
+    status: job.status,
+    updatedAt: job.updatedAt,
+    workflowId: job.workflowId
+  };
 }
 
 function buildRequirementListPath(options: WorkflowListOptions): string {

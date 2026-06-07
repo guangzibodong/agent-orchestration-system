@@ -203,6 +203,116 @@ describe("requirement delivery loader", () => {
     });
   });
 
+  it("hydrates active running requirement jobs so cancel survives refresh", async () => {
+    const requests: string[] = [];
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [
+          {
+            id: "workflow-running",
+            goal: "Run checkout ticket",
+            repositoryPath: "C:/work/shop",
+            status: "running",
+            updatedAt: "2026-06-06T11:06:00.000Z",
+            tasks: [{ id: "task-1", title: "Patch", status: "running" }],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                status: "waiting",
+                required: true
+              }
+            ]
+          }
+        ];
+      }
+
+      if (path === "/agents/health") {
+        return [];
+      }
+
+      if (path === "/requirements") {
+        return [
+          {
+            id: "requirement-running",
+            title: "Run checkout ticket",
+            repositoryPath: "C:/work/shop",
+            goal: "Run checkout evidence",
+            acceptanceCriteria: ["Cancel remains available after refresh"],
+            constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "medium",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch",
+                agent: "shell",
+                instructions: "Patch"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "running",
+            currentWorkflowRunId: "workflow-running",
+            runLinks: [
+              {
+                workflowRunId: "workflow-running",
+                status: "running",
+                linkedAt: "2026-06-06T11:05:00.000Z"
+              }
+            ],
+            createdAt: "2026-06-06T11:00:00.000Z",
+            updatedAt: "2026-06-06T11:06:00.000Z"
+          }
+        ];
+      }
+
+      if (path === "/jobs?workflowId=workflow-running&limit=5") {
+        return [
+          {
+            id: "job-old-completed",
+            workflowId: "workflow-running",
+            status: "completed",
+            createdAt: "2026-06-06T11:02:00.000Z",
+            updatedAt: "2026-06-06T11:03:00.000Z",
+            finishedAt: "2026-06-06T11:03:00.000Z"
+          },
+          {
+            id: "job-running-refresh",
+            workflowId: "workflow-running",
+            status: "queued",
+            createdAt: "2026-06-06T11:05:00.000Z",
+            updatedAt: "2026-06-06T11:06:00.000Z"
+          }
+        ];
+      }
+
+      return [];
+    });
+
+    expect(requests).toContain("/jobs?workflowId=workflow-running&limit=5");
+    expect(model.requirements[0]).toMatchObject({
+      id: "requirement-running",
+      currentJob: {
+        id: "job-running-refresh",
+        workflowId: "workflow-running",
+        status: "queued"
+      },
+      currentJobStatus: "queued",
+      availableActions: ["cancel"]
+    });
+  });
+
   it("loads registered repository safety for requirement tickets before enqueue", async () => {
     const requests: string[] = [];
 

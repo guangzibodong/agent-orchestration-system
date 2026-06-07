@@ -3,6 +3,7 @@ import type {
   AgentHealth,
   RequirementDeliveryTicket,
   RepositorySafety,
+  WorkflowJob,
   WorkflowJobStatus,
   WorkflowRun,
   WorkflowStatus
@@ -151,6 +152,7 @@ export type RequirementSummary = {
   nextAction: string;
   nodeLabel: string;
   updatedAt: string;
+  currentJob?: RequirementCurrentJob;
   currentJobStatus?: WorkflowJobStatus;
   workflowRunHref?: string;
   workflowRunId?: string;
@@ -170,6 +172,11 @@ export type RequirementSummary = {
   actionBlockReason?: string;
   availableActions: RequirementLifecycleAction[];
 };
+
+export type RequirementCurrentJob = Pick<
+  WorkflowJob,
+  "createdAt" | "id" | "status" | "updatedAt" | "workflowId"
+>;
 
 export type DeliveryDecisionSeverity = "info" | "warning" | "danger";
 
@@ -198,6 +205,10 @@ export type DeliveryConsoleModel = {
 
 export type DeliveryConsoleModelContext = {
   agentHealth?: AgentHealth[];
+  currentJobByRequirementId?: Record<
+    string,
+    RequirementCurrentJob | undefined
+  >;
   jobStatusByRequirementId?: Record<string, WorkflowJobStatus | undefined>;
   repositorySafetyByRepositoryId?: Record<string, RepositorySafety | undefined>;
   workflowOverrides?: WorkflowRun[];
@@ -691,7 +702,9 @@ export function mapRequirementTicketToSummary(
       ? context.repositorySafetyByRepositoryId?.[repositorySafetyKey]
       : undefined
   );
-  const currentJobStatus = context.jobStatusByRequirementId?.[requirement.id];
+  const currentJob = context.currentJobByRequirementId?.[requirement.id];
+  const currentJobStatus =
+    currentJob?.status ?? context.jobStatusByRequirementId?.[requirement.id];
   const baseAvailableActions = buildRequirementAvailableActions(
     requirement,
     currentJobStatus
@@ -748,6 +761,7 @@ export function mapRequirementTicketToSummary(
         : mapRequirementNextAction(requirement, workflowStatus),
     nodeLabel: buildRequirementNodeLabel(requirement),
     updatedAt: requirement.updatedAt,
+    ...(currentJob ? { currentJob } : {}),
     currentJobStatus,
     workflowRunHref: workflowRunId ? `/workflows/${workflowRunId}` : undefined,
     workflowRunId,

@@ -2815,6 +2815,117 @@ test.describe("Requirement Delivery Console smoke", () => {
     expect(jobPolls).toBe(pollsAfterCancel);
   });
 
+  test("operator can cancel a refreshed active requirement job", async ({
+    page,
+  }) => {
+    const workflows: WorkflowRun[] = [
+      {
+        ...lifecycleQueuedWorkflow,
+        id: "workflow-refresh-cancel",
+        goal: "Cancel refreshed checkout evidence",
+        status: "running",
+        updatedAt: "2026-06-06T12:31:00.000Z",
+      },
+    ];
+    const requirements: RequirementDeliveryTicket[] = [
+      {
+        ...lifecyclePlanRequirement,
+        id: "requirement-refresh-cancel",
+        title: "Cancel refreshed checkout evidence",
+        status: "running",
+        currentWorkflowRunId: "workflow-refresh-cancel",
+        runLinks: [
+          {
+            workflowRunId: "workflow-refresh-cancel",
+            status: "running",
+            linkedAt: "2026-06-06T12:31:00.000Z",
+          },
+        ],
+        updatedAt: "2026-06-06T12:31:00.000Z",
+      },
+    ];
+    const jobs: WorkflowJob[] = [
+      {
+        id: "job-refresh-cancel",
+        workflowId: "workflow-refresh-cancel",
+        status: "queued",
+        createdAt: "2026-06-06T12:31:00.000Z",
+        updatedAt: "2026-06-06T12:31:00.000Z",
+      },
+    ];
+    const canceledJobs: string[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, workflows, {
+      requirements,
+      jobs,
+      onJobCancel: ({ id }) => {
+        if (id !== "job-refresh-cancel") {
+          throw new Error(`Unexpected job cancel ${id}`);
+        }
+
+        canceledJobs.push(id);
+        workflows[0] = {
+          ...workflows[0]!,
+          status: "ready",
+          updatedAt: "2026-06-06T12:32:00.000Z",
+        };
+        updateRequirement(requirements, "requirement-refresh-cancel", {
+          status: "ready_to_run",
+          runLinks: [
+            {
+              workflowRunId: "workflow-refresh-cancel",
+              status: "ready",
+              linkedAt: "2026-06-06T12:32:00.000Z",
+            },
+          ],
+          updatedAt: "2026-06-06T12:32:00.000Z",
+        });
+
+        jobs[0] = {
+          id,
+          workflowId: "workflow-refresh-cancel",
+          status: "canceled",
+          createdAt: "2026-06-06T12:31:00.000Z",
+          updatedAt: "2026-06-06T12:32:00.000Z",
+          finishedAt: "2026-06-06T12:32:00.000Z",
+        };
+
+        return jobs[0];
+      },
+    });
+
+    await page.goto("/");
+
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Cancel refreshed checkout evidence" });
+    await expect(queueItem).toContainText("Running");
+    await expect(queueItem).toContainText("Queued");
+    await expect(
+      queueItem.getByRole("button", { exact: true, name: "Cancel" }),
+    ).toBeVisible();
+
+    await queueItem.getByRole("button", { exact: true, name: "Cancel" }).click();
+    await expect
+      .poll(() => canceledJobs, {
+        message: "wait for refreshed job cancel request",
+      })
+      .toEqual(["job-refresh-cancel"]);
+    await expect(page.getByLabel("Workflow sync")).toContainText(
+      "Requirement job canceled: Cancel refreshed checkout evidence. Enqueue to run fresh evidence.",
+    );
+    await expect(queueItem).toContainText("Ready to run");
+    await expect(queueItem).toContainText("Canceled");
+    await expect(queueItem).toContainText("Enqueue");
+  });
+
   test("automatically refreshes active requirement jobs after enqueue", async ({
     page,
   }) => {
@@ -2974,6 +3085,7 @@ async function mockApi(
     }) => void;
     onJobCancel?: (request: { id: string }) => WorkflowJob | unknown;
     onJobRequest?: (request: { id: string }) => WorkflowJob | unknown;
+    jobs?: WorkflowJob[];
     launchGateEvidence?: LaunchGateEvidence;
     auditEvents?: AuditEvent[];
     mergeCandidates?: Record<string, unknown>;
@@ -3046,6 +3158,29 @@ async function mockApi(
           ? { json: options.launchGateEvidence }
           : { status: 404, json: { error: "launch_gate_evidence_not_found" } },
       );
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/jobs") {
+      const workflowId = url.searchParams.get("workflowId");
+      const status = url.searchParams.get("status");
+      const limitValue = Number(url.searchParams.get("limit") ?? "0");
+      const filteredJobs = (options.jobs ?? []).filter((job) => {
+        if (workflowId && job.workflowId !== workflowId) {
+          return false;
+        }
+
+        if (status && job.status !== status) {
+          return false;
+        }
+
+        return true;
+      });
+
+      await route.fulfill({
+        json:
+          limitValue > 0 ? filteredJobs.slice(-limitValue) : filteredJobs,
+      });
       return;
     }
 
