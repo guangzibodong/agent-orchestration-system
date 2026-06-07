@@ -360,6 +360,58 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain("git apply &lt;merge-candidate.patch&gt;");
   });
 
+  it("marks superseded review evidence when the source workflow is stale", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          workflowRunId: "workflow-current",
+          workflowRunHref: "/workflows/workflow-current",
+          workflowRunStatus: "needs_review",
+          workflowRunStatusLabel: "Needs review",
+          reviewEvidence: {
+            ...requirement.reviewEvidence!,
+            evidenceSourceWorkflowId: "workflow-stale",
+            reportSummary: "Stale merge candidate ready",
+            changedFiles: ["apps/web/src/stale-page.tsx"],
+            patchArtifactPaths: [
+              "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+            ],
+            mergeCandidate: {
+              ...requirement.reviewEvidence!.mergeCandidate!,
+              summary: "Stale merge candidate ready",
+              patchArtifactPath:
+                "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+              applyCommand:
+                'git -C "C:/work/api" apply "C:/mawo/artifacts/workflow-stale/merge-candidate.patch"',
+            },
+          },
+        },
+        artifacts: [],
+        onReviewAction: () => undefined,
+      }),
+    );
+    const valueReportHtml = extractValueReportSection(html);
+
+    expect(html).toContain(
+      "Superseded evidence from workflow-stale; current workflow workflow-current needs fresh review evidence",
+    );
+    expect(valueReportHtml).toContain(
+      "Superseded evidence from workflow-stale; current workflow workflow-current needs fresh review evidence",
+    );
+    expect(html).toContain(
+      "Superseded patch hidden until current workflow reports a merge candidate",
+    );
+    expect(html).toContain("Apply unavailable until review evidence is ready");
+    expect(html).not.toContain("Changed files under review");
+    expect(html).not.toContain("apps/web/src/stale-page.tsx");
+    expect(html).not.toContain(
+      "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+    );
+    expect(html).not.toContain("Stale merge candidate ready");
+    expect(html).not.toContain("git -C &quot;C:/work/api&quot; apply");
+  });
+
   it("renders readable requirement audit history without raw audit streams", () => {
     const html = renderDetail();
     const auditHtml = extractAuditSection(html);

@@ -306,7 +306,10 @@ function RequirementChangedFilesStrip({
 }: {
   requirement?: RequirementSummary;
 }) {
-  const changedFiles = requirement?.reviewEvidence?.changedFiles ?? [];
+  const changedFiles =
+    requirement && isReviewEvidenceCurrent(requirement)
+      ? requirement.reviewEvidence?.changedFiles ?? []
+      : [];
 
   if (!changedFiles.length) {
     return null;
@@ -395,9 +398,13 @@ function RequirementReviewAcceptance({
   reviewActionState?: RequirementDetailShellProps["reviewActionState"];
   viewerMode: boolean;
 }) {
+  const hasSupersededEvidence = Boolean(
+    buildSupersededEvidenceLabel(requirement),
+  );
   const reviewReady =
     requirement?.executionStatus === "needs_review" &&
-    Boolean(requirement.workflowRunId);
+    Boolean(requirement.workflowRunId) &&
+    !hasSupersededEvidence;
   const archived = isArchivedRequirement(requirement);
   const reviewLoading =
     reviewActionState?.status === "loading" &&
@@ -932,6 +939,11 @@ function buildMergeCandidateStatus(requirement: RequirementSummary): string {
 }
 
 function buildReviewSummary(requirement: RequirementSummary): string {
+  const supersededEvidence = buildSupersededEvidenceLabel(requirement);
+  if (supersededEvidence) {
+    return supersededEvidence;
+  }
+
   if (isArchivedRequirement(requirement)) {
     return "Archived requirement; evidence is read-only";
   }
@@ -960,6 +972,10 @@ function buildReviewSummary(requirement: RequirementSummary): string {
 }
 
 function buildReviewChangedFiles(requirement: RequirementSummary): string {
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Superseded changed files hidden until current workflow reports review evidence";
+  }
+
   const changedFiles = requirement.reviewEvidence?.changedFiles ?? [];
 
   if (!changedFiles.length) {
@@ -970,6 +986,10 @@ function buildReviewChangedFiles(requirement: RequirementSummary): string {
 }
 
 function buildReviewPatchArtifacts(requirement: RequirementSummary): string {
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Superseded patch hidden until current workflow reports a merge candidate";
+  }
+
   const patchPath =
     requirement.reviewEvidence?.mergeCandidate?.patchArtifactPath ??
     requirement.reviewEvidence?.patchArtifactPaths[0];
@@ -991,6 +1011,10 @@ function buildReviewDecisionState(
 
   if (viewerMode) {
     return "Viewer read-only; operator token required";
+  }
+
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Superseded evidence; retry or wait for current workflow evidence";
   }
 
   if (
@@ -1034,10 +1058,19 @@ function buildValueStatus(requirement: RequirementSummary): string {
 }
 
 function buildValueReportSummary(requirement: RequirementSummary): string {
+  const supersededEvidence = buildSupersededEvidenceLabel(requirement);
+  if (supersededEvidence) {
+    return supersededEvidence;
+  }
+
   return requirement.reviewEvidence?.reportSummary ?? buildReviewSummary(requirement);
 }
 
 function buildValueReportOutcome(requirement: RequirementSummary): string {
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Review blocked until current workflow reports fresh evidence";
+  }
+
   if (isArchivedRequirement(requirement)) {
     return "Archived requirement; evidence retained for audit";
   }
@@ -1062,6 +1095,11 @@ function buildValueReportOutcome(requirement: RequirementSummary): string {
 }
 
 function buildValueReportEvidenceSource(requirement: RequirementSummary): string {
+  const supersededEvidence = buildSupersededEvidenceLabel(requirement);
+  if (supersededEvidence) {
+    return supersededEvidence;
+  }
+
   const workflowId =
     requirement.reviewEvidence?.evidenceSourceWorkflowId ??
     requirement.workflowRunId;
@@ -1072,6 +1110,10 @@ function buildValueReportEvidenceSource(requirement: RequirementSummary): string
 }
 
 function buildValueReportTimeSpent(requirement: RequirementSummary): string {
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Pending current workflow evidence";
+  }
+
   const durationMs = requirement.reviewEvidence?.totalDurationMs;
 
   return durationMs === undefined
@@ -1080,6 +1122,10 @@ function buildValueReportTimeSpent(requirement: RequirementSummary): string {
 }
 
 function buildValueReportResidualRisks(requirement: RequirementSummary): string {
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Pending current workflow evidence";
+  }
+
   if (isArchivedRequirement(requirement)) {
     return "Archived requirement; evidence retained for audit";
   }
@@ -1163,6 +1209,10 @@ function formatGateRiskTitle(
 }
 
 function formatReportRecommendation(requirement: RequirementSummary): string {
+  if (buildSupersededEvidenceLabel(requirement)) {
+    return "Superseded evidence";
+  }
+
   if (isArchivedRequirement(requirement)) {
     return "Archived";
   }
@@ -1228,6 +1278,32 @@ function formatContractList(values: string[] | undefined, fallback: string): str
 
 function formatChangedFileCount(count: number): string {
   return `${count} ${count === 1 ? "file" : "files"} changed`;
+}
+
+function isReviewEvidenceCurrent(requirement: RequirementSummary): boolean {
+  return Boolean(requirement.reviewEvidence) && !buildSupersededEvidenceLabel(requirement);
+}
+
+function buildSupersededEvidenceLabel(
+  requirement: RequirementSummary | undefined,
+): string | undefined {
+  const canReviewCurrentEvidence =
+    requirement?.executionStatus === "needs_review" ||
+    requirement?.executionStatus === "completed";
+  const evidenceSourceWorkflowId =
+    requirement?.reviewEvidence?.evidenceSourceWorkflowId;
+  const currentWorkflowId = requirement?.workflowRunId;
+
+  if (
+    canReviewCurrentEvidence &&
+    evidenceSourceWorkflowId &&
+    currentWorkflowId &&
+    evidenceSourceWorkflowId !== currentWorkflowId
+  ) {
+    return `Superseded evidence from ${evidenceSourceWorkflowId}; current workflow ${currentWorkflowId} needs fresh review evidence`;
+  }
+
+  return undefined;
 }
 
 function isArchivedRequirement(
