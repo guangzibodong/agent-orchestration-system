@@ -11,6 +11,7 @@ export type RequirementQueueRow = {
   id: string;
   title: string;
   repositoryLabel: string;
+  repositoryFullLabel?: string;
   stageLabel: string;
   riskLabel: string;
   nextAction: string;
@@ -68,26 +69,49 @@ const severityLabels: Record<DeliveryDecisionSeverity, string> = {
 export function buildRequirementQueueRows(
   requirements: RequirementSummary[]
 ): RequirementQueueRow[] {
-  return requirements.map((requirement) => ({
-    id: requirement.id,
-    title: requirement.title,
-    repositoryLabel: requirement.repositoryLabel,
-    stageLabel: stageLabels[requirement.requirementStage],
-    riskLabel: riskLabels[requirement.riskLevel],
-    nextAction: requirement.nextAction,
-    nodeLabel: requirement.nodeLabel,
-    updatedAt: requirement.updatedAt,
-    availableActions: requirement.availableActions,
-    ...(requirement.actionBlockReason
-      ? { actionBlockReason: requirement.actionBlockReason }
-      : {}),
-    currentJobStatusLabel: requirement.currentJobStatus
-      ? jobStatusLabels[requirement.currentJobStatus]
-      : undefined,
-    workflowRunHref: requirement.workflowRunHref,
-    workflowRunId: requirement.workflowRunId,
-    workflowRunStatusLabel: requirement.workflowRunStatusLabel
-  }));
+  return requirements.map((requirement) => {
+    const repositoryLabel = compactRepositoryLabel(requirement.repositoryLabel);
+
+    return {
+      id: requirement.id,
+      title: requirement.title,
+      repositoryLabel,
+      ...(repositoryLabel !== requirement.repositoryLabel
+        ? { repositoryFullLabel: requirement.repositoryLabel }
+        : {}),
+      stageLabel: stageLabels[requirement.requirementStage],
+      riskLabel: riskLabels[requirement.riskLevel],
+      nextAction: requirement.nextAction,
+      nodeLabel: requirement.nodeLabel,
+      updatedAt: requirement.updatedAt,
+      availableActions: requirement.availableActions,
+      ...(requirement.actionBlockReason
+        ? { actionBlockReason: requirement.actionBlockReason }
+        : {}),
+      currentJobStatusLabel: requirement.currentJobStatus
+        ? jobStatusLabels[requirement.currentJobStatus]
+        : undefined,
+      workflowRunHref: requirement.workflowRunHref,
+      workflowRunId: requirement.workflowRunId,
+      workflowRunStatusLabel: requirement.workflowRunStatusLabel
+    };
+  });
+}
+
+function compactRepositoryLabel(label: string): string {
+  const normalizedPath = label.replace(/\\/g, "/");
+  const segments = normalizedPath.split("/").filter(Boolean);
+  const workRootIndex = segments.indexOf("work");
+
+  if (label.length <= 36 || segments.length <= 3) {
+    return label;
+  }
+
+  if (workRootIndex >= 0 && workRootIndex < segments.length - 1) {
+    return `.../${segments.slice(workRootIndex + 1).join("/")}`;
+  }
+
+  return `.../${segments.slice(-3).join("/")}`;
 }
 
 export function buildDecisionQueueDisplay(

@@ -441,7 +441,12 @@ export function RequirementDeliveryConsole({
                     type="button"
                   >
                     <strong>{row.title}</strong>
-                    <span>{row.repositoryLabel}</span>
+                    <span
+                      aria-label={row.repositoryFullLabel}
+                      title={row.repositoryFullLabel}
+                    >
+                      {row.repositoryLabel}
+                    </span>
                   </button>
                   <div className="requirementQueueMeta">
                     <span>{row.stageLabel}</span>

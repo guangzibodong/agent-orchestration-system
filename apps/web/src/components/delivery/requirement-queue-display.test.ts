@@ -117,4 +117,24 @@ describe("requirement queue display", () => {
       }
     ]);
   });
+
+  it("compacts long repository paths while preserving the full queue label", () => {
+    const [row] = buildRequirementQueueRows([
+      {
+        ...requirements[0],
+        repositoryLabel:
+          "C:/work/safety-console/checkout-with-a-very-long-repository-label",
+        repositorySafety: safety(
+          "C:/work/safety-console/checkout-with-a-very-long-repository-label"
+        )
+      }
+    ]);
+
+    expect(row?.repositoryLabel).toBe(
+      ".../safety-console/checkout-with-a-very-long-repository-label"
+    );
+    expect(row?.repositoryFullLabel).toBe(
+      "C:/work/safety-console/checkout-with-a-very-long-repository-label"
+    );
+  });
 });
