@@ -420,7 +420,6 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Title");
     expect(html).toContain("Repository path");
     expect(html).toContain("Repository ID");
-    expect(html).toContain("Repository path or registered ID");
     expect(html).toContain("Goal");
     expect(html).toContain("Acceptance criteria");
     expect(html).toContain("Constraints");
@@ -686,5 +685,8 @@ describe("RequirementDeliveryConsole", () => {
     expectDisabledNamedControl(html, "title");
     expectDisabledNamedControl(html, "goal");
     expect(html).toContain('type="submit" disabled=""');
+    expect(html).not.toContain("Viewer mode can inspect this flow");
+    expect(html).not.toContain("Use a local path now");
+    expect(html).not.toContain("Add 1-5 tasks with an execution adapter");
   });
 });

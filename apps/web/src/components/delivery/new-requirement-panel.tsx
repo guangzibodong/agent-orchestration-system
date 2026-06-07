@@ -73,13 +73,6 @@ export function NewRequirementPanel({
         </button>
       </div>
 
-      {viewerMode ? (
-        <p className="newRequirementHint">
-          Viewer mode can inspect this flow, but cannot create or mutate
-          requirement tickets.
-        </p>
-      ) : null}
-
       <form className="newRequirementForm" onSubmit={handleSubmit}>
         <div className="newRequirementFormGrid">
           <label className="field">
@@ -104,10 +97,6 @@ export function NewRequirementPanel({
 
         <fieldset className="newRequirementFieldset">
           <legend>Repository</legend>
-          <p className="newRequirementHint">
-            Repository path or registered ID. Use a local path now, or paste the
-            registry ID when one already exists.
-          </p>
           <div className="newRequirementFormGrid">
             <label className="field">
               <span>Repository path</span>
@@ -186,10 +175,6 @@ export function NewRequirementPanel({
 
         <fieldset className="newRequirementFieldset">
           <legend>Tasks</legend>
-          <p className="newRequirementHint">
-            Add 1-5 tasks with an execution adapter, command or instructions,
-            and optional dependency links.
-          </p>
           <div className="newRequirementTasks">
             {taskSlots.map((slot) => (
               <section
