@@ -302,10 +302,12 @@ export function buildRequirementEvidenceDisplay(
 export function buildRequirementEvidenceItemPresentation(
   item: RequirementEvidenceItem,
 ): RequirementEvidenceItemPresentation {
-  if (item.label === "Patch artifact") {
+  if (item.label === "Patch artifact" || item.label === "Patch artifacts") {
+    const visibleValue = compactEvidenceText(item.value);
+
     return {
-      visibleValue: compactEvidencePath(item.value),
-      fullValue: item.value,
+      visibleValue,
+      ...(visibleValue !== item.value ? { fullValue: item.value } : {}),
     };
   }
 
@@ -394,6 +396,13 @@ function compactApplyCommand(command: string): string {
     /"([^"]*(?:[/\\]artifacts[/\\][^"]+))"/g,
     (_match, path: string) => `"${compactEvidencePath(path)}"`,
   );
+}
+
+function compactEvidenceText(value: string): string {
+  return value
+    .split(/,\s*/)
+    .map((part) => compactEvidencePath(part))
+    .join(", ");
 }
 
 function compactEvidencePath(path: string): string {

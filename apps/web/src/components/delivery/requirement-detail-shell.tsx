@@ -153,12 +153,22 @@ export function RequirementDetailShell({
               ) : null}
             </div>
             <dl className="requirementDetailMetaGrid">
-              {section.rows.map((row) => (
-                <div className="requirementDetailMetaItem" key={row.label}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </div>
-              ))}
+              {section.rows.map((row) => {
+                const presentation =
+                  buildRequirementEvidenceItemPresentation(row);
+
+                return (
+                  <div className="requirementDetailMetaItem" key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd
+                      aria-label={presentation.fullValue}
+                      title={presentation.fullValue}
+                    >
+                      {presentation.visibleValue}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
 
             {section.title === "Review" ? (

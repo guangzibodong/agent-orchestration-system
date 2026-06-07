@@ -875,6 +875,17 @@ test.describe("Requirement Delivery Console smoke", () => {
       "title",
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
+    const detailPatchArtifacts = detail
+      .locator(".requirementDetailMetaItem")
+      .filter({ hasText: "Patch artifacts" })
+      .locator("dd");
+    await expect(detailPatchArtifacts).toContainText(
+      ".../workflow-needs-review/merge-candidate.patch",
+    );
+    await expect(detailPatchArtifacts).toHaveAttribute(
+      "title",
+      "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch",
+    );
     await expect(detail.getByLabel("Changed files under review")).toContainText(
       "2 files changed",
     );

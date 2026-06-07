@@ -288,7 +288,16 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("1 file changed");
     expect(html).toContain("apps/web/src/app/page.tsx");
     expect(html).toContain(
-      "C:/mawo/artifacts/workflow-review/merge-candidate.patch"
+      "title=\"C:/mawo/artifacts/workflow-review/merge-candidate.patch\""
+    );
+    expect(html).toContain(
+      "aria-label=\"C:/mawo/artifacts/workflow-review/merge-candidate.patch\""
+    );
+    expect(html).toContain(
+      ">.../workflow-review/merge-candidate.patch</dd>"
+    );
+    expect(html).not.toContain(
+      "<dd>C:/mawo/artifacts/workflow-review/merge-candidate.patch</dd>"
     );
     expect(html).not.toContain("diff --git");
     expect(html).not.toContain(
