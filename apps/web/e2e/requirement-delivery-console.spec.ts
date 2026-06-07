@@ -864,7 +864,15 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(detail).not.toContainText(
       "Linked through artifacts when reported",
     );
-    await expect(detail).toContainText(
+    const detailApplyCommand = detail
+      .getByLabel("Review acceptance")
+      .locator("dd")
+      .filter({ hasText: "git -C" });
+    await expect(detailApplyCommand).toContainText(
+      'git -C "C:/work/shop" apply ".../workflow-needs-review/merge-candidate.patch"',
+    );
+    await expect(detailApplyCommand).toHaveAttribute(
+      "title",
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
     await expect(detail.getByLabel("Changed files under review")).toContainText(

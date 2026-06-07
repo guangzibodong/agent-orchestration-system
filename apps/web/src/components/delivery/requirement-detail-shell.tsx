@@ -14,6 +14,7 @@ import type {
   RequirementSummary
 } from "./delivery-console-model";
 import { ArtifactDrawer, type ArtifactDrawerLink } from "./artifact-drawer";
+import { buildRequirementEvidenceItemPresentation } from "./requirement-evidence-panel";
 import { buildAuditEventDisplay } from "../audit-event-display";
 
 type RequirementDetailShellProps = {
@@ -418,6 +419,12 @@ function RequirementReviewAcceptance({
     ? requirement?.reviewEvidence?.mergeCandidate?.applyCommand
       ?? (patchPath ? `git apply "${patchPath}"` : undefined)
     : undefined;
+  const applyCommandPresentation = applyCommand
+    ? buildRequirementEvidenceItemPresentation({
+        label: "Manual apply command",
+        value: applyCommand,
+      })
+    : undefined;
   const applyStatus =
     requirement?.executionStatus === "gate_failed"
       ? "Apply unavailable until required gates pass"
@@ -454,7 +461,12 @@ function RequirementReviewAcceptance({
           ) : (
             <div>
               <dt>{applyCommand ? "Manual apply command" : "Apply status"}</dt>
-              <dd>{applyCommand ?? applyStatus}</dd>
+              <dd
+                aria-label={applyCommandPresentation?.fullValue}
+                title={applyCommandPresentation?.fullValue}
+              >
+                {applyCommandPresentation?.visibleValue ?? applyStatus}
+              </dd>
             </div>
           )}
         </dl>

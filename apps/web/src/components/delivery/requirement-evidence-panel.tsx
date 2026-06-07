@@ -3,7 +3,7 @@ import { ArtifactDrawer, type ArtifactDrawerLink } from "./artifact-drawer";
 
 type RequirementEvidenceTone = "danger" | "warning" | "success" | "muted";
 
-type RequirementEvidenceItem = {
+export type RequirementEvidenceItem = {
   label: string;
   value: string;
 };

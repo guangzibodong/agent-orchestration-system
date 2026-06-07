@@ -474,7 +474,16 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("Ready for approve or reject");
     expect(html).toContain("Manual apply command");
     expect(html).toContain(
-      "git -C &quot;C:/work/api&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;"
+      "title=\"git -C &quot;C:/work/api&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;\"",
+    );
+    expect(html).toContain(
+      "aria-label=\"git -C &quot;C:/work/api&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;\"",
+    );
+    expect(html).toContain(
+      "git -C &quot;C:/work/api&quot; apply &quot;.../workflow-review/merge-candidate.patch&quot;"
+    );
+    expect(html).not.toContain(
+      "<dd>git -C &quot;C:/work/api&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;</dd>"
     );
     expect(html).not.toContain(
       "git apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;"
