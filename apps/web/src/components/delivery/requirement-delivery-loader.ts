@@ -353,15 +353,26 @@ async function loadRequirementReviewEvidence(
     mergeCandidateResult.status === "fulfilled"
       ? mergeCandidateResult.value
       : undefined;
+  const currentReport = matchesCurrentWorkflowEvidence(requirement, report)
+    ? report
+    : undefined;
+  const currentMergeCandidate = matchesCurrentWorkflowEvidence(
+    requirement,
+    mergeCandidate
+  )
+    ? mergeCandidate
+    : undefined;
 
-  if (!report && !mergeCandidate) {
+  if (!currentReport && !currentMergeCandidate) {
     return { artifactLinks: [] };
   }
 
   const artifactLinks = [
-    ...(report ? buildReportArtifactLinks(requirement, report) : []),
-    ...(mergeCandidate
-      ? buildMergeCandidateArtifactLinks(requirement, mergeCandidate)
+    ...(currentReport
+      ? buildReportArtifactLinks(requirement, currentReport)
+      : []),
+    ...(currentMergeCandidate
+      ? buildMergeCandidateArtifactLinks(requirement, currentMergeCandidate)
       : [])
   ];
 
@@ -369,10 +380,25 @@ async function loadRequirementReviewEvidence(
     artifactLinks,
     reviewEvidence: buildRequirementReviewEvidence(
       requirement,
-      report,
-      mergeCandidate
+      currentReport,
+      currentMergeCandidate
     )
   };
+}
+
+function matchesCurrentWorkflowEvidence(
+  requirement: RequirementSummary,
+  evidence: { workflowId?: string } | undefined
+): boolean {
+  if (!evidence) {
+    return false;
+  }
+
+  if (!requirement.workflowRunId || !evidence.workflowId) {
+    return true;
+  }
+
+  return evidence.workflowId === requirement.workflowRunId;
 }
 
 async function loadRequirementReport(

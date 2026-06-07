@@ -1583,7 +1583,10 @@ test.describe("Requirement Delivery Console smoke", () => {
     const workflows: WorkflowRun[] = [lifecycleFailedWorkflow];
     const requirements: RequirementDeliveryTicket[] = [lifecycleRetryRequirement];
     const reports: Record<string, unknown> = {
-      "requirement-retry": gateFailedEvidenceReport,
+      "requirement-retry": {
+        ...gateFailedEvidenceReport,
+        workflowId: "workflow-failed",
+      },
     };
     const mergeCandidates: Record<string, unknown> = {};
     let jobPolls = 0;

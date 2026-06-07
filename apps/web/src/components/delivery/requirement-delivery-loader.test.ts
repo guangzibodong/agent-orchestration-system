@@ -691,6 +691,139 @@ describe("requirement delivery loader", () => {
     );
   });
 
+  it("ignores stale review evidence when report and merge candidate belong to a previous workflow", async () => {
+    const requests: string[] = [];
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [
+          {
+            id: "workflow-current",
+            goal: "Retry checkout ticket",
+            repositoryPath: "C:/work/shop",
+            status: "needs_review",
+            updatedAt: "2026-06-06T11:10:00.000Z",
+            tasks: [{ id: "task-1", title: "Patch", status: "passed" }],
+            qualityGates: [
+              { id: "gate-1", title: "Unit tests", status: "passed" }
+            ]
+          }
+        ];
+      }
+
+      if (path === "/requirements") {
+        return [
+          {
+            id: "requirement-retry",
+            title: "Retry checkout ticket",
+            repositoryPath: "C:/work/shop",
+            goal: "Retry without stale evidence",
+            acceptanceCriteria: ["Current run owns review evidence"],
+            constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "medium",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch",
+                agent: "shell",
+                instructions: "Patch"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "needs_review",
+            currentWorkflowRunId: "workflow-current",
+            runLinks: [
+              {
+                workflowRunId: "workflow-stale",
+                status: "gate_failed",
+                linkedAt: "2026-06-06T11:02:00.000Z"
+              },
+              {
+                workflowRunId: "workflow-current",
+                status: "needs_review",
+                linkedAt: "2026-06-06T11:10:00.000Z"
+              }
+            ],
+            createdAt: "2026-06-06T11:00:00.000Z",
+            updatedAt: "2026-06-06T11:10:00.000Z"
+          }
+        ];
+      }
+
+      if (path === "/requirements/requirement-retry/report") {
+        return {
+          workflowId: "workflow-stale",
+          reportArtifactPath: "C:/mawo/artifacts/workflow-stale/report.json",
+          summary: "Stale failed gate report",
+          recommendation: "needs_rework",
+          failedTasks: [],
+          failedGates: ["gate-1"],
+          taskResults: [
+            {
+              id: "task-1",
+              title: "Patch",
+              status: "failed",
+              patchArtifactPath:
+                "C:/mawo/artifacts/workflow-stale/tasks/task-1/patch.diff"
+            }
+          ],
+          gateResults: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              status: "failed",
+              exitCode: 1
+            }
+          ]
+        };
+      }
+
+      if (path === "/requirements/requirement-retry/merge-candidate") {
+        return {
+          workflowId: "workflow-stale",
+          status: "ready",
+          summary: "Stale merge candidate ready",
+          sourceBranches: ["mawo/workflow-stale/task-1"],
+          patch: [
+            "diff --git a/apps/web/src/app/page.tsx b/apps/web/src/app/page.tsx",
+            "index 1111111..2222222 100644"
+          ].join("\n"),
+          patchArtifactPath:
+            "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+          applyCommand:
+            'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-stale/merge-candidate.patch"',
+          createdAt: "2026-06-06T11:03:00.000Z"
+        };
+      }
+
+      return [];
+    });
+
+    expect(requests).toContain("/requirements/requirement-retry/report");
+    expect(requests).toContain(
+      "/requirements/requirement-retry/merge-candidate"
+    );
+    expect(model.requirements[0]).toMatchObject({
+      id: "requirement-retry",
+      workflowRunId: "workflow-current",
+      executionStatus: "needs_review",
+      nextAction: "Review merge candidate"
+    });
+    expect(model.requirements[0]?.reviewEvidence).toBeUndefined();
+    expect(model.requirements[0]?.artifactLinks).toBeUndefined();
+  });
+
   it("loads requirement audit trail from requirement and linked workflow events", async () => {
     const requests: string[] = [];
     const requirementAuditEvent: AuditEvent = {
