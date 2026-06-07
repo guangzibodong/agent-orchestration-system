@@ -171,6 +171,11 @@ export function RequirementDeliveryConsole({
     : [];
 
   async function handleNewRequirementSubmit(payload: NewRequirementPayload) {
+    if (viewerMode) {
+      setNewRequirementMessage("Viewer mode prevents creating requirements.");
+      return;
+    }
+
     setNewRequirementMessage(`Creating requirement draft for ${payload.title}`);
 
     try {
@@ -196,6 +201,16 @@ export function RequirementDeliveryConsole({
     const requirementTitle =
       model.requirements.find((requirement) => requirement.id === requirementId)
         ?.title ?? requirementId;
+
+    if (viewerMode) {
+      setRequirementActionState({
+        action,
+        message: "Viewer mode prevents requirement actions.",
+        requirementId,
+        status: "error",
+      });
+      return;
+    }
 
     setRequirementActionState({
       action,
@@ -232,6 +247,16 @@ export function RequirementDeliveryConsole({
     requirement: RequirementSummary,
     action: RequirementReviewAction,
   ) {
+    if (viewerMode) {
+      setRequirementReviewActionState({
+        action,
+        message: "Viewer mode prevents review decisions.",
+        requirementId: requirement.id,
+        status: "error",
+      });
+      return;
+    }
+
     if (!requirement.workflowRunId) {
       setRequirementReviewActionState({
         action,

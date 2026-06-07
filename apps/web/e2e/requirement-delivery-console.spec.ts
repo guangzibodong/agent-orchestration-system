@@ -491,6 +491,55 @@ test.describe("Requirement Delivery Console smoke", () => {
     });
   });
 
+  test("viewer mode short-circuits forced write callbacks before API requests", async ({
+    page,
+  }) => {
+    const mutatingRequests: string[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "viewer-token");
+        window.localStorage.setItem(roleKey, "viewer");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, mixedWorkflows, {
+      requirements: [lifecyclePlanRequirement, ...requirementTickets],
+      onMutatingRequest: ({ method, pathname }) => {
+        mutatingRequests.push(`${method} ${pathname}`);
+      },
+    });
+
+    await page.goto("/");
+
+    const consoleShell = page.locator("main.deliveryShell");
+    await expect(consoleShell.getByLabel("Viewer mode")).toContainText(
+      "Write actions are disabled",
+    );
+
+    const queueAction = page
+      .locator(".requirementQueuePanel")
+      .getByRole("button", { name: "Confirm plan" });
+    await invokeReactButtonClick(queueAction);
+    await expect(consoleShell.getByRole("alert")).toContainText(
+      "Viewer mode prevents requirement actions.",
+    );
+
+    await page
+      .getByRole("button", { name: "Select requirement Viewer readable requirement" })
+      .click();
+    await page.locator(".requirementDetailDisclosure > summary").click();
+    const approveButton = page
+      .locator(".requirementDetailShell")
+      .getByRole("button", { name: "Approve" });
+    await invokeReactButtonClick(approveButton);
+
+    await expect(consoleShell.getByLabel("Review decision")).toContainText(
+      "Viewer mode prevents review decisions.",
+    );
+    expect(mutatingRequests).toEqual([]);
+  });
+
   test("surfaces registered dirty repository safety before enqueue", async ({
     page,
   }) => {
@@ -3239,6 +3288,21 @@ async function chooseGateRequired(scope: Locator, label: RegExp, value: string) 
   const gateRequirement = scope.getByLabel(label).first();
   await expect(gateRequirement).toBeVisible();
   await gateRequirement.selectOption(value);
+}
+
+async function invokeReactButtonClick(locator: Locator) {
+  await locator.evaluate((button) => {
+    const propsKey = Object.keys(button).find((key) =>
+      key.startsWith("__reactProps$"),
+    );
+    const reactButton = button as HTMLButtonElement &
+      Record<string, { onClick?: () => void }>;
+
+    // Exercise the handler boundary directly; disabled buttons do not emit user clicks.
+    if (propsKey) {
+      reactButton[propsKey]?.onClick?.();
+    }
+  });
 }
 
 async function expectNoHorizontalDocumentOverflow(page: Page) {
