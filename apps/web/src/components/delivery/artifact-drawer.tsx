@@ -100,7 +100,11 @@ export function ArtifactDrawer({
               </h3>
               <ul className="artifactDrawerList">
                 {group.links.map((artifact) => {
-                  const metadata = [artifact.meta, artifact.path]
+                  const metadata = [
+                    artifact.meta,
+                    buildArtifactSourceWorkflowLabel(artifact.href),
+                    artifact.path
+                  ]
                     .filter(Boolean)
                     .join(" / ");
 
@@ -124,4 +128,13 @@ export function ArtifactDrawer({
       )}
     </details>
   );
+}
+
+function buildArtifactSourceWorkflowLabel(href: string): string | undefined {
+  const match = href.match(/^\/workflows\/([^/]+)(?:\/|$)/);
+  const workflowId = match?.[1];
+
+  return workflowId
+    ? `Source workflow ${decodeURIComponent(workflowId)}`
+    : undefined;
 }

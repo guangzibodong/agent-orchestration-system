@@ -170,6 +170,35 @@ describe("ArtifactDrawer", () => {
     expect(html).toContain("Audit");
   });
 
+  it("shows source workflow metadata for workflow artifact links", () => {
+    const html = renderToStaticMarkup(
+      createElement(ArtifactDrawer, {
+        artifacts: [
+          {
+            id: "stdout-source",
+            kind: "stdout",
+            label: "Retry stdout",
+            href: "/workflows/workflow-retry-fresh/artifact?path=stdout.log",
+            meta: "fresh retry run"
+          },
+          {
+            id: "report-requirement",
+            kind: "report",
+            label: "Requirement report",
+            href: "/requirements/requirement-retry/report",
+            meta: "review evidence"
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain("Retry stdout");
+    expect(html).toContain("fresh retry run / Source workflow workflow-retry-fresh");
+    expect(html).toContain("Requirement report");
+    expect(html).toContain("review evidence");
+    expect(html).not.toContain("Source workflow requirement-retry");
+  });
+
   it("is collapsed by default so logs do not dominate the first screen", () => {
     const html = renderToStaticMarkup(
       createElement(ArtifactDrawer, {
