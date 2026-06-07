@@ -137,6 +137,32 @@ describe("RequirementEvidencePanel display model", () => {
       workflowRunId: "workflow-current",
       workflowRunStatus: "needs_review",
       workflowRunStatusLabel: "Needs review",
+      artifactLinks: [
+        {
+          id: "stale-stdout",
+          kind: "stdout",
+          label: "Stale retry stdout",
+          href: "/workflows/workflow-stale/artifact?path=stdout.log",
+          meta: "old failed attempt",
+          path: "C:/mawo/artifacts/workflow-stale/stdout.log",
+        },
+        {
+          id: "stale-patch",
+          kind: "patch",
+          label: "Stale retry patch",
+          href: "/workflows/workflow-stale/artifact?path=merge-candidate.patch",
+          meta: "old merge candidate",
+          path: "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+        },
+        {
+          id: "current-stdout",
+          kind: "stdout",
+          label: "Current retry stdout",
+          href: "/workflows/workflow-current/artifact?path=stdout.log",
+          meta: "fresh retry attempt",
+          path: "C:/mawo/artifacts/workflow-current/stdout.log",
+        },
+      ],
       reviewEvidence: {
         ...reviewReadyRequirement.reviewEvidence!,
         evidenceSourceWorkflowId: "workflow-stale",
@@ -188,11 +214,24 @@ describe("RequirementEvidencePanel display model", () => {
       false,
     );
     expect(display.artifactLinks.map((artifact) => artifact.label)).toEqual(
-      expect.arrayContaining(["Current workflow", "Requirement report"]),
+      expect.arrayContaining([
+        "Current workflow",
+        "Requirement report",
+        "Current retry stdout",
+      ]),
     );
     expect(display.artifactLinks.map((artifact) => artifact.label)).not.toContain(
       "Merge candidate evidence",
     );
+    expect(display.artifactLinks.map((artifact) => artifact.label)).not.toContain(
+      "Stale retry stdout",
+    );
+    expect(display.artifactLinks.map((artifact) => artifact.label)).not.toContain(
+      "Stale retry patch",
+    );
+    expect(display.artifactLinks.some((artifact) =>
+      [artifact.href, artifact.path].some((value) => value?.includes("workflow-stale")),
+    )).toBe(false);
   });
 
   it("does not show manual apply commands for failed required gate evidence", () => {

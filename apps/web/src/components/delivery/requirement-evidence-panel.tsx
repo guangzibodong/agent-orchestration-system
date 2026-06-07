@@ -457,7 +457,54 @@ export function buildRequirementEvidenceArtifactLinks(
     });
   }
 
-  return [...links, ...(requirement.artifactLinks ?? [])];
+  return [...links, ...buildSupplementalArtifactLinks(requirement)];
+}
+
+function buildSupplementalArtifactLinks(
+  requirement: RequirementSummary,
+): ArtifactDrawerLink[] {
+  const artifacts = requirement.artifactLinks ?? [];
+
+  if (!buildSupersededEvidenceLabel(requirement)) {
+    return artifacts;
+  }
+
+  const currentWorkflowId = requirement.workflowRunId;
+
+  if (!currentWorkflowId) {
+    return [];
+  }
+
+  return artifacts.filter((artifact) => {
+    if (artifact.kind === "patch") {
+      return false;
+    }
+
+    return extractArtifactWorkflowId(artifact) === currentWorkflowId;
+  });
+}
+
+function extractArtifactWorkflowId(
+  artifact: ArtifactDrawerLink,
+): string | undefined {
+  const hrefMatch = artifact.href.match(/^\/workflows\/([^/?#]+)(?:[/?#]|$)/);
+
+  if (hrefMatch?.[1]) {
+    return safeDecodeURIComponent(hrefMatch[1]);
+  }
+
+  const normalizedPath = artifact.path?.replace(/\\/g, "/");
+  const pathMatch = normalizedPath?.match(/(?:^|\/)artifacts\/([^/]+)\//);
+
+  return pathMatch?.[1];
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function buildSupersededEvidenceLabel(
