@@ -129,8 +129,12 @@ describe("RequirementDeliveryConsole", () => {
 
     expect(html).toContain("No requirements yet");
     expect(html).toContain("No decisions waiting");
+    expect(html).toContain("Repository safety checks pending");
     expect(html).not.toContain(
       "Create a requirement to produce an isolated, quality-gated merge candidate",
+    );
+    expect(html).not.toContain(
+      "Create a requirement to run repository safety checks",
     );
     expect(html).not.toContain(
       "Requirements that need review, retry, clarification, or safety action will appear here",

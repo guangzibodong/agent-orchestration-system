@@ -469,7 +469,7 @@ export function RequirementDeliveryConsole({
               <strong>Recovery action</strong>
               <p>
                 {selectedRequirement?.repositorySafety.recoveryAction ??
-                  "Create a requirement to run repository safety checks"}
+                  "Repository safety checks pending"}
               </p>
             </div>
             <div className="repositorySafetyContract">
