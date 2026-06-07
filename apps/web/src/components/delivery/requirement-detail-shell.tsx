@@ -95,6 +95,7 @@ export function RequirementDetailShell({
   const sections = buildRequirementDetailSections(requirement);
   const title = requirement?.title ?? "Requirement Detail";
   const actionDisabled = viewerMode || !requirement;
+  const visibleArtifacts = buildDetailArtifactLinks(requirement, artifacts);
 
   return (
     <section
@@ -169,7 +170,7 @@ export function RequirementDetailShell({
 
             {section.title === "Execution" ? (
               <>
-                <ArtifactDrawer artifacts={artifacts} />
+                <ArtifactDrawer artifacts={visibleArtifacts} />
                 <RequirementWorkspaceCleanup requirement={requirement} />
                 <RequirementDetailLifecycleActions
                   actionState={actionState}
@@ -182,7 +183,7 @@ export function RequirementDetailShell({
 
             {section.title === "Review" ? (
               <RequirementReviewAcceptance
-                artifacts={artifacts}
+                artifacts={visibleArtifacts}
                 disabled={actionDisabled}
                 onLifecycleAction={onLifecycleAction}
                 onReviewAction={onReviewAction}
@@ -1278,6 +1279,52 @@ function formatContractList(values: string[] | undefined, fallback: string): str
 
 function formatChangedFileCount(count: number): string {
   return `${count} ${count === 1 ? "file" : "files"} changed`;
+}
+
+function buildDetailArtifactLinks(
+  requirement: RequirementSummary | undefined,
+  artifacts: ArtifactDrawerLink[],
+): ArtifactDrawerLink[] {
+  if (!buildSupersededEvidenceLabel(requirement)) {
+    return artifacts;
+  }
+
+  const currentWorkflowId = requirement?.workflowRunId;
+
+  if (!currentWorkflowId) {
+    return [];
+  }
+
+  return artifacts.filter((artifact) => {
+    if (artifact.kind === "patch") {
+      return false;
+    }
+
+    return extractArtifactWorkflowId(artifact) === currentWorkflowId;
+  });
+}
+
+function extractArtifactWorkflowId(
+  artifact: ArtifactDrawerLink,
+): string | undefined {
+  const hrefMatch = artifact.href.match(/^\/workflows\/([^/?#]+)(?:[/?#]|$)/);
+
+  if (hrefMatch?.[1]) {
+    return safeDecodeURIComponent(hrefMatch[1]);
+  }
+
+  const normalizedPath = artifact.path?.replace(/\\/g, "/");
+  const pathMatch = normalizedPath?.match(/(?:^|\/)artifacts\/([^/]+)\//);
+
+  return pathMatch?.[1];
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function isReviewEvidenceCurrent(requirement: RequirementSummary): boolean {

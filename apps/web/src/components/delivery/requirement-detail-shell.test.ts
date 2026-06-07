@@ -531,6 +531,70 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain("<details open");
   });
 
+  it("hides stale retry artifacts from the detail artifact drawer", () => {
+    const html = renderToStaticMarkup(
+      createElement(RequirementDetailShell, {
+        requirement: {
+          ...requirement,
+          workflowRunHref: "/workflows/workflow-current",
+          workflowRunId: "workflow-current",
+          workflowRunStatus: "needs_review",
+          workflowRunStatusLabel: "Needs review",
+          reviewEvidence: {
+            ...requirement.reviewEvidence!,
+            evidenceSourceWorkflowId: "workflow-stale",
+            reportSummary: "Stale merge candidate ready",
+            changedFiles: ["apps/web/src/stale-page.tsx"],
+            patchArtifactPaths: [
+              "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+            ],
+            mergeCandidate: {
+              ...requirement.reviewEvidence!.mergeCandidate!,
+              summary: "Stale merge candidate ready",
+              patchArtifactPath:
+                "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+              applyCommand:
+                'git -C "C:/work/api" apply "C:/mawo/artifacts/workflow-stale/merge-candidate.patch"',
+            },
+          },
+        },
+        artifacts: [
+          {
+            id: "stale-stdout",
+            kind: "stdout",
+            label: "Stale detail stdout",
+            href: "/workflows/workflow-stale/artifact?path=stdout.log",
+            meta: "old failed attempt",
+            path: "C:/mawo/artifacts/workflow-stale/stdout.log",
+          },
+          {
+            id: "stale-patch",
+            kind: "patch",
+            label: "Stale detail patch",
+            href: "/workflows/workflow-stale/artifact?path=merge-candidate.patch",
+            meta: "old merge candidate",
+            path: "C:/mawo/artifacts/workflow-stale/merge-candidate.patch",
+          },
+          {
+            id: "current-stdout",
+            kind: "stdout",
+            label: "Current detail stdout",
+            href: "/workflows/workflow-current/artifact?path=stdout.log",
+            meta: "fresh retry attempt",
+            path: "C:/mawo/artifacts/workflow-current/stdout.log",
+          },
+        ],
+        onReviewAction: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("Superseded evidence from workflow-stale");
+    expect(html).toContain("Current detail stdout");
+    expect(html).not.toContain("Stale detail stdout");
+    expect(html).not.toContain("Stale detail patch");
+    expect(html).not.toContain("old merge candidate");
+  });
+
   it("explains retained worktree cleanup policy for review evidence", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDetailShell, {
