@@ -617,7 +617,10 @@ export function RequirementDeliveryConsole({
             </section>
           ) : null}
 
-          <section aria-label="Stage Stepper">
+          <section
+            className="requirementStageStepperCard"
+            aria-label="Stage Stepper"
+          >
             <div className="deliveryPanelHeader compact">
               <h2>Stage Stepper</h2>
               <span>

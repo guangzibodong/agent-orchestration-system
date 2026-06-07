@@ -1467,6 +1467,57 @@ button {
     padding: 16px;
   }
 
+  .deliveryFocusPanel {
+    display: contents;
+  }
+
+  .repositorySafetyCard {
+    order: 1;
+  }
+
+  .agentAvailabilityCard {
+    order: 2;
+  }
+
+  .decisionQueuePanel {
+    order: 3;
+  }
+
+  .requirementStageStepperCard {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    order: 4;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+  }
+
+  .requirementEvidenceCard {
+    order: 5;
+  }
+
+  .deliveryFocusPanel > .deliveryPanelHeader {
+    order: 6;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+  }
+
+  .requirementDetailDisclosure {
+    order: 7;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+  }
+
+  .requirementQueuePanel {
+    order: 8;
+  }
+
   .deliveryTopbar {
     align-items: stretch;
     flex-direction: column;

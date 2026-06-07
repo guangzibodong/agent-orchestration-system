@@ -1191,6 +1191,28 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Retry failed gate",
       "Review merge candidate",
     ]);
+    await expectMobileSectionOrder(page, [
+      {
+        label: "Repository Safety",
+        locator: page.getByLabel("Repository Safety"),
+      },
+      {
+        label: "Decision Queue",
+        locator: page.locator(".decisionQueuePanel"),
+      },
+      {
+        label: "Stage Stepper",
+        locator: page.getByLabel("Stage Stepper"),
+      },
+      {
+        label: "Gate Result / Review Evidence",
+        locator: page.getByLabel("Gate Result / Review Evidence"),
+      },
+      {
+        label: "Requirement Queue",
+        locator: page.locator(".requirementQueuePanel"),
+      },
+    ]);
 
     const mobileEvidenceDrawer = page.getByLabel("Read-only evidence links");
     await expect(mobileEvidenceDrawer.getByText("2 links")).toBeVisible();
@@ -3424,6 +3446,34 @@ async function expectElementsInsideViewport(page: Page, locator: Locator) {
       box!.x + box!.width,
       `element ${index} should not overflow right`,
     ).toBeLessThanOrEqual(viewport!.width + 1);
+  }
+}
+
+async function expectMobileSectionOrder(
+  page: Page,
+  sections: Array<{ label: string; locator: Locator }>,
+) {
+  const positions: Array<{ label: string; top: number }> = [];
+
+  for (const section of sections) {
+    await expect(section.locator.first()).toBeVisible();
+    const box = await section.locator.first().boundingBox();
+
+    expect(
+      box,
+      `${section.label} should have a measurable mobile section box`,
+    ).not.toBeNull();
+    positions.push({ label: section.label, top: box!.y });
+  }
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const previous = positions[index - 1]!;
+    const current = positions[index]!;
+
+    expect(
+      current.top,
+      `${current.label} should appear below ${previous.label} on mobile`,
+    ).toBeGreaterThan(previous.top);
   }
 }
 
