@@ -115,6 +115,10 @@ export function buildNewRequirementPayload(
     errors.push("Each task needs task-level acceptance.");
   }
 
+  if (tasks.some((task) => task.agent === "shell" && !task.command)) {
+    errors.push("Shell tasks need a command.");
+  }
+
   if (tasks.some((task) => task.timeoutMs === "invalid")) {
     errors.push("Task timeouts must be positive milliseconds.");
   }

@@ -650,6 +650,29 @@ describe("RequirementDeliveryConsole", () => {
     });
   });
 
+  it("requires shell tasks to include an executable command before enqueue", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      tasks: [
+        {
+          title: "Patch checkout copy",
+          objective: "Patch checkout copy in an isolated worktree",
+          acceptanceCriteria: "Patch is reviewable",
+          agent: "shell",
+          command: "",
+          instructions: "Patch checkout copy without a shell command",
+          timeoutMs: "",
+          dependsOn: "",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Shell tasks need a command."],
+    });
+  });
+
   it("builds a structured New Requirement payload for submit callbacks", () => {
     const result = buildNewRequirementPayload(validNewRequirementDraft);
 

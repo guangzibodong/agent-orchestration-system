@@ -1334,6 +1334,63 @@ test.describe("Requirement Delivery Console smoke", () => {
     });
   });
 
+  test("New Requirement blocks shell tasks without commands before create", async ({
+    page,
+  }) => {
+    const createdRequests: unknown[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, [], {
+      onRequirementCreate: (payload) => {
+        createdRequests.push(payload);
+      },
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "New Requirement" }).click();
+
+    const flow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await fillField(flow, /title|requirement title/i, "Shell command guard");
+    await fillField(flow, /repository path/i, "C:/work/shop");
+    await fillField(
+      flow,
+      /goal/i,
+      "Prevent invalid shell tasks from reaching enqueue.",
+    );
+    await fillField(
+      flow,
+      /acceptance criteria/i,
+      "Shell task command is captured before execution.",
+    );
+    await fillField(flow, /task 1 title/i, "Patch checkout copy");
+    await fillField(
+      flow,
+      /task 1 objective/i,
+      "Patch checkout copy in an isolated worktree.",
+    );
+    await fillField(flow, /task 1 acceptance/i, "Patch is reviewable.");
+    await fillField(flow, /gate 1 command/i, "npm test");
+
+    await flow
+      .getByRole("button", {
+        name: /create requirement|save requirement|create/i,
+      })
+      .click();
+
+    await expect(flow.getByRole("alert")).toContainText(
+      "Shell tasks need a command.",
+    );
+    expect(createdRequests).toEqual([]);
+  });
+
   test("New Requirement creation refreshes and focuses the created requirement workspace", async ({
     page,
   }) => {
