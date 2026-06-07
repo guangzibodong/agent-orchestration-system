@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { RequirementSummary } from "./delivery-console-model";
-import { buildRequirementEvidenceDisplay } from "./requirement-evidence-panel";
+import {
+  RequirementEvidencePanel,
+  buildRequirementEvidenceDisplay,
+  buildRequirementEvidenceItemPresentation,
+} from "./requirement-evidence-panel";
 
 const reviewReadyRequirement: RequirementSummary = {
   id: "requirement-review",
@@ -128,6 +134,52 @@ describe("RequirementEvidencePanel display model", () => {
       ]),
     );
     expect(display.items.some((item) => item.value.includes("{"))).toBe(false);
+  });
+
+  it("compacts first-screen patch and apply evidence while preserving full values", () => {
+    expect(
+      buildRequirementEvidenceItemPresentation({
+        label: "Patch artifact",
+        value: "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+      }),
+    ).toEqual({
+      visibleValue: ".../workflow-review/merge-candidate.patch",
+      fullValue: "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+    });
+    expect(
+      buildRequirementEvidenceItemPresentation({
+        label: "Manual apply command",
+        value:
+          'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+      }),
+    ).toEqual({
+      visibleValue:
+        'git -C "C:/work/shop" apply ".../workflow-review/merge-candidate.patch"',
+      fullValue:
+        'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(RequirementEvidencePanel, {
+        requirement: reviewReadyRequirement,
+      }),
+    );
+
+    expect(html).toContain(
+      'title="C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+    );
+    expect(html).toContain(
+      'aria-label="C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
+    );
+    expect(html).toContain(
+      ">.../workflow-review/merge-candidate.patch</dd>",
+    );
+    expect(html).toContain(
+      'title="git -C &quot;C:/work/shop&quot; apply &quot;C:/mawo/artifacts/workflow-review/merge-candidate.patch&quot;"',
+    );
+    expect(html).toContain(
+      ">git -C &quot;C:/work/shop&quot; apply &quot;.../workflow-review/merge-candidate.patch&quot;</dd>",
+    );
   });
 
   it("marks superseded review evidence without exposing stale merge candidates", () => {

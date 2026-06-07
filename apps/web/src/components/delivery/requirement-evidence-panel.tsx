@@ -8,6 +8,11 @@ type RequirementEvidenceItem = {
   value: string;
 };
 
+export type RequirementEvidenceItemPresentation = {
+  visibleValue: string;
+  fullValue?: string;
+};
+
 type RequirementEvidenceDisplay = {
   tone: RequirementEvidenceTone;
   title: string;
@@ -38,12 +43,21 @@ export function RequirementEvidencePanel({
         <p>{evidence.summary}</p>
       </div>
       <dl className="requirementEvidenceList">
-        {evidence.items.map((item) => (
-          <div className="requirementEvidenceItem" key={item.label}>
-            <dt>{item.label}</dt>
-            <dd>{item.value}</dd>
-          </div>
-        ))}
+        {evidence.items.map((item) => {
+          const presentation = buildRequirementEvidenceItemPresentation(item);
+
+          return (
+            <div className="requirementEvidenceItem" key={item.label}>
+              <dt>{item.label}</dt>
+              <dd
+                aria-label={presentation.fullValue}
+                title={presentation.fullValue}
+              >
+                {presentation.visibleValue}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
       {evidence.artifactLinks.length ? (
         <div
@@ -285,6 +299,30 @@ export function buildRequirementEvidenceDisplay(
   };
 }
 
+export function buildRequirementEvidenceItemPresentation(
+  item: RequirementEvidenceItem,
+): RequirementEvidenceItemPresentation {
+  if (item.label === "Patch artifact") {
+    return {
+      visibleValue: compactEvidencePath(item.value),
+      fullValue: item.value,
+    };
+  }
+
+  if (item.label === "Manual apply command") {
+    const visibleCommand = compactApplyCommand(item.value);
+
+    return {
+      visibleValue: visibleCommand,
+      fullValue: item.value,
+    };
+  }
+
+  return {
+    visibleValue: item.value,
+  };
+}
+
 function buildReviewEvidenceSummaryItems(
   requirement: RequirementSummary,
   options: { includeManualApplyCommand?: boolean } = {},
@@ -349,6 +387,29 @@ function formatEvidenceList(values: string[]): string {
   }
 
   return `${values.slice(0, 3).join(", ")} and ${values.length - 3} more`;
+}
+
+function compactApplyCommand(command: string): string {
+  return command.replace(
+    /"([^"]*(?:[/\\]artifacts[/\\][^"]+))"/g,
+    (_match, path: string) => `"${compactEvidencePath(path)}"`,
+  );
+}
+
+function compactEvidencePath(path: string): string {
+  const normalizedPath = path.replace(/\\/g, "/");
+  const segments = normalizedPath.split("/").filter(Boolean);
+  const artifactRootIndex = segments.indexOf("artifacts");
+
+  if (artifactRootIndex >= 0 && artifactRootIndex < segments.length - 1) {
+    return `.../${segments.slice(artifactRootIndex + 1).join("/")}`;
+  }
+
+  if (segments.length > 4) {
+    return `.../${segments.slice(-4).join("/")}`;
+  }
+
+  return path;
 }
 
 function buildGateEvidenceItems(

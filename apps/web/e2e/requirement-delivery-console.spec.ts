@@ -751,10 +751,30 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
     await expect(evidence).toContainText("apps/web/src/app/page.tsx");
     await expect(evidence).toContainText("packages/shared/src/index.ts");
-    await expect(evidence).toContainText(
+    const patchEvidence = evidence
+      .locator(".requirementEvidenceItem")
+      .filter({ hasText: "Patch artifact" })
+      .locator("dd");
+    await expect(patchEvidence).toContainText(
+      ".../workflow-needs-review/merge-candidate.patch",
+    );
+    await expect(patchEvidence).toHaveAttribute(
+      "title",
       "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch",
     );
-    await expect(evidence).toContainText(
+    await expect(patchEvidence).toHaveAttribute(
+      "aria-label",
+      "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch",
+    );
+    const applyEvidence = evidence
+      .locator(".requirementEvidenceItem")
+      .filter({ hasText: "Manual apply command" })
+      .locator("dd");
+    await expect(applyEvidence).toContainText(
+      'git -C "C:/work/shop" apply ".../workflow-needs-review/merge-candidate.patch"',
+    );
+    await expect(applyEvidence).toHaveAttribute(
+      "title",
       'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-needs-review/merge-candidate.patch"',
     );
     await expect(evidence).toContainText(
@@ -2167,13 +2187,22 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Requirement execution settled; evidence refreshed: Journey checkout requirement",
     );
     await expect(page.getByLabel("Stage Stepper")).toContainText("Review");
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+    const createdEvidence = focusPanel.getByLabel("Gate Result / Review Evidence");
+    await expect(createdEvidence).toContainText(
       "Review-ready merge candidate",
     );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+    await expect(createdEvidence).toContainText(
       "Journey merge candidate ready with 2 changed files",
     );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
+    const createdApplyEvidence = createdEvidence
+      .locator(".requirementEvidenceItem")
+      .filter({ hasText: "Manual apply command" })
+      .locator("dd");
+    await expect(createdApplyEvidence).toContainText(
+      'git -C "C:/work/journey" apply ".../workflow-created-journey/merge-candidate.patch"',
+    );
+    await expect(createdApplyEvidence).toHaveAttribute(
+      "title",
       'git -C "C:/work/journey" apply "C:/mawo/artifacts/workflow-created-journey/merge-candidate.patch"',
     );
     await expect(focusPanel).not.toContainText("Apply Candidate");
