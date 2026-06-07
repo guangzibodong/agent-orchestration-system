@@ -672,12 +672,15 @@ export function mapRequirementTicketToSummary(
     requirement,
     workflowStatus
   );
+  const repositorySafetyKey =
+    requirement.repositoryId ??
+    (requirement.repositoryPath ? requirement.id : undefined);
   const repositorySafety = buildTicketRepositorySafety(
     requirement,
     executionStatus,
     workflow,
-    requirement.repositoryId
-      ? context.repositorySafetyByRepositoryId?.[requirement.repositoryId]
+    repositorySafetyKey
+      ? context.repositorySafetyByRepositoryId?.[repositorySafetyKey]
       : undefined
   );
   const currentJobStatus = context.jobStatusByRequirementId?.[requirement.id];

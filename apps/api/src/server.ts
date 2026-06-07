@@ -131,6 +131,7 @@ const VIEWER_READ_ENDPOINTS: Array<string | RegExp> = [
   "/requirements",
   /^\/requirements\/[^/]+\/merge-candidate$/,
   /^\/requirements\/[^/]+\/report$/,
+  /^\/requirements\/[^/]+\/safety$/,
   /^\/requirements\/[^/]+$/,
   "/workflows",
   /^\/workflows\/[^/]+$/,
@@ -1030,6 +1031,41 @@ export function buildApp(runner?: LocalRunner, options: BuildAppOptions = {}) {
     }
 
     return syncRequirementWithWorkflow(requirement);
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/requirements/:id/safety", async (request, reply) => {
+    const requirement = await requirementStore.get(request.params.id);
+
+    if (!requirement) {
+      return reply.code(404).send({ error: "requirement_not_found" });
+    }
+
+    const repository = requirement.repositoryId
+      ? await repositoryStore.get(requirement.repositoryId)
+      : undefined;
+
+    if (requirement.repositoryId && !repository) {
+      return reply.code(404).send({ error: "repository_not_found" });
+    }
+
+    const repositoryPath = repository?.path ?? requirement.repositoryPath;
+    if (!repositoryPath) {
+      return reply.code(400).send({ error: "repository_path_required" });
+    }
+
+    return await repositorySafetyInspector({
+      repository: repository ?? {
+        id: requirement.id,
+        name: requirement.title,
+        path: repositoryPath,
+        qualityGates: [],
+        createdAt: requirement.createdAt,
+        updatedAt: requirement.updatedAt,
+      },
+      allowedRoots: allowedRepositoryRoots,
+    });
   });
 
   app.patch<{

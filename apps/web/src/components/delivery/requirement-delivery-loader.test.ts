@@ -284,6 +284,95 @@ describe("requirement delivery loader", () => {
     });
   });
 
+  it("loads path-only requirement safety before enqueue", async () => {
+    const requests: string[] = [];
+
+    const model = await loadRequirementDeliveryModel(async (path) => {
+      requests.push(path);
+
+      if (path === "/workflows") {
+        return [];
+      }
+
+      if (path === "/requirements") {
+        return [
+          {
+            id: "requirement-path-dirty",
+            title: "Run path-only dirty repo safely",
+            repositoryPath: "C:/work/path-only-shop",
+            goal: "Block execution until path-only repository safety is clear",
+            acceptanceCriteria: ["Dirty repository state is visible"],
+            constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+            nonGoals: ["Automatic PR creation"],
+            riskLevel: "high",
+            contextPaths: [],
+            tasks: [
+              {
+                id: "task-1",
+                title: "Patch checkout",
+                agent: "shell",
+                instructions: "Patch checkout"
+              }
+            ],
+            qualityGates: [
+              {
+                id: "gate-1",
+                title: "Unit tests",
+                command: "npm test",
+                required: true
+              }
+            ],
+            status: "ready_to_run",
+            runLinks: [],
+            createdAt: "2026-06-06T11:00:00.000Z",
+            updatedAt: "2026-06-06T11:05:00.000Z"
+          }
+        ];
+      }
+
+      if (path === "/requirements/requirement-path-dirty/safety") {
+        return {
+          repositoryId: "requirement-path-dirty",
+          path: "C:/work/path-only-shop",
+          defaultBranch: "main",
+          currentBranch: "feature/path-only",
+          headShortSha: "def5678",
+          clean: false,
+          dirty: true,
+          allowedRoot: true,
+          blockedReason: "repository_dirty",
+          recoveryAction:
+            "Commit, stash, or discard local changes before running mutating workflows.",
+          noAutoMerge: true,
+          manualApplyPolicy:
+            "Manual review is required; MAWO never automatically merges repository changes."
+        };
+      }
+
+      return [];
+    });
+
+    expect(requests).toContain(
+      "/requirements/requirement-path-dirty/safety"
+    );
+    expect(model.requirements[0]).toMatchObject({
+      id: "requirement-path-dirty",
+      availableActions: [],
+      nextAction:
+        "Commit, stash, or discard local changes before running mutating workflows."
+    });
+    expect(model.requirements[0]?.repositorySafety).toMatchObject({
+      statusLabel: "Safety blocked",
+      statusTone: "danger",
+      branchLabel: "feature/path-only",
+      headLabel: "HEAD def5678",
+      cleanStateLabel: "Dirty - mutating runs blocked",
+      allowedRootLabel: "Allowed root accepted by API",
+      blockedReason:
+        "Repository has uncommitted changes; mutating requirement runs are blocked."
+    });
+  });
+
   it("uses fresh workflow overrides so retry does not show stale failed evidence", async () => {
     const model = await loadRequirementDeliveryModel(
       async (path) => {

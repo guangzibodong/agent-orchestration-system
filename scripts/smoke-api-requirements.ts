@@ -207,6 +207,28 @@ async function main() {
         `Viewer GET /requirements/:id returned ${viewerDetail.status}; expected 200 for readable ticket details.`,
       );
 
+      const viewerSafety = await request(
+        app,
+        "GET",
+        `/requirements/${requirementId}/safety`,
+        undefined,
+        viewerToken,
+      );
+      log(`viewer GET /requirements/:id/safety -> ${viewerSafety.status}`);
+      check(
+        failures,
+        viewerSafety.status === 200,
+        `Viewer GET /requirements/:id/safety returned ${viewerSafety.status}; expected 200 safety evidence without auth denial.`,
+      );
+      check(
+        failures,
+        isObject(viewerSafety.body) &&
+          viewerSafety.body.noAutoMerge === true &&
+          typeof viewerSafety.body.manualApplyPolicy === "string" &&
+          typeof viewerSafety.body.path === "string",
+        "Requirement safety evidence did not include path, noAutoMerge, and manualApplyPolicy.",
+      );
+
       const report = await request(
         app,
         "GET",

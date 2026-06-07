@@ -1475,6 +1475,60 @@ describe("runner API", () => {
     });
   });
 
+  it("inspects repository safety for path-only requirement tickets", async () => {
+    const demoRoot = await mkdtemp(
+      join(tmpdir(), "mawo-requirement-path-safety-test-"),
+    );
+    tempRoots.push(demoRoot);
+    const repoPath = await createCommittedRepo();
+    await writeFile(join(repoPath, "dirty.txt"), "dirty\n", "utf8");
+    const app = buildApp(undefined, { demoRoot });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/requirements",
+      payload: {
+        title: "Inspect path-only safety",
+        repositoryPath: repoPath,
+        goal: "Show repository safety before execution",
+        acceptanceCriteria: ["Dirty state is visible before enqueue"],
+        tasks: [
+          {
+            title: "Patch",
+            agent: "shell",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+        qualityGates: [
+          {
+            title: "Tests",
+            command: `${node} -e "process.exit(0)"`,
+          },
+        ],
+      },
+    });
+    const requirement = createResponse.json();
+
+    const safetyResponse = await app.inject({
+      method: "GET",
+      url: `/requirements/${requirement.id}/safety`,
+    });
+
+    expect(safetyResponse.statusCode).toBe(200);
+    expect(safetyResponse.json()).toMatchObject({
+      repositoryId: requirement.id,
+      path: repoPath,
+      currentBranch: "main",
+      clean: false,
+      dirty: true,
+      allowedRoot: true,
+      blockedReason: "repository_dirty",
+      noAutoMerge: true,
+      manualApplyPolicy:
+        "Manual review is required; MAWO never automatically merges repository changes.",
+    });
+  });
+
   it("retries linked requirement workflows without stale evidence", async () => {
     const demoRoot = await mkdtemp(
       join(tmpdir(), "mawo-requirement-retry-test-"),

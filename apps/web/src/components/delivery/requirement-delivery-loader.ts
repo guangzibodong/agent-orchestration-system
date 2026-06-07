@@ -108,23 +108,41 @@ async function loadRepositorySafetyForRequirements(
   api: ApiClient,
   requirements: RequirementDeliveryTicket[]
 ): Promise<Record<string, RepositorySafety | undefined>> {
-  const repositoryIds = [
-    ...new Set(
-      requirements
-        .map((requirement) => requirement.repositoryId)
-        .filter((repositoryId): repositoryId is string => Boolean(repositoryId))
-    )
+  const safetyRequests = [
+    ...new Map(
+      requirements.flatMap((requirement) => {
+        if (requirement.repositoryId) {
+          return [
+            [
+              requirement.repositoryId,
+              `/repositories/${encodeURIComponent(requirement.repositoryId)}/safety`
+            ]
+          ] satisfies Array<[string, string]>;
+        }
+
+        if (requirement.repositoryPath) {
+          return [
+            [
+              requirement.id,
+              `/requirements/${encodeURIComponent(requirement.id)}/safety`
+            ]
+          ] satisfies Array<[string, string]>;
+        }
+
+        return [] satisfies Array<[string, string]>;
+      })
+    ).entries()
   ];
 
-  if (!repositoryIds.length) {
+  if (!safetyRequests.length) {
     return {};
   }
 
   const results = await Promise.allSettled(
-    repositoryIds.map(async (repositoryId) => ({
-      repositoryId,
+    safetyRequests.map(async ([key, path]) => ({
+      key,
       safety: repositorySafetySchema.parse(
-        await api(`/repositories/${encodeURIComponent(repositoryId)}/safety`)
+        await api(path)
       )
     }))
   );
@@ -132,7 +150,7 @@ async function loadRepositorySafetyForRequirements(
   return Object.fromEntries(
     results.flatMap((result) =>
       result.status === "fulfilled"
-        ? [[result.value.repositoryId, result.value.safety]]
+        ? [[result.value.key, result.value.safety]]
         : []
     )
   );

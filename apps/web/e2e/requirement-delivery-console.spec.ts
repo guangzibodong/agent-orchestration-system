@@ -367,6 +367,36 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toHaveCount(0);
   });
 
+  test("surfaces path-only dirty repository safety before enqueue", async ({
+    page,
+  }) => {
+    await mockApi(page, [], {
+      repositorySafetyByRequirementId: {
+        "requirement-path-dirty-repo": pathOnlyDirtyRepositorySafety,
+      },
+      requirements: [pathOnlyDirtyRepositoryRequirement],
+    });
+
+    await page.goto("/");
+
+    const safety = page.getByLabel("Repository Safety");
+    await expect(safety).toContainText("Safety blocked");
+    await expect(safety).toContainText("feature/path-only");
+    await expect(safety).toContainText("HEAD def5678");
+    await expect(safety).toContainText("Dirty - mutating runs blocked");
+    await expect(safety).toContainText("Allowed root accepted by API");
+    await expect(safety).toContainText(
+      "Repository has uncommitted changes; mutating requirement runs are blocked.",
+    );
+    const queueItem = page
+      .locator(".requirementQueueItem")
+      .filter({ hasText: "Run path-only dirty repo safely" });
+    await expect(queueItem).toContainText("Repository safety blocks execution");
+    await expect(
+      queueItem.getByRole("button", { name: "Enqueue" }),
+    ).toHaveCount(0);
+  });
+
   test("surfaces readable review evidence and artifact paths for requirement tickets", async ({
     page,
   }) => {
@@ -2168,6 +2198,7 @@ async function mockApi(
     launchGateEvidence?: LaunchGateEvidence;
     mergeCandidates?: Record<string, unknown>;
     reports?: Record<string, unknown>;
+    repositorySafetyByRequirementId?: Record<string, RepositorySafety>;
     repositorySafetyByRepositoryId?: Record<string, RepositorySafety>;
     requirements?: RequirementDeliveryTicket[];
   } = {},
@@ -2263,6 +2294,23 @@ async function mockApi(
         safety
           ? { json: safety }
           : { status: 404, json: { error: "repository_not_found" } },
+      );
+      return;
+    }
+
+    const requirementSafetyMatch = url.pathname.match(
+      /^\/requirements\/([^/]+)\/safety$/,
+    );
+    if (request.method() === "GET" && requirementSafetyMatch) {
+      const requirementId = decodeURIComponent(
+        requirementSafetyMatch[1] ?? "",
+      );
+      const safety = options.repositorySafetyByRequirementId?.[requirementId];
+
+      await route.fulfill(
+        safety
+          ? { json: safety }
+          : { status: 404, json: { error: "requirement_safety_not_found" } },
       );
       return;
     }
@@ -2747,6 +2795,46 @@ const dirtyRepositorySafety: RepositorySafety = {
   noAutoMerge: true,
   manualApplyPolicy:
     "Manual review is required; MAWO never automatically merges repository changes.",
+};
+
+const pathOnlyDirtyRepositoryRequirement: RequirementDeliveryTicket = {
+  id: "requirement-path-dirty-repo",
+  title: "Run path-only dirty repo safely",
+  repositoryPath: "C:/work/path-only-shop",
+  goal: "Block mutating runs until path-only repository safety is clear.",
+  acceptanceCriteria: ["Dirty repository state is visible before enqueue."],
+  constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+  nonGoals: ["Automatic PR creation"],
+  riskLevel: "high",
+  contextPaths: ["apps/web/src/app/page.tsx"],
+  tasks: [
+    {
+      id: "task-path-dirty",
+      title: "Patch checkout",
+      agent: "shell",
+      instructions: "Patch checkout after the repository is clean.",
+    },
+  ],
+  qualityGates: [
+    {
+      id: "gate-path-dirty",
+      title: "Unit tests",
+      command: "npm test",
+      required: true,
+    },
+  ],
+  status: "ready_to_run",
+  runLinks: [],
+  createdAt: "2026-06-06T11:00:00.000Z",
+  updatedAt: "2026-06-06T11:05:00.000Z",
+};
+
+const pathOnlyDirtyRepositorySafety: RepositorySafety = {
+  ...dirtyRepositorySafety,
+  repositoryId: "requirement-path-dirty-repo",
+  path: "C:/work/path-only-shop",
+  currentBranch: "feature/path-only",
+  headShortSha: "def5678",
 };
 
 const mobileStressWorkflows: WorkflowRun[] = [
