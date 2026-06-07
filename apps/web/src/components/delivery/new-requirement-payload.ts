@@ -119,6 +119,14 @@ export function buildNewRequirementPayload(
     errors.push("Shell tasks need a command.");
   }
 
+  if (
+    tasks.some(
+      (task) => task.agent !== "shell" && !task.instructions && !task.command,
+    )
+  ) {
+    errors.push("CLI agent tasks need instructions or a command.");
+  }
+
   if (tasks.some((task) => task.timeoutMs === "invalid")) {
     errors.push("Task timeouts must be positive milliseconds.");
   }
@@ -295,7 +303,7 @@ function buildTaskCandidate(task: NewRequirementTaskDraft, index: number) {
     acceptanceCriteria,
     agent,
     command,
-    instructions: instructions || (!command && title ? title : ""),
+    instructions,
     timeoutMs,
     dependsOn,
     hasAnyValue:

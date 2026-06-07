@@ -1391,6 +1391,64 @@ test.describe("Requirement Delivery Console smoke", () => {
     expect(createdRequests).toEqual([]);
   });
 
+  test("New Requirement blocks CLI agent tasks without explicit instructions", async ({
+    page,
+  }) => {
+    const createdRequests: unknown[] = [];
+
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, [], {
+      onRequirementCreate: (payload) => {
+        createdRequests.push(payload);
+      },
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "New Requirement" }).click();
+
+    const flow = page.getByRole("region", {
+      name: "New Requirement panel",
+    });
+    await fillField(flow, /title|requirement title/i, "CLI instruction guard");
+    await fillField(flow, /repository path/i, "C:/work/shop");
+    await fillField(
+      flow,
+      /goal/i,
+      "Prevent weak CLI agent tasks from reaching enqueue.",
+    );
+    await fillField(
+      flow,
+      /acceptance criteria/i,
+      "CLI task instructions are explicit before execution.",
+    );
+    await fillField(flow, /task 1 title/i, "Review checkout evidence");
+    await chooseTaskAgent(flow, /task 1 agent/i, "codex");
+    await fillField(
+      flow,
+      /task 1 objective/i,
+      "Inspect generated patch evidence before approval.",
+    );
+    await fillField(flow, /task 1 acceptance/i, "Patch artifact is reviewable.");
+    await fillField(flow, /gate 1 command/i, "npm test");
+
+    await flow
+      .getByRole("button", {
+        name: /create requirement|save requirement|create/i,
+      })
+      .click();
+
+    await expect(flow.getByRole("alert")).toContainText(
+      "CLI agent tasks need instructions or a command.",
+    );
+    expect(createdRequests).toEqual([]);
+  });
+
   test("New Requirement creation refreshes and focuses the created requirement workspace", async ({
     page,
   }) => {

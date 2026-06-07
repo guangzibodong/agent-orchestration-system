@@ -673,6 +673,29 @@ describe("RequirementDeliveryConsole", () => {
     });
   });
 
+  it("requires CLI agent tasks to include explicit instructions or a command", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      tasks: [
+        {
+          title: "Review checkout evidence",
+          objective: "Inspect the generated patch before approval",
+          acceptanceCriteria: "Patch artifact is reviewable",
+          agent: "codex",
+          command: "",
+          instructions: "",
+          timeoutMs: "",
+          dependsOn: "",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["CLI agent tasks need instructions or a command."],
+    });
+  });
+
   it("builds a structured New Requirement payload for submit callbacks", () => {
     const result = buildNewRequirementPayload(validNewRequirementDraft);
 
