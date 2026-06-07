@@ -5,6 +5,7 @@ import type { RequirementSummary } from "./delivery-console-model";
 import {
   ArtifactDrawer,
   buildArtifactDrawerGroups,
+  buildArtifactDrawerMetadata,
   type ArtifactDrawerLink
 } from "./artifact-drawer";
 import { RequirementEvidencePanel } from "./requirement-evidence-panel";
@@ -197,6 +198,46 @@ describe("ArtifactDrawer", () => {
     expect(html).toContain("Requirement report");
     expect(html).toContain("review evidence");
     expect(html).not.toContain("Source workflow requirement-retry");
+  });
+
+  it("compacts long artifact paths while preserving the full path for inspection", () => {
+    const metadata = buildArtifactDrawerMetadata({
+      id: "stdout-long-path",
+      kind: "stdout",
+      label: "Inspect evidence stdout",
+      href: "/workflows/workflow-review/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-review%2Ftasks%2Ftask-view%2Fstdout.txt",
+      meta: "12 KB",
+      path: "C:/mawo/artifacts/workflow-review/tasks/task-view/stdout.txt"
+    });
+
+    expect(metadata).toEqual({
+      visibleLabel:
+        "12 KB / Source workflow workflow-review / .../workflow-review/tasks/task-view/stdout.txt",
+      fullLabel:
+        "12 KB / Source workflow workflow-review / C:/mawo/artifacts/workflow-review/tasks/task-view/stdout.txt"
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(ArtifactDrawer, {
+        artifacts: [
+          {
+            id: "stdout-long-path",
+            kind: "stdout",
+            label: "Inspect evidence stdout",
+            href: "/workflows/workflow-review/artifact?path=C%3A%2Fmawo%2Fartifacts%2Fworkflow-review%2Ftasks%2Ftask-view%2Fstdout.txt",
+            meta: "12 KB",
+            path: "C:/mawo/artifacts/workflow-review/tasks/task-view/stdout.txt"
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain(
+      "title=\"12 KB / Source workflow workflow-review / C:/mawo/artifacts/workflow-review/tasks/task-view/stdout.txt\""
+    );
+    expect(html).toContain(
+      ">12 KB / Source workflow workflow-review / .../workflow-review/tasks/task-view/stdout.txt</span>"
+    );
   });
 
   it("is collapsed by default so logs do not dominate the first screen", () => {

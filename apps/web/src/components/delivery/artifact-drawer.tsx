@@ -23,6 +23,11 @@ export type ArtifactDrawerGroup = {
   links: ArtifactDrawerLink[];
 };
 
+export type ArtifactDrawerMetadata = {
+  visibleLabel: string;
+  fullLabel: string;
+};
+
 type ArtifactDrawerProps = {
   artifacts: ArtifactDrawerLink[];
   title?: string;
@@ -69,6 +74,29 @@ export function buildArtifactDrawerGroups(
   });
 }
 
+export function buildArtifactDrawerMetadata(
+  artifact: ArtifactDrawerLink
+): ArtifactDrawerMetadata | undefined {
+  const sourceWorkflow = buildArtifactSourceWorkflowLabel(artifact.href);
+  const visibleParts = [
+    artifact.meta,
+    sourceWorkflow,
+    artifact.path ? compactArtifactPath(artifact.path) : undefined
+  ].filter(isPresent);
+  const fullParts = [artifact.meta, sourceWorkflow, artifact.path].filter(
+    isPresent
+  );
+
+  if (!fullParts.length) {
+    return undefined;
+  }
+
+  return {
+    visibleLabel: visibleParts.join(" / "),
+    fullLabel: fullParts.join(" / ")
+  };
+}
+
 export function ArtifactDrawer({
   artifacts,
   title = "Artifacts"
@@ -100,13 +128,7 @@ export function ArtifactDrawer({
               </h3>
               <ul className="artifactDrawerList">
                 {group.links.map((artifact) => {
-                  const metadata = [
-                    artifact.meta,
-                    buildArtifactSourceWorkflowLabel(artifact.href),
-                    artifact.path
-                  ]
-                    .filter(Boolean)
-                    .join(" / ");
+                  const metadata = buildArtifactDrawerMetadata(artifact);
 
                   return (
                     <li className="artifactDrawerItem" key={artifact.id}>
@@ -114,7 +136,12 @@ export function ArtifactDrawer({
                         {artifact.label}
                       </a>
                       {metadata ? (
-                        <span className="artifactDrawerMeta">{metadata}</span>
+                        <span
+                          className="artifactDrawerMeta"
+                          title={metadata.fullLabel}
+                        >
+                          {metadata.visibleLabel}
+                        </span>
                       ) : null}
                     </li>
                   );
@@ -128,6 +155,26 @@ export function ArtifactDrawer({
       )}
     </details>
   );
+}
+
+function isPresent(value: string | undefined): value is string {
+  return Boolean(value);
+}
+
+function compactArtifactPath(path: string): string {
+  const normalizedPath = path.replace(/\\/g, "/");
+  const segments = normalizedPath.split("/").filter(Boolean);
+  const artifactRootIndex = segments.indexOf("artifacts");
+
+  if (artifactRootIndex >= 0 && artifactRootIndex < segments.length - 1) {
+    return `.../${segments.slice(artifactRootIndex + 1).join("/")}`;
+  }
+
+  if (segments.length > 4) {
+    return `.../${segments.slice(-4).join("/")}`;
+  }
+
+  return path;
 }
 
 function buildArtifactSourceWorkflowLabel(href: string): string | undefined {
