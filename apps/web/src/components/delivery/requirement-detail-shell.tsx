@@ -581,7 +581,7 @@ function buildSectionRows(
       },
       {
         label: "Evidence",
-        value: "Select a requirement to inspect review evidence"
+        value: "No selected requirement evidence"
       }
     ];
   }
@@ -635,7 +635,7 @@ function buildSectionRows(
           value: requirement.repositorySafety.cleanStateLabel
         },
         { label: "Task progress", value: requirement.nodeLabel },
-        { label: "Log access", value: "Open artifact drawer for stdout and stderr links" },
+        { label: "Log access", value: "stdout/stderr artifact links" },
         { label: "Actions", value: requirement.nextAction }
       ];
     case "Gates":
@@ -954,7 +954,7 @@ function buildReviewDecisionState(
   viewerMode: boolean,
 ): string {
   if (!requirement) {
-    return "Select a requirement before review";
+    return "No selected requirement for review";
   }
 
   if (viewerMode) {

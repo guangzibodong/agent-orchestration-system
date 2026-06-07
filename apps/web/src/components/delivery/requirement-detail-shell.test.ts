@@ -300,6 +300,8 @@ describe("RequirementDetailShell", () => {
     expect(html).not.toContain("Execution adapter selected by requirement run");
     expect(html).not.toContain("Linked through artifacts when reported");
     expect(html).not.toContain("Merge candidate ready for manual apply");
+    expect(html).toContain("stdout/stderr artifact links");
+    expect(html).not.toContain("Open artifact drawer for stdout and stderr links");
     expect(html).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
     expect(valueReportHtml).not.toContain("RAW_AUDIT_STREAM_SHOULD_NOT_RENDER");
   });
@@ -520,7 +522,11 @@ describe("RequirementDetailShell", () => {
 
     expect(html).toContain("Requirement Detail");
     expect(html).toContain("No requirement selected");
+    expect(html).toContain("No selected requirement evidence");
+    expect(html).toContain("No selected requirement for review");
     expect(html).toContain("No artifacts linked yet");
+    expect(html).not.toContain("Select a requirement to inspect review evidence");
+    expect(html).not.toContain("Select a requirement before review");
   });
 });
 
