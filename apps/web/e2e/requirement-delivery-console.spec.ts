@@ -1029,6 +1029,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(reviewEvidence).toContainText(
       "No MAWO auto-merge; manual git apply outside MAWO",
     );
+    await expect(reviewEvidence).toContainText(
+      "Review decision required; manual apply remains outside MAWO",
+    );
 
     const evidenceDrawer = reviewEvidence.getByLabel("Read-only evidence links");
     await expect(

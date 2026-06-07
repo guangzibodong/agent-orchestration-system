@@ -119,6 +119,10 @@ describe("RequirementEvidencePanel display model", () => {
             'git -C "C:/work/shop" apply "C:/mawo/artifacts/workflow-review/merge-candidate.patch"',
         },
         {
+          label: "Decision checkpoint",
+          value: "Review decision required; manual apply remains outside MAWO",
+        },
+        {
           label: "Required gates",
           value: "1 required passed: Unit tests passed (exit 0): npm test",
         },

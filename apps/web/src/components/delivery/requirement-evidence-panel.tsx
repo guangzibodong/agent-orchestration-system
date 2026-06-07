@@ -221,6 +221,10 @@ export function buildRequirementEvidenceDisplay(
           value: requirement.nextAction,
         },
         {
+          label: "Decision checkpoint",
+          value: "Review decision required; manual apply remains outside MAWO",
+        },
+        {
           label: "Merge candidate",
           value: "Patch available for human review",
         },
