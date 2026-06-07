@@ -488,6 +488,39 @@ export function RequirementDeliveryConsole({
             </div>
           </section>
 
+          {selectedRequirement?.agentAvailability ? (
+            <section
+              className="agentAvailabilityCard danger"
+              aria-label="Agent Availability"
+            >
+              <div className="agentAvailabilityHeader">
+                <div>
+                  <Settings size={18} aria-hidden="true" />
+                  <strong>Agent Availability</strong>
+                </div>
+                <span>Unavailable agents</span>
+              </div>
+              <div className="agentAvailabilityList">
+                {selectedRequirement.agentAvailability.unavailableAgents.map(
+                  (agent) => (
+                    <article className="agentAvailabilityItem" key={agent.id}>
+                      <div>
+                        <strong>{agent.label}</strong>
+                        <span>{agent.status.replace(/_/g, " ")}</span>
+                      </div>
+                      <p>{agent.message}</p>
+                      <p>Affected tasks: {agent.taskIds.join(", ")}</p>
+                    </article>
+                  ),
+                )}
+              </div>
+              <div className="agentAvailabilityRecovery">
+                <strong>Recovery action</strong>
+                <p>{selectedRequirement.agentAvailability.recoveryAction}</p>
+              </div>
+            </section>
+          ) : null}
+
           <section aria-label="Stage Stepper">
             <div className="deliveryPanelHeader compact">
               <h2>Stage Stepper</h2>

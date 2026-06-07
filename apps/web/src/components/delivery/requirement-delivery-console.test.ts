@@ -421,6 +421,10 @@ describe("RequirementDeliveryConsole", () => {
     );
 
     expect(html).toContain("Configure missing agent");
+    expect(html).toContain("Agent Availability");
+    expect(html).toContain("Unavailable agents");
+    expect(html).toContain("Codex CLI");
+    expect(html).toContain("Affected tasks: patch");
     expect(html).toContain("Preflight blocked");
     expect(html).toContain("Agent preflight blocks execution");
     expect(html).toContain("Codex CLI command is not configured");

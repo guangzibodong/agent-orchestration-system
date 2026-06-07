@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
+  AgentHealth,
   AuditEvent,
   LaunchGateEvidence,
   RepositorySafety,
@@ -398,6 +399,85 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(queueItem).toContainText("Repository safety blocks execution");
     await expect(
       queueItem.getByRole("button", { name: "Enqueue" }),
+    ).toHaveCount(0);
+  });
+
+  test("surfaces unavailable CLI agent availability before enqueue", async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ([tokenKey, roleKey]) => {
+        window.localStorage.setItem(tokenKey, "operator-token");
+        window.localStorage.setItem(roleKey, "operator");
+      },
+      [apiTokenStorageKey, apiTokenRoleStorageKey],
+    );
+    await mockApi(page, [], {
+      agentHealth: [
+        {
+          id: "codex",
+          label: "Codex CLI",
+          configured: false,
+          healthy: false,
+          status: "missing_command",
+          message:
+            "Codex CLI command is not configured. Set MAWO_CODEX_COMMAND_TEMPLATE before enqueue.",
+          checkedAt: "2026-06-06T11:00:00.000Z",
+        },
+      ],
+      requirements: [
+        {
+          id: "requirement-codex",
+          title: "Run Codex safely",
+          repositoryPath: "C:/work/shop",
+          goal: "Show missing Codex before enqueue",
+          acceptanceCriteria: ["Missing agent is visible before enqueue"],
+          constraints: ["No MAWO auto-merge; manual git apply outside MAWO"],
+          nonGoals: ["Automatic PR creation"],
+          riskLevel: "high",
+          contextPaths: [],
+          tasks: [
+            {
+              id: "patch",
+              title: "Patch with Codex",
+              agent: "codex",
+              instructions: "Patch checkout",
+            },
+          ],
+          qualityGates: [
+            {
+              id: "gate-1",
+              title: "Unit tests",
+              command: "npm test",
+              required: true,
+            },
+          ],
+          status: "ready_to_run",
+          runLinks: [],
+          createdAt: "2026-06-06T11:00:00.000Z",
+          updatedAt: "2026-06-06T11:05:00.000Z",
+        },
+      ],
+    });
+
+    await page.goto("/");
+
+    const focusPanel = page.locator(".deliveryFocusPanel");
+    const agentAvailability = focusPanel.getByLabel("Agent Availability");
+    await expect(agentAvailability).toContainText("Unavailable agents");
+    await expect(agentAvailability).toContainText("Codex CLI");
+    await expect(agentAvailability).toContainText("Affected tasks: patch");
+    await expect(agentAvailability).toContainText("Configure missing agent");
+    await expect(agentAvailability).toContainText(
+      "Codex CLI command is not configured",
+    );
+    await expect(page.locator(".requirementQueuePanel")).toContainText(
+      "Preflight blocked",
+    );
+    await expect(
+      page
+        .locator(".requirementQueuePanel")
+        .getByRole("button", { exact: true, name: "Enqueue" }),
     ).toHaveCount(0);
   });
 
@@ -2311,6 +2391,7 @@ async function mockApi(
     repositorySafetyByRequirementId?: Record<string, RepositorySafety>;
     repositorySafetyByRepositoryId?: Record<string, RepositorySafety>;
     requirements?: RequirementDeliveryTicket[];
+    agentHealth?: AgentHealth[];
   } = {},
 ) {
   await page.unroute(`${API_ORIGIN}/**`).catch(() => undefined);
@@ -2334,6 +2415,11 @@ async function mockApi(
 
     if (request.method() === "GET" && url.pathname === "/requirements") {
       await route.fulfill({ json: options.requirements ?? [] });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === "/agents/health") {
+      await route.fulfill({ json: options.agentHealth ?? [] });
       return;
     }
 
