@@ -97,6 +97,21 @@ export function NewRequirementPanel({
 
         <fieldset className="newRequirementFieldset">
           <legend>Repository</legend>
+          <div
+            className="repositorySafetyContract newRequirementRepositoryContract"
+            aria-label="Safety contract"
+          >
+            <strong>Safety contract</strong>
+            <p>Local real repository path or registered repository ID</p>
+            <p>
+              Safety preflight checks branch, HEAD, clean/dirty state, and
+              allowed root before mutating runs.
+            </p>
+            <p>
+              No MAWO auto-merge; merge candidate stays manual git apply
+              outside MAWO.
+            </p>
+          </div>
           <div className="newRequirementFormGrid">
             <label className="field">
               <span>Repository path</span>

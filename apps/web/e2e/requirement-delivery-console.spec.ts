@@ -969,9 +969,18 @@ test.describe("Requirement Delivery Console smoke", () => {
       name: "New Requirement panel",
     });
     await expect(flow).toBeVisible();
+    await expect(flow).toContainText(
+      "Local real repository path or registered repository ID",
+    );
+    await expect(flow).toContainText(
+      "Safety preflight checks branch, HEAD, clean/dirty state, and allowed root before mutating runs",
+    );
+    await expect(flow).toContainText(
+      "No MAWO auto-merge; merge candidate stays manual git apply outside MAWO",
+    );
 
     await fillField(flow, /title|requirement title/i, "Smoke gated checkout");
-    await fillField(flow, /repository path|repository/i, "C:/work/shop");
+    await fillField(flow, /repository path/i, "C:/work/shop");
     await fillField(
       flow,
       /goal/i,

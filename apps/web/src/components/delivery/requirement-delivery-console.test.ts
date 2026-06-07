@@ -506,6 +506,13 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Title");
     expect(html).toContain("Repository path");
     expect(html).toContain("Repository ID");
+    expect(html).toContain("Local real repository path or registered repository ID");
+    expect(html).toContain(
+      "Safety preflight checks branch, HEAD, clean/dirty state, and allowed root before mutating runs",
+    );
+    expect(html).toContain(
+      "No MAWO auto-merge; merge candidate stays manual git apply outside MAWO",
+    );
     expect(html).toContain("Goal");
     expect(html).toContain("Acceptance criteria");
     expect(html).toContain("Constraints");
@@ -531,6 +538,7 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).not.toContain("web typecheck");
     expect(html).toContain("Create requirement draft");
     expect(html).not.toContain("raw JSON");
+    expect(html).not.toContain("Use a local path now");
   });
 
   it("reads structured quality gate timeout fields from New Requirement form data", () => {

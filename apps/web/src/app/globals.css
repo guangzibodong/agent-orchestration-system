@@ -258,6 +258,17 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.newRequirementRepositoryContract {
+  border-left: 3px solid #4f7cac;
+  background: #f6f9fc;
+  padding: 10px 12px;
+}
+
+.newRequirementRepositoryContract p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .newRequirementFieldset {
   margin: 0;
   border: 0;
