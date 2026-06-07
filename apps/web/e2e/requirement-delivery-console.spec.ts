@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type {
   AgentHealth,
@@ -80,9 +82,9 @@ test.describe("Requirement Delivery Console smoke", () => {
         name: "Legacy Run Console secondary ops/debug",
       }),
     ).toHaveAttribute("href", /#legacy-run-console$/);
-    await expect(
-      page.locator("#legacy-run-console > summary"),
-    ).toContainText("Secondary ops/debug");
+    await expect(page.locator("#legacy-run-console > summary")).toContainText(
+      "Secondary ops/debug",
+    );
     expect(mutatingRequests).toEqual([]);
   });
 
@@ -157,7 +159,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.goto("/");
 
     const consoleShell = page.locator("main.deliveryShell");
-    const search = consoleShell.getByLabel("Search requirements, repos, reports");
+    const search = consoleShell.getByLabel(
+      "Search requirements, repos, reports",
+    );
     const requirementQueue = page.locator(".requirementQueuePanel");
     const decisionQueue = page.locator(".decisionQueuePanel");
     const focusPanel = page.locator(".deliveryFocusPanel");
@@ -275,7 +279,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.goto("/");
 
     const consoleShell = page.locator("main.deliveryShell");
-    const search = consoleShell.getByLabel("Search requirements, repos, reports");
+    const search = consoleShell.getByLabel(
+      "Search requirements, repos, reports",
+    );
     const requirementQueue = page.locator(".requirementQueuePanel");
     const evidence = page.getByLabel("Gate Result / Review Evidence");
 
@@ -328,9 +334,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       .locator("main.deliveryShell")
       .getByLabel("Delivery health");
     await expect(deliveryHealth).toContainText("Launch Stale");
-    await expect(deliveryHealth).toContainText(
-      "Queue 0",
-    );
+    await expect(deliveryHealth).toContainText("Queue 0");
     await expect(
       deliveryHealth.getByLabel(
         "Launch Stale: Evidence commit 847c137 does not match HEAD next-head.",
@@ -338,9 +342,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toBeVisible();
     await expect(
       deliveryHealth.locator(".deliveryHealthIndicator.danger"),
-    ).toContainText(
-      "Stale",
-    );
+    ).toContainText("Stale");
   });
 
   test("surfaces launch gate external blockers in delivery health", async ({
@@ -563,7 +565,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     );
 
     await page
-      .getByRole("button", { name: "Select requirement Viewer readable requirement" })
+      .getByRole("button", {
+        name: "Select requirement Viewer readable requirement",
+      })
       .click();
     await page.locator(".requirementDetailDisclosure > summary").click();
     const approveButton = page
@@ -932,7 +936,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(detail.getByLabel("Changed files under review")).toContainText(
       "packages/shared/src/index.ts",
     );
-    const valueReportSection = detail.locator("#requirement-detail-value-report");
+    const valueReportSection = detail.locator(
+      "#requirement-detail-value-report",
+    );
     const valueReport = valueReportSection.getByLabel("Value report summary");
     await expect(valueReport).toContainText("Report recommendation");
     await expect(valueReport).toContainText("Ready for review");
@@ -961,9 +967,13 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(auditHistory).toContainText("operator");
     await expect(auditHistory).toContainText("decision=approved");
     await expect(auditHistory).toContainText("gate_failed -> ready");
-    await expect(auditHistory).not.toContainText("RAW_STDOUT_SHOULD_NOT_RENDER");
+    await expect(auditHistory).not.toContainText(
+      "RAW_STDOUT_SHOULD_NOT_RENDER",
+    );
     await expect(auditHistory).not.toContainText("diff --git");
-    const detailDrawer = page.locator(".requirementDetailShell .artifactDrawer");
+    const detailDrawer = page.locator(
+      ".requirementDetailShell .artifactDrawer",
+    );
     await detailDrawer.getByText("Artifacts", { exact: true }).click();
     await expect(
       detailDrawer.getByRole("link", { name: "Inspect evidence stdout" }),
@@ -1007,8 +1017,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(evidence).toContainText(
       "1 required reported issues: Copy checks failed (exit 1): npm run copy:check; blocks merge approval",
     );
-    await expect(evidence).not.toContainText("RAW_GATE_STDOUT_SHOULD_NOT_RENDER");
-    await expect(evidence).not.toContainText("RAW_GATE_STDERR_SHOULD_NOT_RENDER");
+    await expect(evidence).not.toContainText(
+      "RAW_GATE_STDOUT_SHOULD_NOT_RENDER",
+    );
+    await expect(evidence).not.toContainText(
+      "RAW_GATE_STDERR_SHOULD_NOT_RENDER",
+    );
 
     const blockedDrawer = evidence.getByLabel("Read-only evidence links");
     await blockedDrawer.getByText("Evidence links", { exact: true }).click();
@@ -1033,7 +1047,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Goal not achieved; rework required",
     );
     await expect(failedValueReport).toContainText("Required gate failed");
-    await expect(detail.locator("#requirement-detail-value-report")).toContainText(
+    await expect(
+      detail.locator("#requirement-detail-value-report"),
+    ).toContainText(
       "Required gate failed: Copy checks (exit 1); blocks merge approval",
     );
     await expect(failedValueReport).toContainText(
@@ -1049,7 +1065,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(reviewAcceptance).not.toContainText(
       "git apply <merge-candidate.patch>",
     );
-    await expect(detail.getByRole("button", { name: "Approve" })).toBeDisabled();
+    await expect(
+      detail.getByRole("button", { name: "Approve" }),
+    ).toBeDisabled();
     await expect(detail.getByRole("button", { name: "Reject" })).toBeDisabled();
     expect(mutatingRequests).toEqual([]);
 
@@ -1060,9 +1078,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     await page.reload();
 
     const reviewEvidence = page.getByLabel("Gate Result / Review Evidence");
-    await expect(reviewEvidence).toContainText(
-      "Review-ready merge candidate",
-    );
+    await expect(reviewEvidence).toContainText("Review-ready merge candidate");
     await expect(reviewEvidence).toContainText("Review ready");
     await expect(reviewEvidence).toContainText("Quality gates passed");
     await expect(reviewEvidence).toContainText(
@@ -1072,7 +1088,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Review decision required; manual apply remains outside MAWO",
     );
 
-    const evidenceDrawer = reviewEvidence.getByLabel("Read-only evidence links");
+    const evidenceDrawer = reviewEvidence.getByLabel(
+      "Read-only evidence links",
+    );
     await expect(
       evidenceDrawer.getByText("Evidence links", { exact: true }),
     ).toBeVisible();
@@ -1113,9 +1131,7 @@ test.describe("Requirement Delivery Console smoke", () => {
       decision: string;
       workflowId: string;
     }> = [];
-    const reviewWorkflows: WorkflowRun[] = [
-      mixedWorkflows[1] as WorkflowRun,
-    ];
+    const reviewWorkflows: WorkflowRun[] = [mixedWorkflows[1] as WorkflowRun];
     const reviewRequirements: RequirementDeliveryTicket[] = [
       { ...(requirementTickets[0] as RequirementDeliveryTicket) },
     ];
@@ -1196,9 +1212,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(page.locator(".decisionQueuePanel")).not.toContainText(
       "Review evidence / view manual git apply command",
     );
-    await expect(page.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Approved delivery",
-    );
+    await expect(
+      page.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Approved delivery");
     expect(mutatingRequests).toEqual([
       "POST /workflows/workflow-needs-review/review",
     ]);
@@ -1330,7 +1346,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       page.getByRole("heading", { name: "Requirement Delivery Console" }),
     ).toBeVisible();
     await expectNoHorizontalDocumentOverflow(page);
-    await expectElementsInsideViewport(page, page.locator("main.deliveryShell"));
+    await expectElementsInsideViewport(
+      page,
+      page.locator("main.deliveryShell"),
+    );
     await captureScreenshotEvidence(page, desktopScreenshotPath);
     await expectScreenshotEvidence(desktopScreenshotPath);
 
@@ -1419,7 +1438,11 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Patch artifact is reviewable.",
     );
     await chooseTaskAgent(flow, /task 2 agent/i, "codex");
-    await fillField(flow, /task 2 instructions/i, "Review the generated patch.");
+    await fillField(
+      flow,
+      /task 2 instructions/i,
+      "Review the generated patch.",
+    );
     await fillField(flow, /task 2 depends/i, "task-1");
     await fillField(flow, /gate 1 command/i, "npm test");
     await fillField(flow, /gate 1 timeout/i, "120000");
@@ -1568,7 +1591,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     const flow = page.getByRole("region", {
       name: "New Requirement panel",
     });
-    await fillField(flow, /title|requirement title/i, "Repository selector guard");
+    await fillField(
+      flow,
+      /title|requirement title/i,
+      "Repository selector guard",
+    );
     await fillField(flow, /repository path/i, "C:/work/shop");
     await fillField(flow, /repository ID/i, "repo-shop");
     await fillField(
@@ -1646,7 +1673,11 @@ test.describe("Requirement Delivery Console smoke", () => {
       /task 1 objective/i,
       "Inspect generated patch evidence before approval.",
     );
-    await fillField(flow, /task 1 acceptance/i, "Patch artifact is reviewable.");
+    await fillField(
+      flow,
+      /task 1 acceptance/i,
+      "Patch artifact is reviewable.",
+    );
     await fillField(flow, /gate 1 command/i, "npm test");
 
     await flow
@@ -1771,8 +1802,16 @@ test.describe("Requirement Delivery Console smoke", () => {
       /task 3 objective/i,
       "Inspect generated patch evidence before approval.",
     );
-    await fillField(flow, /task 3 acceptance/i, "Patch artifact is reviewable.");
-    await fillField(flow, /task 3 instructions/i, "Review the generated patch.");
+    await fillField(
+      flow,
+      /task 3 acceptance/i,
+      "Patch artifact is reviewable.",
+    );
+    await fillField(
+      flow,
+      /task 3 instructions/i,
+      "Review the generated patch.",
+    );
     await fillField(flow, /gate 1 command/i, "npm test");
 
     await flow
@@ -1976,7 +2015,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     const flow = page.getByRole("region", {
       name: "New Requirement panel",
     });
-    await fillField(flow, /title|requirement title/i, "Created checkout requirement");
+    await fillField(
+      flow,
+      /title|requirement title/i,
+      "Created checkout requirement",
+    );
     await fillField(flow, /repository id/i, "repo-created");
     await fillField(
       flow,
@@ -2033,7 +2076,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       }),
     ).toBeVisible();
     await expect(page.getByLabel("Stage Stepper")).toContainText("Plan");
-    await expect(page.locator(".decisionQueuePanel")).toContainText("1 waiting");
+    await expect(page.locator(".decisionQueuePanel")).toContainText(
+      "1 waiting",
+    );
     await expect(page.locator(".decisionQueuePanel")).toContainText(
       "Confirm plan",
     );
@@ -2052,9 +2097,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(focusPanel.getByLabel("Repository Safety")).toContainText(
       "No MAWO auto-merge; manual git apply outside MAWO",
     );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Not review-ready",
-    );
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Not review-ready");
     await expect(focusPanel).not.toContainText("Apply Candidate");
 
     await page.locator(".requirementDetailDisclosure > summary").click();
@@ -2271,7 +2316,11 @@ test.describe("Requirement Delivery Console smoke", () => {
     const flow = page.getByRole("region", {
       name: "New Requirement panel",
     });
-    await fillField(flow, /title|requirement title/i, "Journey checkout requirement");
+    await fillField(
+      flow,
+      /title|requirement title/i,
+      "Journey checkout requirement",
+    );
     await fillField(flow, /repository id/i, "repo-journey");
     await fillField(
       flow,
@@ -2340,10 +2389,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Requirement execution settled; evidence refreshed: Journey checkout requirement",
     );
     await expect(page.getByLabel("Stage Stepper")).toContainText("Review");
-    const createdEvidence = focusPanel.getByLabel("Gate Result / Review Evidence");
-    await expect(createdEvidence).toContainText(
-      "Review-ready merge candidate",
+    const createdEvidence = focusPanel.getByLabel(
+      "Gate Result / Review Evidence",
     );
+    await expect(createdEvidence).toContainText("Review-ready merge candidate");
     await expect(createdEvidence).toContainText(
       "Journey merge candidate ready with 2 changed files",
     );
@@ -2365,11 +2414,226 @@ test.describe("Requirement Delivery Console smoke", () => {
     ]);
   });
 
+  test("real API New Requirement journey blocks a failed gate before retrying into merge candidate evidence", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    const demoRoot = await mkdtemp(join(tmpdir(), "mawo-web-real-api-"));
+    const repoRoot = await createCommittedRepo("mawo-web-real-repo-");
+    const retryGateMarker = join(demoRoot, "retry-gate-marker.txt");
+    const app = await buildRealApiApp(demoRoot, repoRoot);
+
+    try {
+      await page.addInitScript(
+        ([tokenKey, roleKey]) => {
+          window.localStorage.setItem(tokenKey, "operator-token");
+          window.localStorage.setItem(roleKey, "operator");
+        },
+        [apiTokenStorageKey, apiTokenRoleStorageKey],
+      );
+      await routeRealApi(page, app);
+
+      await page.goto("/");
+      await page.getByRole("button", { name: "New Requirement" }).click();
+
+      const flow = page.getByRole("region", {
+        name: "New Requirement panel",
+      });
+      await fillField(
+        flow,
+        /title|requirement title/i,
+        "Real API retry evidence",
+      );
+      await fillField(flow, /repository path/i, repoRoot);
+      await fillField(
+        flow,
+        /goal/i,
+        "Prove a real local repo blocks failed gates, retries, and exposes manual review evidence.",
+      );
+      await fillField(
+        flow,
+        /acceptance criteria/i,
+        "Required gate failure blocks merge-ready output.\nRetry refreshes current evidence.\nMerge candidate stays manual git apply only.",
+      );
+      await fillField(
+        flow,
+        /constraints/i,
+        "Use isolated worktrees.\nDo not auto-merge into the source repository.",
+      );
+      await fillField(flow, /non-?goals/i, "Automatic PR creation.");
+      await fillField(flow, /context paths/i, "README.md");
+      await fillField(flow, /task 1 title/i, "Patch README evidence");
+      await fillField(
+        flow,
+        /task 1 objective/i,
+        "Create a small README patch from an isolated worktree.",
+      );
+      await fillField(
+        flow,
+        /task 1 acceptance/i,
+        "README diff is visible in review evidence.",
+      );
+      await fillField(
+        flow,
+        /task 1 command/i,
+        nodeEvalCommand(
+          `require("fs").appendFileSync("README.md", "real api retry evidence\\n");`,
+        ),
+      );
+      await fillField(flow, /task 2 title/i, "Verify README evidence");
+      await fillField(
+        flow,
+        /task 2 objective/i,
+        "Create an independent notes artifact from a second isolated worktree.",
+      );
+      await fillField(
+        flow,
+        /task 2 acceptance/i,
+        "NOTES.md diff is visible alongside the README change.",
+      );
+      await fillField(
+        flow,
+        /task 2 command/i,
+        nodeEvalCommand(
+          `require("fs").writeFileSync("NOTES.md", "second task review evidence\\n");`,
+        ),
+      );
+      await fillField(flow, /task 2 depends/i, "task-1");
+      await fillField(
+        flow,
+        /gate 1 command/i,
+        nodeEvalCommand(
+          `const fs=require("fs");const marker=${JSON.stringify(
+            retryGateMarker,
+          )};if(fs.existsSync(marker)){process.exit(0)}fs.writeFileSync(marker,"first failure");process.exit(1);`,
+        ),
+      );
+      await fillField(flow, /gate 2 command/i, "");
+
+      await flow
+        .getByRole("button", {
+          name: /create requirement|save requirement|create/i,
+        })
+        .click();
+
+      const queueItem = page
+        .locator(".requirementQueueItem")
+        .filter({ hasText: "Real API retry evidence" });
+      const focusPanel = page.locator(".deliveryFocusPanel");
+      const evidence = focusPanel.getByLabel("Gate Result / Review Evidence");
+      const repositorySafety = focusPanel.getByLabel("Repository Safety");
+
+      await expect(queueItem).toContainText("Plan review");
+      await expect(repositorySafety).toContainText("Safety accepted");
+      await expect(repositorySafety).toContainText("main");
+      await expect(repositorySafety).toContainText("HEAD");
+      await expect(repositorySafety).toContainText(
+        "Clean - mutating runs allowed",
+      );
+      await expect(repositorySafety).toContainText(
+        "Allowed root accepted by API",
+      );
+      await expect(repositorySafety).toContainText("No MAWO auto-merge");
+      await queueItem
+        .getByRole("button", { exact: true, name: "Confirm plan" })
+        .click();
+      await expect(queueItem).toContainText("Ready to run");
+      await expect(queueItem).toContainText("2 tasks / 1 gate");
+
+      await queueItem
+        .getByRole("button", { exact: true, name: "Enqueue" })
+        .click();
+      await expect(queueItem).toContainText("Retry failed gate", {
+        timeout: 45_000,
+      });
+      await expect(page.getByLabel("Stage Stepper")).toContainText("Gates");
+      await expect(evidence).toContainText("Gate blocked by required gate");
+      await expect(evidence).toContainText("Required gate failed");
+      await expect(evidence).toContainText(
+        "Merge candidate blocked until required gates pass",
+      );
+      await expect(focusPanel).not.toContainText("Manual apply command");
+      await expect(focusPanel).not.toContainText("Apply Candidate");
+
+      await queueItem
+        .getByRole("button", { exact: true, name: "Retry" })
+        .click();
+      await expect(page.getByLabel("Workflow sync")).toContainText(
+        "Retry reset to ready. Enqueue to run fresh evidence.",
+      );
+      await expect(queueItem).toContainText("Ready to run");
+
+      await queueItem
+        .getByRole("button", { exact: true, name: "Enqueue" })
+        .click();
+      await expect(queueItem).toContainText("Needs review", {
+        timeout: 45_000,
+      });
+      await expect(queueItem).toContainText("Review merge candidate");
+      await expect(page.getByLabel("Workflow sync")).toContainText(
+        "Requirement execution settled; evidence refreshed: Real API retry evidence",
+      );
+      await expect(page.getByLabel("Stage Stepper")).toContainText("Review");
+      await expect(evidence).toContainText("Review-ready merge candidate");
+      await expect(evidence).toContainText("Quality gates passed");
+      await expect(evidence).toContainText("Changed files");
+      await expect(evidence).toContainText("README.md");
+      await expect(evidence).toContainText("NOTES.md");
+      await expect(evidence).toContainText("Manual apply command");
+      await expect(evidence).toContainText("git -C");
+      await expect(evidence).toContainText(" apply ");
+      await expect(focusPanel).not.toContainText("Apply Candidate");
+
+      const requirementsResponse = await injectRealApiJson(
+        app,
+        "GET",
+        "/requirements",
+      );
+      expect(requirementsResponse.status).toBe(200);
+      const requirement = Array.isArray(requirementsResponse.body)
+        ? requirementsResponse.body.find(
+            (item) =>
+              isRecord(item) && item.title === "Real API retry evidence",
+          )
+        : undefined;
+      expect(requirement).toEqual(
+        expect.objectContaining({ status: "needs_review" }),
+      );
+      const requirementId = isRecord(requirement) ? String(requirement.id) : "";
+      const candidate = await injectRealApiJson(
+        app,
+        "GET",
+        `/requirements/${encodeURIComponent(requirementId)}/merge-candidate`,
+      );
+      expect(candidate.status).toBe(200);
+      expect(candidate.body).toEqual(
+        expect.objectContaining({
+          status: "ready",
+          applyCommand: expect.stringContaining("git -C"),
+          patch: expect.stringContaining("+real api retry evidence"),
+        }),
+      );
+      expect(candidate.body).toEqual(
+        expect.objectContaining({
+          patch: expect.stringContaining("+second task review evidence"),
+        }),
+      );
+      expect(runGit(["status", "--short"], repoRoot)).toBe("");
+    } finally {
+      await app.close();
+      await rm(demoRoot, { recursive: true, force: true });
+      await rm(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   test("retry supersedes stale gate evidence before fresh review evidence", async ({
     page,
   }) => {
     const workflows: WorkflowRun[] = [lifecycleFailedWorkflow];
-    const requirements: RequirementDeliveryTicket[] = [lifecycleRetryRequirement];
+    const requirements: RequirementDeliveryTicket[] = [
+      lifecycleRetryRequirement,
+    ];
     const reports: Record<string, unknown> = {
       "requirement-retry": {
         ...gateFailedEvidenceReport,
@@ -2553,12 +2817,12 @@ test.describe("Requirement Delivery Console smoke", () => {
       .filter({ hasText: "Retry stale gate" });
     const focusPanel = page.locator(".deliveryFocusPanel");
     await expect(queueItem).toContainText("Needs rework");
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Gate blocked by required gate",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Copy checks failed (exit 1)",
-    );
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Gate blocked by required gate");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Copy checks failed (exit 1)");
 
     await queueItem.getByRole("button", { exact: true, name: "Retry" }).click();
     await expect(page.getByLabel("Workflow sync")).toContainText(
@@ -2568,17 +2832,19 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(queueItem).toContainText("Run evidence");
     await expect(queueItem).toContainText("Current attempt");
     await expect(queueItem).not.toContainText("workflow-retry-fresh");
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Not review-ready",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
-      "Gate blocked by required gate",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
-      "Copy checks failed (exit 1)",
-    );
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Not review-ready");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).not.toContainText("Gate blocked by required gate");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).not.toContainText("Copy checks failed (exit 1)");
 
-    await queueItem.getByRole("button", { exact: true, name: "Enqueue" }).click();
+    await queueItem
+      .getByRole("button", { exact: true, name: "Enqueue" })
+      .click();
     await expect(queueItem).toContainText("Running");
     await expect(queueItem).toContainText("Queued");
     await expect
@@ -2588,21 +2854,21 @@ test.describe("Requirement Delivery Console smoke", () => {
       .toBeGreaterThan(0);
 
     await expect(queueItem).toContainText("Needs review");
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Review-ready merge candidate",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Fresh retry merge candidate ready",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Current workflow workflow-retry-fresh",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
-      "workflow-failed",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
-      "Gate blocked by required gate",
-    );
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Review-ready merge candidate");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Fresh retry merge candidate ready");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Current workflow workflow-retry-fresh");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).not.toContainText("workflow-failed");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).not.toContainText("Gate blocked by required gate");
     await expect(focusPanel).not.toContainText("Apply Candidate");
   });
 
@@ -2642,22 +2908,18 @@ test.describe("Requirement Delivery Console smoke", () => {
 
         if (id === "requirement-plan" && action === "enqueue") {
           lifecycleWorkflows.push(lifecycleQueuedWorkflow);
-          const nextRequirement = updateRequirement(
-            lifecycleRequirements,
-            id,
-            {
-              status: "running",
-              currentWorkflowRunId: "workflow-lifecycle",
-              runLinks: [
-                {
-                  workflowRunId: "workflow-lifecycle",
-                  status: "ready",
-                  linkedAt: "2026-06-06T11:06:00.000Z",
-                },
-              ],
-              updatedAt: "2026-06-06T11:06:00.000Z",
-            },
-          );
+          const nextRequirement = updateRequirement(lifecycleRequirements, id, {
+            status: "running",
+            currentWorkflowRunId: "workflow-lifecycle",
+            runLinks: [
+              {
+                workflowRunId: "workflow-lifecycle",
+                status: "ready",
+                linkedAt: "2026-06-06T11:06:00.000Z",
+              },
+            ],
+            updatedAt: "2026-06-06T11:06:00.000Z",
+          });
 
           return {
             requirement: nextRequirement,
@@ -2673,21 +2935,17 @@ test.describe("Requirement Delivery Console smoke", () => {
         }
 
         if (id === "requirement-retry" && action === "retry") {
-          const nextRequirement = updateRequirement(
-            lifecycleRequirements,
-            id,
-            {
-              status: "ready_to_run",
-              updatedAt: "2026-06-06T11:07:00.000Z",
-              runLinks: [
-                {
-                  workflowRunId: "workflow-failed",
-                  status: "ready",
-                  linkedAt: "2026-06-06T11:07:00.000Z",
-                },
-              ],
-            },
-          );
+          const nextRequirement = updateRequirement(lifecycleRequirements, id, {
+            status: "ready_to_run",
+            updatedAt: "2026-06-06T11:07:00.000Z",
+            runLinks: [
+              {
+                workflowRunId: "workflow-failed",
+                status: "ready",
+                linkedAt: "2026-06-06T11:07:00.000Z",
+              },
+            ],
+          });
 
           return {
             requirement: nextRequirement,
@@ -2695,11 +2953,13 @@ test.describe("Requirement Delivery Console smoke", () => {
               ...lifecycleFailedWorkflow,
               status: "ready",
               updatedAt: "2026-06-06T11:07:00.000Z",
-              qualityGates: lifecycleFailedWorkflow.qualityGates.map((gate) => ({
-                ...gate,
-                status: "waiting",
-                result: undefined,
-              })),
+              qualityGates: lifecycleFailedWorkflow.qualityGates.map(
+                (gate) => ({
+                  ...gate,
+                  status: "waiting",
+                  result: undefined,
+                }),
+              ),
             },
             retry: {
               previousStatus: "gate_failed",
@@ -2755,9 +3015,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     ).toHaveAttribute("href", "/workflows/workflow-failed");
     await expect(retryItem).not.toContainText("Current workflow");
     await expect(retryItem).not.toContainText("workflow-failed");
-    await retryItem
-      .getByRole("button", { exact: true, name: "Retry" })
-      .click();
+    await retryItem.getByRole("button", { exact: true, name: "Retry" }).click();
     await expect(page.getByLabel("Workflow sync")).toContainText(
       "Retry reset to ready. Enqueue to run fresh evidence.",
     );
@@ -2895,12 +3153,18 @@ test.describe("Requirement Delivery Console smoke", () => {
     const focusPanel = page.locator(".deliveryFocusPanel");
     await expect(queueItem).toContainText("Ready to run");
 
-    await queueItem.getByRole("button", { exact: true, name: "Enqueue" }).click();
+    await queueItem
+      .getByRole("button", { exact: true, name: "Enqueue" })
+      .click();
     await expect(queueItem).toContainText("Running");
     await expect(queueItem).toContainText("Queued");
-    await expect(queueItem.getByRole("button", { exact: true, name: "Cancel" })).toBeVisible();
+    await expect(
+      queueItem.getByRole("button", { exact: true, name: "Cancel" }),
+    ).toBeVisible();
 
-    await queueItem.getByRole("button", { exact: true, name: "Cancel" }).click();
+    await queueItem
+      .getByRole("button", { exact: true, name: "Cancel" })
+      .click();
     await expect
       .poll(() => canceledJobs, {
         message: "wait for job cancel request",
@@ -2918,12 +3182,12 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(queueItem).toContainText("Enqueue");
     await expect(queueItem).not.toContainText("Queued");
     await expect(queueItem).not.toContainText("Running");
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
-      "Not review-ready",
-    );
-    await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).not.toContainText(
-      "Review-ready merge candidate",
-    );
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).toContainText("Not review-ready");
+    await expect(
+      focusPanel.getByLabel("Gate Result / Review Evidence"),
+    ).not.toContainText("Review-ready merge candidate");
 
     const pollsAfterCancel = jobPolls;
     await page.waitForTimeout(1800);
@@ -3027,7 +3291,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       queueItem.getByRole("button", { exact: true, name: "Cancel" }),
     ).toBeVisible();
 
-    await queueItem.getByRole("button", { exact: true, name: "Cancel" }).click();
+    await queueItem
+      .getByRole("button", { exact: true, name: "Cancel" })
+      .click();
     await expect
       .poll(() => canceledJobs, {
         message: "wait for refreshed job cancel request",
@@ -3178,6 +3444,173 @@ async function expectMetric(page: Page, label: string, value: string) {
   await expect(metric.locator("strong")).toHaveText(value);
 }
 
+type RealApiApp = {
+  close: () => PromiseLike<unknown>;
+  inject: (input: {
+    headers?: Record<string, string>;
+    method: string;
+    payload?: string;
+    url: string;
+  }) => Promise<{
+    body: string;
+    headers: Record<string, unknown>;
+    statusCode: number;
+  }>;
+  ready: () => PromiseLike<unknown>;
+};
+
+async function buildRealApiApp(
+  demoRoot: string,
+  allowedRepositoryRoot: string,
+): Promise<RealApiApp> {
+  const apiServer = (await import(
+    "../../../apps/api/src/server.js"
+  )) as unknown as {
+    buildApp: (
+      runner?: unknown,
+      options?: { demoRoot?: string; env?: NodeJS.ProcessEnv },
+    ) => RealApiApp;
+  };
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const previousNodeEnv = mutableEnv.NODE_ENV;
+  mutableEnv.NODE_ENV = "test";
+
+  let app: RealApiApp | undefined;
+  try {
+    app = apiServer.buildApp(undefined, {
+      demoRoot,
+      env: {
+        ...process.env,
+        MAWO_ALLOWED_REPOSITORY_ROOTS: allowedRepositoryRoot,
+        MAWO_API_TOKEN: "operator-token",
+        MAWO_QUEUE_BACKEND: "in_process",
+        MAWO_STATE_BACKEND: "file",
+        MAWO_VIEWER_API_TOKEN: "viewer-token",
+      },
+    });
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete mutableEnv.NODE_ENV;
+    } else {
+      mutableEnv.NODE_ENV = previousNodeEnv;
+    }
+  }
+
+  if (!app) {
+    throw new Error(
+      "Failed to build real API app for Playwright route bridge.",
+    );
+  }
+
+  await app.ready();
+  return app;
+}
+
+async function routeRealApi(page: Page, app: RealApiApp): Promise<void> {
+  await page.unroute(`${API_ORIGIN}/**`).catch(() => undefined);
+  await page.route(`${API_ORIGIN}/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const headers = await request.allHeaders();
+    const payload = request.postData() ?? undefined;
+    delete headers.host;
+    delete headers["content-length"];
+    if (payload === undefined) {
+      delete headers["content-type"];
+    }
+
+    const response = await app.inject({
+      headers,
+      method: request.method(),
+      payload,
+      url: `${url.pathname}${url.search}`,
+    });
+
+    await route.fulfill({
+      body: response.body,
+      headers: normalizeRealApiResponseHeaders(response.headers),
+      status: response.statusCode,
+    });
+  });
+}
+
+async function injectRealApiJson(
+  app: RealApiApp,
+  method: string,
+  path: string,
+): Promise<{ body: unknown; status: number }> {
+  const response = await app.inject({
+    headers: {
+      authorization: "Bearer operator-token",
+    },
+    method,
+    url: path,
+  });
+
+  return {
+    body: response.body ? (JSON.parse(response.body) as unknown) : undefined,
+    status: response.statusCode,
+  };
+}
+
+function normalizeRealApiResponseHeaders(
+  headers: Record<string, unknown>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([name]) => {
+        const normalized = name.toLowerCase();
+        return normalized !== "content-length" && normalized !== "connection";
+      })
+      .flatMap(([name, value]) => {
+        if (value === undefined) {
+          return [];
+        }
+
+        return [
+          [name, Array.isArray(value) ? value.join(", ") : String(value)],
+        ];
+      }),
+  );
+}
+
+async function createCommittedRepo(prefix: string): Promise<string> {
+  const repoPath = await mkdtemp(join(tmpdir(), prefix));
+
+  runGit(["init", "-b", "main"], repoPath);
+  runGit(["config", "user.email", "e2e@example.com"], repoPath);
+  runGit(["config", "user.name", "MAWO E2E"], repoPath);
+  await writeFile(join(repoPath, "README.md"), "initial\n", "utf8");
+  runGit(["add", "README.md"], repoPath);
+  runGit(["commit", "-m", "initial commit"], repoPath);
+
+  return repoPath;
+}
+
+function nodeEvalCommand(script: string): string {
+  return `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`;
+}
+
+function runGit(args: string[], cwd: string): string {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      result.stderr || result.stdout || `git ${args.join(" ")} failed`,
+    );
+  }
+
+  return result.stdout.trim();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 async function mockApi(
   page: Page,
   workflows: WorkflowRun[],
@@ -3194,10 +3627,7 @@ async function mockApi(
       decision: "approve" | "reject";
       workflowId: string;
     }) => Promise<unknown> | unknown;
-    onMutatingRequest?: (request: {
-      method: string;
-      pathname: string;
-    }) => void;
+    onMutatingRequest?: (request: { method: string; pathname: string }) => void;
     onJobCancel?: (request: { id: string }) => WorkflowJob | unknown;
     onJobRequest?: (request: { id: string }) => WorkflowJob | unknown;
     jobs?: WorkflowJob[];
@@ -3293,8 +3723,7 @@ async function mockApi(
       });
 
       await route.fulfill({
-        json:
-          limitValue > 0 ? filteredJobs.slice(-limitValue) : filteredJobs,
+        json: limitValue > 0 ? filteredJobs.slice(-limitValue) : filteredJobs,
       });
       return;
     }
@@ -3362,9 +3791,7 @@ async function mockApi(
       /^\/requirements\/([^/]+)\/safety$/,
     );
     if (request.method() === "GET" && requirementSafetyMatch) {
-      const requirementId = decodeURIComponent(
-        requirementSafetyMatch[1] ?? "",
-      );
+      const requirementId = decodeURIComponent(requirementSafetyMatch[1] ?? "");
       const safety = options.repositorySafetyByRequirementId?.[requirementId];
 
       await route.fulfill(
@@ -3393,15 +3820,13 @@ async function mockApi(
       const created = options.onRequirementCreate?.(payload);
       await route.fulfill({
         status: 201,
-        json:
-          created ??
-          {
-            id: "requirement-smoke-created",
-            status: "plan_review",
-            createdAt: "2026-06-06T10:30:00.000Z",
-            updatedAt: "2026-06-06T10:30:00.000Z",
-            ...(typeof payload === "object" && payload ? payload : {}),
-          },
+        json: created ?? {
+          id: "requirement-smoke-created",
+          status: "plan_review",
+          createdAt: "2026-06-06T10:30:00.000Z",
+          updatedAt: "2026-06-06T10:30:00.000Z",
+          ...(typeof payload === "object" && payload ? payload : {}),
+        },
       });
       return;
     }
@@ -3607,7 +4032,11 @@ async function chooseTaskAgent(scope: Locator, label: RegExp, value: string) {
   await agent.selectOption(value);
 }
 
-async function chooseGateRequired(scope: Locator, label: RegExp, value: string) {
+async function chooseGateRequired(
+  scope: Locator,
+  label: RegExp,
+  value: string,
+) {
   const gateRequirement = scope.getByLabel(label).first();
   await expect(gateRequirement).toBeVisible();
   await gateRequirement.selectOption(value);
