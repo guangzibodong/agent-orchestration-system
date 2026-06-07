@@ -127,6 +127,10 @@ export function buildNewRequirementPayload(
     errors.push("CLI agent tasks need instructions or a command.");
   }
 
+  if (hasInvalidTaskDependencies(tasks)) {
+    errors.push("Task dependencies must reference earlier submitted tasks.");
+  }
+
   if (tasks.some((task) => task.timeoutMs === "invalid")) {
     errors.push("Task timeouts must be positive milliseconds.");
   }
@@ -315,6 +319,22 @@ function buildTaskCandidate(task: NewRequirementTaskDraft, index: number) {
       Boolean(cleanValue(task.timeoutMs)) ||
       dependsOn.length > 0,
   };
+}
+
+function hasInvalidTaskDependencies(
+  tasks: Array<ReturnType<typeof buildTaskCandidate>>,
+): boolean {
+  const earlierTaskIds = new Set<string>();
+
+  for (const task of tasks) {
+    if (task.dependsOn.some((dependencyId) => !earlierTaskIds.has(dependencyId))) {
+      return true;
+    }
+
+    earlierTaskIds.add(task.id);
+  }
+
+  return false;
 }
 
 function getFormValue(formData: FormData, key: string): string {

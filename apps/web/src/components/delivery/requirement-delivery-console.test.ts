@@ -696,6 +696,29 @@ describe("RequirementDeliveryConsole", () => {
     });
   });
 
+  it("rejects task dependencies that do not reference earlier submitted tasks", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      tasks: [
+        {
+          title: "Patch checkout copy",
+          objective: "Patch checkout copy in an isolated worktree",
+          acceptanceCriteria: "Patch is reviewable",
+          agent: "shell",
+          command: "npm run patch:checkout",
+          instructions: "",
+          timeoutMs: "",
+          dependsOn: "task-99",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Task dependencies must reference earlier submitted tasks."],
+    });
+  });
+
   it("builds a structured New Requirement payload for submit callbacks", () => {
     const result = buildNewRequirementPayload(validNewRequirementDraft);
 
