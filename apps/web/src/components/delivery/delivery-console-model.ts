@@ -79,6 +79,8 @@ export type RequirementQualityGateDefinition = {
 export type RequirementTaskDefinition = {
   id: string;
   title: string;
+  objective?: string;
+  acceptanceCriteria?: string[];
   agent?: string;
   command?: string;
   instructions?: string;
@@ -757,6 +759,10 @@ export function mapRequirementTicketToSummary(
     taskDefinitions: requirement.tasks.map((task, index) => ({
       id: task.id ?? `task-${index + 1}`,
       title: task.title ?? `Task ${index + 1}`,
+      ...(task.objective ? { objective: task.objective } : {}),
+      ...(task.acceptanceCriteria?.length
+        ? { acceptanceCriteria: task.acceptanceCriteria }
+        : {}),
       ...(task.agent ? { agent: task.agent } : {}),
       ...(task.command ? { command: task.command } : {}),
       ...(task.instructions ? { instructions: task.instructions } : {}),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentSummarySchema,
   auditEventSchema,
+  createRequirementDeliveryTicketRequestSchema,
   createRepositoryWorkflowRequestSchema,
   repositoryRegistrationRequestSchema,
   repositoryRecordSchema,
@@ -308,6 +309,43 @@ describe("workflowRunSchema", () => {
 
     expect(request.qualityGates[0]?.required).toBe(false);
     expect(request.qualityGates[1]?.required).toBe(true);
+  });
+
+  it("preserves manual task objective and task-level acceptance on requirement tickets", () => {
+    const request = createRequirementDeliveryTicketRequestSchema.parse({
+      title: "Manual task contract",
+      repositoryPath: "C:/repo",
+      goal: "Run explicit tasks with reviewable acceptance",
+      acceptanceCriteria: ["Task contracts are visible before enqueue"],
+      tasks: [
+        {
+          id: "task-contract",
+          title: "Patch checkout",
+          objective: "Update checkout copy without changing payment flow",
+          acceptanceCriteria: [
+            "Checkout copy is updated",
+            "Payment flow remains untouched"
+          ],
+          agent: "shell",
+          command: "npm test"
+        }
+      ],
+      qualityGates: [
+        {
+          title: "Unit tests",
+          command: "npm test"
+        }
+      ]
+    });
+
+    expect(request.tasks[0]).toMatchObject({
+      id: "task-contract",
+      objective: "Update checkout copy without changing payment flow",
+      acceptanceCriteria: [
+        "Checkout copy is updated",
+        "Payment flow remains untouched"
+      ]
+    });
   });
 
   it("accepts repository workflow creation requests by registered repository id", () => {

@@ -549,11 +549,17 @@ function buildSectionRows(
     case "Plan":
       return [
         { label: "Task plan", value: requirement.nodeLabel },
-        { label: "Task objective", value: requirement.title },
+        {
+          label: "Task objective",
+          value: buildTaskObjectiveDetail(requirement)
+        },
         { label: "Task contract", value: buildTaskContractDetail(requirement) },
         { label: "Dependency", value: buildTaskDependencyDetail(requirement) },
         { label: "Gate mapping", value: buildGateDefinitionDetail(requirement) },
-        { label: "Task acceptance", value: "Reviewable patch plus passed required gates" },
+        {
+          label: "Task acceptance",
+          value: buildTaskAcceptanceDetail(requirement)
+        },
         { label: "Owner", value: "Operator review required" }
       ];
     case "Execution":
@@ -649,6 +655,37 @@ function buildTaskContractDetail(requirement: RequirementSummary): string {
   }
 
   return taskDefinitions.map(formatTaskDefinition).join(" | ");
+}
+
+function buildTaskObjectiveDetail(requirement: RequirementSummary): string {
+  const taskDefinitions = requirement.taskDefinitions ?? [];
+  const objectives = taskDefinitions
+    .filter((task) => task.objective)
+    .map((task) => `${task.id} ${task.title}: objective ${task.objective}`);
+
+  if (objectives.length) {
+    return objectives.join(" | ");
+  }
+
+  return requirement.title;
+}
+
+function buildTaskAcceptanceDetail(requirement: RequirementSummary): string {
+  const taskDefinitions = requirement.taskDefinitions ?? [];
+  const acceptance = taskDefinitions
+    .filter((task) => task.acceptanceCriteria?.length)
+    .map(
+      (task) =>
+        `${task.id} ${task.title}: ${formatDetailList(
+          task.acceptanceCriteria ?? []
+        )}`
+    );
+
+  if (acceptance.length) {
+    return acceptance.join(" | ");
+  }
+
+  return "Reviewable patch plus passed required gates";
 }
 
 function formatTaskDefinition(

@@ -229,6 +229,26 @@ export function NewRequirementPanel({
                   </label>
                 </div>
                 <label className="field">
+                  <span>Task {slot} objective</span>
+                  <textarea
+                    name="taskObjective"
+                    placeholder="Outcome this task must achieve"
+                    required={slot === 1}
+                    rows={2}
+                    disabled={viewerMode}
+                  />
+                </label>
+                <label className="field">
+                  <span>Task {slot} acceptance</span>
+                  <textarea
+                    name="taskAcceptanceCriteria"
+                    placeholder="Task-level acceptance, one per line"
+                    required={slot === 1}
+                    rows={2}
+                    disabled={viewerMode}
+                  />
+                </label>
+                <label className="field">
                   <span>Task {slot} command</span>
                   <input
                     name="taskCommand"

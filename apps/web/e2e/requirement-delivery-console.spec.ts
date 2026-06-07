@@ -935,9 +935,29 @@ test.describe("Requirement Delivery Console smoke", () => {
     await fillField(flow, /constraints/i, "No automatic merge.");
     await fillField(flow, /non-?goals/i, "No PR creation.");
     await fillField(flow, /task 1 title/i, "Create the checkout copy patch.");
+    await fillField(
+      flow,
+      /task 1 objective/i,
+      "Patch checkout copy without changing payment behavior.",
+    );
+    await fillField(
+      flow,
+      /task 1 acceptance/i,
+      "Checkout copy is updated.\nPayment behavior stays unchanged.",
+    );
     await fillField(flow, /task 1 command/i, "npm run patch:checkout");
     await fillField(flow, /task 1 timeout/i, "90000");
     await fillField(flow, /task 2 title/i, "Review checkout evidence.");
+    await fillField(
+      flow,
+      /task 2 objective/i,
+      "Inspect the generated patch before approval.",
+    );
+    await fillField(
+      flow,
+      /task 2 acceptance/i,
+      "Patch artifact is reviewable.",
+    );
     await chooseTaskAgent(flow, /task 2 agent/i, "codex");
     await fillField(flow, /task 2 instructions/i, "Review the generated patch.");
     await fillField(flow, /task 2 depends/i, "task-1");
@@ -973,6 +993,11 @@ test.describe("Requirement Delivery Console smoke", () => {
         expect.objectContaining({
           id: "task-1",
           title: expect.stringMatching(/checkout copy patch/i),
+          objective: "Patch checkout copy without changing payment behavior.",
+          acceptanceCriteria: [
+            "Checkout copy is updated.",
+            "Payment behavior stays unchanged.",
+          ],
           agent: "shell",
           command: "npm run patch:checkout",
           timeoutMs: 90000,
@@ -980,6 +1005,8 @@ test.describe("Requirement Delivery Console smoke", () => {
         expect.objectContaining({
           id: "task-2",
           title: "Review checkout evidence.",
+          objective: "Inspect the generated patch before approval.",
+          acceptanceCriteria: ["Patch artifact is reviewable."],
           agent: "codex",
           instructions: "Review the generated patch.",
           dependsOn: ["task-1"],
@@ -1136,6 +1163,16 @@ test.describe("Requirement Delivery Console smoke", () => {
     await fillField(flow, /non-?goals/i, "Automatic PR creation.");
     await fillField(flow, /context paths/i, "apps/web/src/app/page.tsx");
     await fillField(flow, /task 1 title/i, "Patch checkout copy");
+    await fillField(
+      flow,
+      /task 1 objective/i,
+      "Create a focused checkout copy patch.",
+    );
+    await fillField(
+      flow,
+      /task 1 acceptance/i,
+      "Checkout copy patch is ready for review.",
+    );
     await fillField(flow, /task 1 command/i, "npm run patch:checkout");
     await fillField(flow, /gate 1 command/i, "npm test");
     await chooseRisk(flow, "high");
@@ -1421,6 +1458,16 @@ test.describe("Requirement Delivery Console smoke", () => {
     await fillField(flow, /non-?goals/i, "Automatic PR creation.");
     await fillField(flow, /context paths/i, "apps/web/src/app/page.tsx");
     await fillField(flow, /task 1 title/i, "Patch checkout copy");
+    await fillField(
+      flow,
+      /task 1 objective/i,
+      "Create a focused checkout copy patch.",
+    );
+    await fillField(
+      flow,
+      /task 1 acceptance/i,
+      "Checkout copy patch is ready for review.",
+    );
     await fillField(flow, /task 1 command/i, "npm run patch:checkout");
     await fillField(flow, /gate 1 command/i, "npm test");
 

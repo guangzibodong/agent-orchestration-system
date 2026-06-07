@@ -120,6 +120,11 @@ describe("delivery console model", () => {
         {
           id: "task-1",
           title: "Patch checkout",
+          objective: "Patch checkout copy without touching payment flow",
+          acceptanceCriteria: [
+            "Checkout copy changes are isolated",
+            "Payment files are untouched"
+          ],
           agent: "shell",
           instructions: "Patch checkout"
         }
@@ -157,6 +162,19 @@ describe("delivery console model", () => {
         contextPaths: ["apps/web/src/app/page.tsx"]
       },
       workflowRunStatusLabel: "No workflow run linked",
+      taskDefinitions: [
+        {
+          id: "task-1",
+          title: "Patch checkout",
+          objective: "Patch checkout copy without touching payment flow",
+          acceptanceCriteria: [
+            "Checkout copy changes are isolated",
+            "Payment files are untouched"
+          ],
+          agent: "shell",
+          instructions: "Patch checkout"
+        }
+      ],
       availableActions: ["confirm-plan"]
     });
 

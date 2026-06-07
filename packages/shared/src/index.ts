@@ -89,10 +89,14 @@ export const workflowRunSchema = z.object({
   qualityGates: z.array(qualityGateRunSchema).default([]),
 });
 
+const requirementStringListSchema = z.array(z.string().min(1));
+
 export const workflowTaskInputSchema = z
   .object({
     id: z.string().min(1).optional(),
     title: z.string().min(1).optional(),
+    objective: z.string().min(1).optional(),
+    acceptanceCriteria: requirementStringListSchema.optional(),
     agent: z.string().min(1).default("shell"),
     command: z.string().min(1).optional(),
     instructions: z.string().min(1).optional(),
@@ -137,8 +141,6 @@ export const requirementRunLinkSchema = z.object({
 export const requirementQualityGateInputSchema = qualityGateInputSchema.extend({
   required: z.boolean().default(true),
 });
-
-const requirementStringListSchema = z.array(z.string().min(1));
 
 export const createRequirementDeliveryTicketRequestSchema = z.object({
   title: z.string().min(1),

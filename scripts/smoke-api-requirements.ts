@@ -73,6 +73,11 @@ function createRequirementPayload(): JsonObject {
       {
         id: "task-copy",
         title: "Create checkout copy patch",
+        objective: "Update checkout copy while preserving manual review safety.",
+        acceptanceCriteria: [
+          "Checkout copy changes are isolated to the task worktree.",
+          "Patch evidence is available before approval.",
+        ],
         agent: "shell",
         instructions:
           "Update checkout copy in an isolated worktree and leave evidence for review.",
@@ -180,6 +185,18 @@ async function main() {
         failures,
         Array.isArray(operatorCreate.body.tasks),
         "Created requirement did not preserve tasks as an array.",
+      );
+      const firstTask = Array.isArray(operatorCreate.body.tasks)
+        ? operatorCreate.body.tasks[0]
+        : undefined;
+      check(
+        failures,
+        isObject(firstTask) &&
+          firstTask.objective ===
+            "Update checkout copy while preserving manual review safety." &&
+          Array.isArray(firstTask.acceptanceCriteria) &&
+          firstTask.acceptanceCriteria.length === 2,
+        "Created requirement did not preserve task objective and task-level acceptance.",
       );
       check(
         failures,

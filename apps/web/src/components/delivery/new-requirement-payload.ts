@@ -16,6 +16,8 @@ export type NewRequirementDraft = {
 
 export type NewRequirementTaskDraft = {
   title: string;
+  objective: string;
+  acceptanceCriteria: string;
   agent: string;
   command: string;
   instructions: string;
@@ -42,6 +44,8 @@ export type NewRequirementPayload = {
   tasks: Array<{
     id: string;
     title: string;
+    objective?: string;
+    acceptanceCriteria?: string[];
     agent: string;
     command?: string;
     instructions?: string;
@@ -103,6 +107,14 @@ export function buildNewRequirementPayload(
     errors.push("Each task needs a title.");
   }
 
+  if (tasks.some((task) => !task.objective)) {
+    errors.push("Each task needs an objective.");
+  }
+
+  if (tasks.some((task) => !task.acceptanceCriteria.length)) {
+    errors.push("Each task needs task-level acceptance.");
+  }
+
   if (tasks.some((task) => task.timeoutMs === "invalid")) {
     errors.push("Task timeouts must be positive milliseconds.");
   }
@@ -138,6 +150,10 @@ export function buildNewRequirementPayload(
       tasks: tasks.map((task) => ({
         id: task.id,
         title: task.title,
+        ...(task.objective ? { objective: task.objective } : {}),
+        ...(task.acceptanceCriteria.length
+          ? { acceptanceCriteria: task.acceptanceCriteria }
+          : {}),
         agent: task.agent,
         ...(task.command ? { command: task.command } : {}),
         ...(task.instructions ? { instructions: task.instructions } : {}),
@@ -195,6 +211,8 @@ function getTaskDraftsFromFormData(formData: FormData): NewRequirementTaskDraft[
   if (!titles.length) {
     return formData.getAll("tasks").map((value) => ({
       title: String(value),
+      objective: "",
+      acceptanceCriteria: "",
       agent: "shell",
       command: "",
       instructions: String(value),
@@ -204,6 +222,12 @@ function getTaskDraftsFromFormData(formData: FormData): NewRequirementTaskDraft[
   }
 
   const agents = formData.getAll("taskAgent").map((value) => String(value));
+  const objectives = formData
+    .getAll("taskObjective")
+    .map((value) => String(value));
+  const acceptanceCriteria = formData
+    .getAll("taskAcceptanceCriteria")
+    .map((value) => String(value));
   const commands = formData.getAll("taskCommand").map((value) => String(value));
   const instructions = formData
     .getAll("taskInstructions")
@@ -217,6 +241,8 @@ function getTaskDraftsFromFormData(formData: FormData): NewRequirementTaskDraft[
 
   return titles.map((title, index) => ({
     title,
+    objective: objectives[index] ?? "",
+    acceptanceCriteria: acceptanceCriteria[index] ?? "",
     agent: agents[index] ?? "shell",
     command: commands[index] ?? "",
     instructions: instructions[index] ?? "",
@@ -250,6 +276,8 @@ function getQualityGateDraftsFromFormData(
 
 function buildTaskCandidate(task: NewRequirementTaskDraft, index: number) {
   const title = cleanListItem(task.title);
+  const objective = cleanValue(task.objective);
+  const acceptanceCriteria = parseList(task.acceptanceCriteria);
   const agent = cleanValue(task.agent) || "shell";
   const command = cleanValue(task.command);
   const instructions = cleanValue(task.instructions);
@@ -259,6 +287,8 @@ function buildTaskCandidate(task: NewRequirementTaskDraft, index: number) {
   return {
     id: `task-${index + 1}`,
     title,
+    objective,
+    acceptanceCriteria,
     agent,
     command,
     instructions: instructions || (!command && title ? title : ""),
@@ -266,6 +296,8 @@ function buildTaskCandidate(task: NewRequirementTaskDraft, index: number) {
     dependsOn,
     hasAnyValue:
       Boolean(title) ||
+      Boolean(objective) ||
+      acceptanceCriteria.length > 0 ||
       Boolean(command) ||
       Boolean(instructions) ||
       Boolean(cleanValue(task.timeoutMs)) ||

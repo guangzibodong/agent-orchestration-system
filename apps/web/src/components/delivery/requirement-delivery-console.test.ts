@@ -65,6 +65,9 @@ const validNewRequirementDraft: NewRequirementDraft = {
   tasks: [
     {
       title: "Build form",
+      objective: "Give operators a structured form for requirement delivery",
+      acceptanceCriteria:
+        "Form submits title, repository, goal, and task contracts\nViewer mode remains read only",
       agent: "shell",
       command: "npm run build:form",
       instructions: "",
@@ -73,6 +76,9 @@ const validNewRequirementDraft: NewRequirementDraft = {
     },
     {
       title: "Wire submit callback",
+      objective: "Send the structured requirement payload to the client callback",
+      acceptanceCriteria:
+        "Callback receives task-level acceptance\nDependency links remain intact",
       agent: "codex",
       command: "",
       instructions: "Wire the callback through the client component",
@@ -81,6 +87,8 @@ const validNewRequirementDraft: NewRequirementDraft = {
     },
     {
       title: "",
+      objective: "",
+      acceptanceCriteria: "",
       agent: "shell",
       command: "",
       instructions: "",
@@ -420,6 +428,8 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Context paths");
     expect(html).toContain("Risk level");
     expect(html).toContain("Task 1");
+    expect(html).toContain("Task 1 objective");
+    expect(html).toContain("Task 1 acceptance");
     expect(html).toContain("Task 1 command");
     expect(html).toContain("Task 1 depends on");
     expect(html).toContain("Task 5");
@@ -447,6 +457,8 @@ describe("RequirementDeliveryConsole", () => {
     formData.set("acceptanceCriteria", "Gate timeout is submitted");
     formData.set("riskLevel", "medium");
     formData.append("taskTitle", "Build timeout form");
+    formData.append("taskObjective", "Capture timeout fields without raw JSON");
+    formData.append("taskAcceptanceCriteria", "Timeouts appear in the payload");
     formData.append("taskAgent", "shell");
     formData.append("taskCommand", "npm test");
     formData.append("taskInstructions", "");
@@ -553,6 +565,12 @@ describe("RequirementDeliveryConsole", () => {
           {
             id: "task-1",
             title: "Build form",
+            objective:
+              "Give operators a structured form for requirement delivery",
+            acceptanceCriteria: [
+              "Form submits title, repository, goal, and task contracts",
+              "Viewer mode remains read only"
+            ],
             agent: "shell",
             command: "npm run build:form",
             timeoutMs: 90000,
@@ -560,6 +578,12 @@ describe("RequirementDeliveryConsole", () => {
           {
             id: "task-2",
             title: "Wire submit callback",
+            objective:
+              "Send the structured requirement payload to the client callback",
+            acceptanceCriteria: [
+              "Callback receives task-level acceptance",
+              "Dependency links remain intact"
+            ],
             agent: "codex",
             instructions: "Wire the callback through the client component",
             dependsOn: ["task-1"],
@@ -596,6 +620,12 @@ describe("RequirementDeliveryConsole", () => {
           {
             id: "task-1",
             title: "Build form",
+            objective:
+              "Give operators a structured form for requirement delivery",
+            acceptanceCriteria: [
+              "Form submits title, repository, goal, and task contracts",
+              "Viewer mode remains read only"
+            ],
             agent: "shell",
             command: "npm run build:form",
             timeoutMs: 90000,
@@ -603,6 +633,12 @@ describe("RequirementDeliveryConsole", () => {
           {
             id: "task-2",
             title: "Wire submit callback",
+            objective:
+              "Send the structured requirement payload to the client callback",
+            acceptanceCriteria: [
+              "Callback receives task-level acceptance",
+              "Dependency links remain intact"
+            ],
             agent: "codex",
             instructions: "Wire the callback through the client component",
             dependsOn: ["task-1"],

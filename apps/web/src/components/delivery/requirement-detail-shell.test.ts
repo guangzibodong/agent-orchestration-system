@@ -46,6 +46,11 @@ const requirement: RequirementSummary = {
     {
       id: "task-auth",
       title: "Update auth guard",
+      objective: "Reject missing operator tokens before admin handlers run",
+      acceptanceCriteria: [
+        "Admin routes return 403 without an operator token",
+        "Review evidence names the auth middleware change"
+      ],
       agent: "shell",
       command: "npm run patch:auth",
       instructions: "Patch middleware and keep the review evidence focused.",
@@ -220,6 +225,12 @@ describe("RequirementDetailShell", () => {
     expect(html).toContain("2 tasks / 2 gates");
     expect(html).toContain(
       "task-auth Update auth guard: agent shell; command npm run patch:auth; instructions Patch middleware and keep the review evidence focused.; timeout 1m 30s; depends on task-preflight"
+    );
+    expect(html).toContain(
+      "task-auth Update auth guard: objective Reject missing operator tokens before admin handlers run"
+    );
+    expect(html).toContain(
+      "task-auth Update auth guard: Admin routes return 403 without an operator token, Review evidence names the auth middleware change"
     );
     expect(html).toContain(
       "gate-unit Unit tests: required; command npm test; timeout 2m 00s"
