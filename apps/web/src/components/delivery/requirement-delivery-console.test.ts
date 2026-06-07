@@ -76,7 +76,8 @@ const validNewRequirementDraft: NewRequirementDraft = {
     },
     {
       title: "Wire submit callback",
-      objective: "Send the structured requirement payload to the client callback",
+      objective:
+        "Send the structured requirement payload to the client callback",
       acceptanceCriteria:
         "Callback receives task-level acceptance\nDependency links remain intact",
       agent: "codex",
@@ -122,7 +123,7 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain(
       'aria-label="Legacy Run Console secondary ops/debug"',
     );
-    expect(html).toContain("href=\"#legacy-run-console\"");
+    expect(html).toContain('href="#legacy-run-console"');
     expect(html).toContain("1 task / 1 gate / 2026-06-06T10:10:00.000Z");
     expect(html).not.toContain("Shell Run");
     expect(html.indexOf("New Requirement")).toBeLessThan(
@@ -287,6 +288,24 @@ describe("RequirementDeliveryConsole", () => {
     );
   });
 
+  it("shows decision queue repository, stage, and risk context", () => {
+    const fullRepositoryPath =
+      "C:/work/safety-console/checkout-with-a-very-long-repository-label";
+    const html = renderConsoleFor([
+      {
+        ...workflow,
+        repositoryPath: fullRepositoryPath,
+        status: "gate_failed",
+      },
+    ]);
+
+    expect(html).toContain("Decision Queue");
+    expect(html).toContain("Retry failed gate");
+    expect(html).toContain(
+      `<small class="decisionItemContext" aria-label="${fullRepositoryPath} / Needs rework / High risk" title="${fullRepositoryPath} / Needs rework / High risk">.../safety-console/checkout-with-a-very-long-repository-label / Needs rework / High risk</small>`,
+    );
+  });
+
   it("shows required gate failure evidence without raw logs", () => {
     const html = renderConsoleFor([
       {
@@ -406,11 +425,12 @@ describe("RequirementDeliveryConsole", () => {
     );
     expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
     expect(html).not.toContain("Apply Candidate");
-    const enqueueButtons = html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
+    const enqueueButtons =
+      html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
     expect(enqueueButtons.length).toBeGreaterThan(0);
-    expect(enqueueButtons.every((button) => button.includes('disabled=""'))).toBe(
-      true,
-    );
+    expect(
+      enqueueButtons.every((button) => button.includes('disabled=""')),
+    ).toBe(true);
   });
 
   it("renders unavailable CLI agent preflight as a blocking decision", () => {
@@ -480,11 +500,12 @@ describe("RequirementDeliveryConsole", () => {
       "Preflight blocked: Configure missing agent",
     );
     expect(html).toContain("Codex CLI command is not configured");
-    const enqueueButtons = html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
+    const enqueueButtons =
+      html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
     expect(enqueueButtons.length).toBeGreaterThan(0);
-    expect(enqueueButtons.every((button) => button.includes('disabled=""'))).toBe(
-      true,
-    );
+    expect(
+      enqueueButtons.every((button) => button.includes('disabled=""')),
+    ).toBe(true);
   });
 
   it("renders review evidence artifacts inside the requirement detail shell", () => {
@@ -562,7 +583,9 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Title");
     expect(html).toContain("Repository path");
     expect(html).toContain("Repository ID");
-    expect(html).toContain("Local real repository path or registered repository ID");
+    expect(html).toContain(
+      "Local real repository path or registered repository ID",
+    );
     expect(html).toContain(
       "Safety preflight checks branch, HEAD, clean/dirty state, and allowed root before mutating runs",
     );
@@ -853,7 +876,7 @@ describe("RequirementDeliveryConsole", () => {
               "Give operators a structured form for requirement delivery",
             acceptanceCriteria: [
               "Form submits title, repository, goal, and task contracts",
-              "Viewer mode remains read only"
+              "Viewer mode remains read only",
             ],
             agent: "shell",
             command: "npm run build:form",
@@ -866,7 +889,7 @@ describe("RequirementDeliveryConsole", () => {
               "Send the structured requirement payload to the client callback",
             acceptanceCriteria: [
               "Callback receives task-level acceptance",
-              "Dependency links remain intact"
+              "Dependency links remain intact",
             ],
             agent: "codex",
             instructions: "Wire the callback through the client component",
@@ -891,8 +914,9 @@ describe("RequirementDeliveryConsole", () => {
 
   it("submits the structured payload through a callback", () => {
     const submitted = new Array<unknown>();
-    const result = submitNewRequirementDraft(validNewRequirementDraft, (payload) =>
-      submitted.push(payload),
+    const result = submitNewRequirementDraft(
+      validNewRequirementDraft,
+      (payload) => submitted.push(payload),
     );
 
     expect(result.ok).toBe(true);
@@ -908,7 +932,7 @@ describe("RequirementDeliveryConsole", () => {
               "Give operators a structured form for requirement delivery",
             acceptanceCriteria: [
               "Form submits title, repository, goal, and task contracts",
-              "Viewer mode remains read only"
+              "Viewer mode remains read only",
             ],
             agent: "shell",
             command: "npm run build:form",
@@ -921,7 +945,7 @@ describe("RequirementDeliveryConsole", () => {
               "Send the structured requirement payload to the client callback",
             acceptanceCriteria: [
               "Callback receives task-level acceptance",
-              "Dependency links remain intact"
+              "Dependency links remain intact",
             ],
             agent: "codex",
             instructions: "Wire the callback through the client component",

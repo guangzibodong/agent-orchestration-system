@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type {
   RepositorySafetySummary,
-  RequirementSummary
+  RequirementSummary,
 } from "./delivery-console-model";
 import {
   buildDecisionQueueDisplay,
-  buildRequirementQueueRows
+  buildRequirementQueueRows,
 } from "./requirement-queue-display";
 
 const requirements: RequirementSummary[] = [
@@ -24,7 +24,7 @@ const requirements: RequirementSummary[] = [
     workflowRunId: "workflow-ready",
     workflowRunStatus: "ready",
     workflowRunStatusLabel: "Ready",
-    availableActions: ["enqueue"]
+    availableActions: ["enqueue"],
   },
   {
     id: "req-2",
@@ -42,8 +42,8 @@ const requirements: RequirementSummary[] = [
     workflowRunId: "workflow-failed",
     workflowRunStatus: "gate_failed",
     workflowRunStatusLabel: "Gate failed",
-    availableActions: ["retry"]
-  }
+    availableActions: ["retry"],
+  },
 ];
 
 function safety(repositoryLabel: string): RepositorySafetySummary {
@@ -55,7 +55,7 @@ function safety(repositoryLabel: string): RepositorySafetySummary {
     headLabel: "HEAD SHA not reported",
     mergePolicyLabel: "No MAWO auto-merge; manual git apply outside MAWO",
     recoveryAction: "Run repository preflight before mutating actions",
-    repositoryLabel
+    repositoryLabel,
   };
 }
 
@@ -75,7 +75,7 @@ describe("requirement queue display", () => {
         currentJobStatusLabel: undefined,
         workflowRunHref: "/workflows/workflow-ready",
         workflowRunId: "workflow-ready",
-        workflowRunStatusLabel: "Ready"
+        workflowRunStatusLabel: "Ready",
       },
       {
         id: "req-2",
@@ -90,31 +90,68 @@ describe("requirement queue display", () => {
         currentJobStatusLabel: "Failed",
         workflowRunHref: "/workflows/workflow-failed",
         workflowRunId: "workflow-failed",
-        workflowRunStatusLabel: "Gate failed"
-      }
+        workflowRunStatusLabel: "Gate failed",
+      },
     ]);
   });
 
   it("formats decision items as user actions instead of logs", () => {
     expect(
-      buildDecisionQueueDisplay([
-        {
-          id: "req-2:retry",
-          requirementId: "req-2",
-          title: "Harden auth checks",
-          actionLabel: "Retry failed gate",
-          severity: "danger"
-        }
-      ])
+      buildDecisionQueueDisplay(
+        [
+          {
+            id: "req-2:retry",
+            requirementId: "req-2",
+            title: "Harden auth checks",
+            actionLabel: "Retry failed gate",
+            severity: "danger",
+          },
+        ],
+        requirements,
+      ),
     ).toEqual([
       {
         id: "req-2:retry",
         requirementId: "req-2",
         title: "Harden auth checks",
         actionLabel: "Retry failed gate",
+        contextLabel: "C:/work/api / Needs rework / High risk",
         severityLabel: "Blocking",
-        tone: "danger"
-      }
+        tone: "danger",
+      },
+    ]);
+  });
+
+  it("keeps long decision queue repository context compact but inspectable", () => {
+    const fullRepositoryPath =
+      "C:/work/safety-console/checkout-with-a-very-long-repository-label";
+
+    expect(
+      buildDecisionQueueDisplay(
+        [
+          {
+            id: "req-2:retry",
+            requirementId: "req-2",
+            title: "Harden auth checks",
+            actionLabel: "Retry failed gate",
+            severity: "danger",
+          },
+        ],
+        [
+          {
+            ...requirements[1],
+            repositoryLabel: fullRepositoryPath,
+            repositorySafety: safety(fullRepositoryPath),
+          },
+        ],
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        contextLabel:
+          ".../safety-console/checkout-with-a-very-long-repository-label / Needs rework / High risk",
+        contextFullLabel:
+          "C:/work/safety-console/checkout-with-a-very-long-repository-label / Needs rework / High risk",
+      }),
     ]);
   });
 
@@ -125,16 +162,16 @@ describe("requirement queue display", () => {
         repositoryLabel:
           "C:/work/safety-console/checkout-with-a-very-long-repository-label",
         repositorySafety: safety(
-          "C:/work/safety-console/checkout-with-a-very-long-repository-label"
-        )
-      }
+          "C:/work/safety-console/checkout-with-a-very-long-repository-label",
+        ),
+      },
     ]);
 
     expect(row?.repositoryLabel).toBe(
-      ".../safety-console/checkout-with-a-very-long-repository-label"
+      ".../safety-console/checkout-with-a-very-long-repository-label",
     );
     expect(row?.repositoryFullLabel).toBe(
-      "C:/work/safety-console/checkout-with-a-very-long-repository-label"
+      "C:/work/safety-console/checkout-with-a-very-long-repository-label",
     );
   });
 });

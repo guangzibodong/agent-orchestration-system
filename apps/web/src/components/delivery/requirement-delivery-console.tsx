@@ -138,7 +138,10 @@ export function RequirementDeliveryConsole({
   const activeQueueCount = visibleRequirements.filter(
     (requirement) => requirement.requirementStage !== "archived",
   ).length;
-  const decisionRows = buildDecisionQueueDisplay(model.decisionQueue).filter(
+  const decisionRows = buildDecisionQueueDisplay(
+    model.decisionQueue,
+    model.requirements,
+  ).filter(
     (decision) =>
       !normalizedSearchQuery ||
       visibleRequirementIds.has(decision.requirementId) ||
@@ -181,7 +184,9 @@ export function RequirementDeliveryConsole({
 
     try {
       const createdRequirementId = await onNewRequirementSubmit?.(payload);
-      setNewRequirementMessage(`Requirement draft submitted for ${payload.title}`);
+      setNewRequirementMessage(
+        `Requirement draft submitted for ${payload.title}`,
+      );
       if (createdRequirementId) {
         setSelectedRequirementId(createdRequirementId);
       }
@@ -608,7 +613,8 @@ export function RequirementDeliveryConsole({
             <div className="deliveryPanelHeader compact">
               <h2>Stage Stepper</h2>
               <span>
-                {selectedRequirement?.nextAction ?? "No active requirement stage"}
+                {selectedRequirement?.nextAction ??
+                  "No active requirement stage"}
               </span>
             </div>
             <ol className="stageStepper">
@@ -659,19 +665,34 @@ export function RequirementDeliveryConsole({
             <div className="decisionQueueList">
               {decisionRows.map((decision) => (
                 <button
-                  aria-pressed={decision.requirementId === selectedRequirement?.id}
+                  aria-pressed={
+                    decision.requirementId === selectedRequirement?.id
+                  }
                   className={`decisionItem ${decision.tone} ${
                     decision.requirementId === selectedRequirement?.id
                       ? "selected"
                       : ""
                   }`}
                   key={decision.id}
-                  onClick={() => setSelectedRequirementId(decision.requirementId)}
+                  onClick={() =>
+                    setSelectedRequirementId(decision.requirementId)
+                  }
                   type="button"
                 >
                   <span>{decision.severityLabel}</span>
                   <strong>{decision.title}</strong>
-                  <p>{buildDecisionActionLabel(decision.actionLabel, viewerMode)}</p>
+                  {decision.contextLabel ? (
+                    <small
+                      className="decisionItemContext"
+                      aria-label={decision.contextFullLabel}
+                      title={decision.contextFullLabel}
+                    >
+                      {decision.contextLabel}
+                    </small>
+                  ) : null}
+                  <p>
+                    {buildDecisionActionLabel(decision.actionLabel, viewerMode)}
+                  </p>
                 </button>
               ))}
             </div>
@@ -708,8 +729,7 @@ function DeliveryHealthIndicators({
           key={indicator.id}
           title={indicator.detail}
         >
-          <span>{indicator.label}</span>{" "}
-          <strong>{indicator.value}</strong>
+          <span>{indicator.label}</span> <strong>{indicator.value}</strong>
         </div>
       ))}
     </div>
@@ -731,7 +751,10 @@ function buildRequirementLifecycleSuccessMessage(
   return `${successActionMessages[action]} for ${requirementTitle}`;
 }
 
-function buildDecisionActionLabel(actionLabel: string, viewerMode: boolean): string {
+function buildDecisionActionLabel(
+  actionLabel: string,
+  viewerMode: boolean,
+): string {
   return viewerMode ? "Operator token required" : actionLabel;
 }
 
@@ -800,7 +823,9 @@ function matchesDecisionSearch(
     decision.title,
     decision.actionLabel,
     decision.severityLabel,
-  ].some((value) => value.toLowerCase().includes(query));
+    decision.contextLabel,
+    decision.contextFullLabel,
+  ].some((value) => value?.toLowerCase().includes(query));
 }
 
 function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {
@@ -838,9 +863,7 @@ function RequirementQueueActions({
     return (
       <div className="requirementQueueActions" aria-label="Requirement actions">
         <button className="secondaryButton" disabled type="button">
-          {row.actionBlockReason
-            ? "Preflight blocked"
-            : "No action available"}
+          {row.actionBlockReason ? "Preflight blocked" : "No action available"}
         </button>
         {row.actionBlockReason ? (
           <p className="requirementActionMessage errorText">

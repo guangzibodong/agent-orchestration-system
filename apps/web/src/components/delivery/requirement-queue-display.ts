@@ -4,7 +4,7 @@ import type {
   RequirementLifecycleAction,
   RequirementRiskLevel,
   RequirementStage,
-  RequirementSummary
+  RequirementSummary,
 } from "./delivery-console-model";
 
 export type RequirementQueueRow = {
@@ -30,6 +30,8 @@ export type DecisionQueueDisplayItem = {
   requirementId: string;
   title: string;
   actionLabel: string;
+  contextLabel?: string;
+  contextFullLabel?: string;
   severityLabel: string;
   tone: DeliveryDecisionSeverity;
 };
@@ -43,13 +45,13 @@ const stageLabels: Record<RequirementStage, string> = {
   needs_review: "Needs review",
   delivered: "Delivered",
   needs_rework: "Needs rework",
-  archived: "Archived"
+  archived: "Archived",
 };
 
 const riskLabels: Record<RequirementRiskLevel, string> = {
   low: "Low risk",
   medium: "Medium risk",
-  high: "High risk"
+  high: "High risk",
 };
 
 const jobStatusLabels = {
@@ -57,17 +59,17 @@ const jobStatusLabels = {
   running: "Running",
   completed: "Completed",
   failed: "Failed",
-  canceled: "Canceled"
+  canceled: "Canceled",
 } as const;
 
 const severityLabels: Record<DeliveryDecisionSeverity, string> = {
   info: "Info",
   warning: "Needs review",
-  danger: "Blocking"
+  danger: "Blocking",
 };
 
 export function buildRequirementQueueRows(
-  requirements: RequirementSummary[]
+  requirements: RequirementSummary[],
 ): RequirementQueueRow[] {
   return requirements.map((requirement) => {
     const repositoryLabel = compactRepositoryLabel(requirement.repositoryLabel);
@@ -93,7 +95,7 @@ export function buildRequirementQueueRows(
         : undefined,
       workflowRunHref: requirement.workflowRunHref,
       workflowRunId: requirement.workflowRunId,
-      workflowRunStatusLabel: requirement.workflowRunStatusLabel
+      workflowRunStatusLabel: requirement.workflowRunStatusLabel,
     };
   });
 }
@@ -115,14 +117,54 @@ export function compactRepositoryLabel(label: string): string {
 }
 
 export function buildDecisionQueueDisplay(
-  decisions: DeliveryDecisionItem[]
+  decisions: DeliveryDecisionItem[],
+  requirements: RequirementSummary[] = [],
 ): DecisionQueueDisplayItem[] {
-  return decisions.map((decision) => ({
-    id: decision.id,
-    requirementId: decision.requirementId,
-    title: decision.title,
-    actionLabel: decision.actionLabel,
-    severityLabel: severityLabels[decision.severity],
-    tone: decision.severity
-  }));
+  const requirementsById = new Map(
+    requirements.map((requirement) => [requirement.id, requirement]),
+  );
+
+  return decisions.map((decision) => {
+    const context = buildDecisionContext(
+      requirementsById.get(decision.requirementId),
+    );
+
+    return {
+      id: decision.id,
+      requirementId: decision.requirementId,
+      title: decision.title,
+      actionLabel: decision.actionLabel,
+      ...context,
+      severityLabel: severityLabels[decision.severity],
+      tone: decision.severity,
+    };
+  });
+}
+
+function buildDecisionContext(
+  requirement: RequirementSummary | undefined,
+): Pick<DecisionQueueDisplayItem, "contextFullLabel" | "contextLabel"> {
+  if (!requirement) {
+    return {};
+  }
+
+  const repositoryLabel = compactRepositoryLabel(requirement.repositoryLabel);
+  const contextLabel = [
+    repositoryLabel,
+    stageLabels[requirement.requirementStage],
+    riskLabels[requirement.riskLevel],
+  ].join(" / ");
+  const contextFullLabel =
+    repositoryLabel === requirement.repositoryLabel
+      ? undefined
+      : [
+          requirement.repositoryLabel,
+          stageLabels[requirement.requirementStage],
+          riskLabels[requirement.riskLevel],
+        ].join(" / ");
+
+  return {
+    contextLabel,
+    ...(contextFullLabel ? { contextFullLabel } : {}),
+  };
 }

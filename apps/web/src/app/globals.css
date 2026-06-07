@@ -436,6 +436,7 @@ button {
 .requirementQueueSelect,
 .decisionItem strong,
 .decisionItem p,
+.decisionItemContext,
 .deliveryEmptyState span,
 .repositorySafetyCard p,
 .repositorySafetyNotice,
@@ -461,6 +462,7 @@ button {
 .requirementQueueItem small,
 .requirementQueueSelect span,
 .decisionItem span,
+.decisionItemContext,
 .deliveryEmptyState span,
 .repositorySafetyCard p,
 .repositorySafetyCard span {
@@ -1402,6 +1404,11 @@ button {
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+
+.decisionItemContext {
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .requirementQueueSelect:hover strong,
