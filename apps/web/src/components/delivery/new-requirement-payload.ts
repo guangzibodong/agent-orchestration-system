@@ -79,7 +79,8 @@ export function buildNewRequirementPayload(
   const contextPaths = parseList(draft.contextPaths);
   const taskCandidates = draft.tasks.map(buildTaskCandidate);
   const tasks = taskCandidates.filter((task) => task.hasAnyValue);
-  const qualityGates = parseQualityGates(draft.qualityGates);
+  const qualityGateCandidates = parseQualityGates(draft.qualityGates);
+  const qualityGates = qualityGateCandidates.filter((gate) => gate.hasAnyValue);
   const riskLevel = normalizeRiskLevel(draft.riskLevel);
   const errors = new Array<string>();
 
@@ -105,6 +106,10 @@ export function buildNewRequirementPayload(
 
   if (hasSkippedTaskSlots(taskCandidates)) {
     errors.push("Fill task slots in order without gaps.");
+  }
+
+  if (hasSkippedQualityGateSlots(qualityGateCandidates)) {
+    errors.push("Fill quality gate slots in order without gaps.");
   }
 
   if (tasks.some((task) => !task.title)) {
@@ -360,6 +365,25 @@ function hasSkippedTaskSlots(
   return false;
 }
 
+function hasSkippedQualityGateSlots(
+  gateCandidates: Array<ReturnType<typeof parseQualityGates>[number]>,
+): boolean {
+  let foundEmptySlot = false;
+
+  for (const gate of gateCandidates) {
+    if (!gate.hasAnyValue) {
+      foundEmptySlot = true;
+      continue;
+    }
+
+    if (foundEmptySlot) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function getFormValue(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "");
 }
@@ -378,6 +402,7 @@ function parseQualityGates(
   command: string;
   required: boolean;
   timeoutMs?: number | "invalid";
+  hasAnyValue: boolean;
 }> {
   if (Array.isArray(value)) {
     return value
@@ -390,18 +415,17 @@ function parseQualityGates(
           command,
           required: gate.required,
           timeoutMs,
+          hasAnyValue:
+            Boolean(command) ||
+            typeof timeoutMs === "number" ||
+            timeoutMs === "invalid",
         };
       })
-      .filter(
-        (gate) =>
-          Boolean(gate.command) ||
-          typeof gate.timeoutMs === "number" ||
-          gate.timeoutMs === "invalid",
-      )
       .map((gate) => ({
         title: gate.title,
         command: gate.command,
         required: gate.required,
+        hasAnyValue: gate.hasAnyValue,
         ...(gate.timeoutMs !== undefined ? { timeoutMs: gate.timeoutMs } : {}),
       }));
   }
@@ -417,6 +441,7 @@ function parseQualityGates(
       title: command,
       command,
       required: !optionalMatch,
+      hasAnyValue: Boolean(command),
     };
   });
 }

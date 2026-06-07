@@ -762,6 +762,29 @@ describe("RequirementDeliveryConsole", () => {
     });
   });
 
+  it("rejects skipped quality gate slots so New Requirement gate contracts stay contiguous", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      qualityGates: [
+        {
+          command: "",
+          required: true,
+          timeoutMs: "",
+        },
+        {
+          command: "npm run smoke:ui",
+          required: true,
+          timeoutMs: "",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Fill quality gate slots in order without gaps."],
+    });
+  });
+
   it("builds a structured New Requirement payload for submit callbacks", () => {
     const result = buildNewRequirementPayload(validNewRequirementDraft);
 
