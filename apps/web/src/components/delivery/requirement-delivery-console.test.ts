@@ -109,6 +109,11 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain('type="search"');
     expect(html).toContain('aria-label="Search requirements, repos, reports"');
     expect(html).toContain("Requirement Queue");
+    const requirementQueue = extractRequirementQueue(html);
+    expect(requirementQueue).toContain("Run evidence");
+    expect(requirementQueue).toContain("Current attempt");
+    expect(requirementQueue).not.toContain("Current workflow");
+    expect(requirementQueue).not.toContain(">workflow-review</a>");
     expect(html).toContain("Repository Safety");
     expect(html).toContain("C:/work/api");
     expect(html).toContain("Apply clean check required");

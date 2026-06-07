@@ -849,15 +849,15 @@ function matchesDecisionSearch(
 
 function RequirementRunStatus({ row }: { row: RequirementQueueRow }) {
   return (
-    <div className="requirementRunStatus" aria-label="Current workflow">
-      <span>Current workflow</span>
+    <div className="requirementRunStatus" aria-label="Run evidence">
+      <span>Run evidence</span>
       {row.workflowRunId && row.workflowRunHref ? (
         <a href={row.workflowRunHref}>
           <ExternalLink size={13} aria-hidden="true" />
-          {row.workflowRunId}
+          Current attempt
         </a>
       ) : (
-        <strong>No run linked</strong>
+        <strong>No attempt linked</strong>
       )}
       <strong>{row.currentJobStatusLabel ?? row.workflowRunStatusLabel}</strong>
     </div>

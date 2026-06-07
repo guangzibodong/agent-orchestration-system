@@ -108,6 +108,10 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(requirementQueue).toContainText("Harden auth checks");
     await expect(requirementQueue).toContainText("Retry failed gate");
     await expect(requirementQueue).toContainText("Review merge candidate");
+    await expect(requirementQueue).toContainText("Run evidence");
+    await expect(requirementQueue).toContainText("Current attempt");
+    await expect(requirementQueue).not.toContainText("Current workflow");
+    await expect(requirementQueue).not.toContainText("workflow-needs-review");
 
     const decisionQueue = page.locator(".decisionQueuePanel");
     await expect(decisionQueue).toContainText("2 waiting");
@@ -2561,7 +2565,9 @@ test.describe("Requirement Delivery Console smoke", () => {
       "Retry reset to ready. Enqueue to run fresh evidence. Stale execution evidence is superseded.",
     );
     await expect(queueItem).toContainText("Ready to run");
-    await expect(queueItem).toContainText("workflow-retry-fresh");
+    await expect(queueItem).toContainText("Run evidence");
+    await expect(queueItem).toContainText("Current attempt");
+    await expect(queueItem).not.toContainText("workflow-retry-fresh");
     await expect(focusPanel.getByLabel("Gate Result / Review Evidence")).toContainText(
       "Not review-ready",
     );
@@ -2734,8 +2740,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       .click();
     await expect(planItem).toContainText("Running");
     await expect(
-      planItem.getByRole("link", { name: /workflow-lifecycle/i }),
-    ).toBeVisible();
+      planItem.getByRole("link", { name: "Current attempt" }),
+    ).toHaveAttribute("href", "/workflows/workflow-lifecycle");
+    await expect(planItem).not.toContainText("Current workflow");
+    await expect(planItem).not.toContainText("workflow-lifecycle");
     await expect(planItem).toContainText("Queued");
 
     const retryItem = queue
@@ -2743,8 +2751,10 @@ test.describe("Requirement Delivery Console smoke", () => {
       .filter({ hasText: "Retry stale gate" });
     await expect(retryItem).toContainText("Needs rework");
     await expect(
-      retryItem.getByRole("link", { name: /workflow-failed/i }),
-    ).toBeVisible();
+      retryItem.getByRole("link", { name: "Current attempt" }),
+    ).toHaveAttribute("href", "/workflows/workflow-failed");
+    await expect(retryItem).not.toContainText("Current workflow");
+    await expect(retryItem).not.toContainText("workflow-failed");
     await retryItem
       .getByRole("button", { exact: true, name: "Retry" })
       .click();
