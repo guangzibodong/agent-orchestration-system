@@ -719,6 +719,49 @@ describe("RequirementDeliveryConsole", () => {
     });
   });
 
+  it("rejects skipped task slots so New Requirement task ids stay contiguous", () => {
+    const result = buildNewRequirementPayload({
+      ...validNewRequirementDraft,
+      tasks: [
+        {
+          title: "Patch checkout copy",
+          objective: "Patch checkout copy in an isolated worktree",
+          acceptanceCriteria: "Patch is reviewable",
+          agent: "shell",
+          command: "npm run patch:checkout",
+          instructions: "",
+          timeoutMs: "",
+          dependsOn: "",
+        },
+        {
+          title: "",
+          objective: "",
+          acceptanceCriteria: "",
+          agent: "shell",
+          command: "",
+          instructions: "",
+          timeoutMs: "",
+          dependsOn: "",
+        },
+        {
+          title: "Review checkout evidence",
+          objective: "Inspect the generated patch before approval",
+          acceptanceCriteria: "Patch artifact is reviewable",
+          agent: "codex",
+          command: "",
+          instructions: "Review the generated patch.",
+          timeoutMs: "",
+          dependsOn: "",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Fill task slots in order without gaps."],
+    });
+  });
+
   it("builds a structured New Requirement payload for submit callbacks", () => {
     const result = buildNewRequirementPayload(validNewRequirementDraft);
 

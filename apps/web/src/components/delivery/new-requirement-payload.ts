@@ -103,6 +103,10 @@ export function buildNewRequirementPayload(
     errors.push("Add 1-5 tasks.");
   }
 
+  if (hasSkippedTaskSlots(taskCandidates)) {
+    errors.push("Fill task slots in order without gaps.");
+  }
+
   if (tasks.some((task) => !task.title)) {
     errors.push("Each task needs a title.");
   }
@@ -332,6 +336,25 @@ function hasInvalidTaskDependencies(
     }
 
     earlierTaskIds.add(task.id);
+  }
+
+  return false;
+}
+
+function hasSkippedTaskSlots(
+  taskCandidates: Array<ReturnType<typeof buildTaskCandidate>>,
+): boolean {
+  let foundEmptySlot = false;
+
+  for (const task of taskCandidates) {
+    if (!task.hasAnyValue) {
+      foundEmptySlot = true;
+      continue;
+    }
+
+    if (foundEmptySlot) {
+      return true;
+    }
   }
 
   return false;
