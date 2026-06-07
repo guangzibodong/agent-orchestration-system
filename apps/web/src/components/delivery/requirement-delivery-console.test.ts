@@ -124,6 +124,19 @@ describe("RequirementDeliveryConsole", () => {
     );
   });
 
+  it("keeps empty queue states factual without instructional copy", () => {
+    const html = renderConsoleFor([]);
+
+    expect(html).toContain("No requirements yet");
+    expect(html).toContain("No decisions waiting");
+    expect(html).not.toContain(
+      "Create a requirement to produce an isolated, quality-gated merge candidate",
+    );
+    expect(html).not.toContain(
+      "Requirements that need review, retry, clarification, or safety action will appear here",
+    );
+  });
+
   it("renders compact read-only health indicators in the topbar", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {

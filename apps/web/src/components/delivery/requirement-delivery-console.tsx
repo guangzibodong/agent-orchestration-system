@@ -402,10 +402,6 @@ export function RequirementDeliveryConsole({
           ) : (
             <div className="deliveryEmptyState">
               <strong>No requirements yet</strong>
-              <span>
-                Create a requirement to produce an isolated, quality-gated merge
-                candidate.
-              </span>
             </div>
           )}
         </aside>
@@ -559,10 +555,6 @@ export function RequirementDeliveryConsole({
           ) : (
             <div className="deliveryEmptyState">
               <strong>No decisions waiting</strong>
-              <span>
-                Requirements that need review, retry, clarification, or safety
-                action will appear here.
-              </span>
             </div>
           )}
         </aside>
