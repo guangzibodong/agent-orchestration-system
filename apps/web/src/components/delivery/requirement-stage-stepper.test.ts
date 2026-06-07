@@ -31,6 +31,28 @@ describe("requirement stage stepper", () => {
     ]);
   });
 
+  it("marks preflight-blocked ready requirements on the run step", () => {
+    expect(
+      buildRequirementStageStepper("ready_to_run", {
+        blockKind: "agent-availability",
+        blockActionLabel: "Configure missing agent"
+      })
+    ).toEqual([
+      { id: "draft", label: "Draft", state: "complete" },
+      { id: "clarify", label: "Clarify", state: "complete" },
+      { id: "plan", label: "Plan", state: "complete" },
+      {
+        id: "run",
+        label: "Run",
+        state: "failed",
+        reason: "Preflight blocked: Configure missing agent"
+      },
+      { id: "gates", label: "Gates", state: "upcoming" },
+      { id: "review", label: "Review", state: "upcoming" },
+      { id: "delivered", label: "Delivered", state: "upcoming" }
+    ]);
+  });
+
   it("keeps archived requirements distinct from delivered requirements", () => {
     expect(buildRequirementStageStepper("archived")).toEqual([
       { id: "draft", label: "Draft", state: "complete" },

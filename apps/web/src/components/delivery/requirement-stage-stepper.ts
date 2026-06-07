@@ -13,6 +13,11 @@ export type RequirementStageStep = {
   reason?: string;
 };
 
+export type RequirementStageStepperOptions = {
+  blockKind?: "agent-availability" | "repository-safety";
+  blockActionLabel?: string;
+};
+
 const steps: Array<Pick<RequirementStageStep, "id" | "label">> = [
   { id: "draft", label: "Draft" },
   { id: "clarify", label: "Clarify" },
@@ -36,11 +41,26 @@ const activeStepIndex: Record<RequirementStage, number> = {
 };
 
 export function buildRequirementStageStepper(
-  stage: RequirementStage
+  stage: RequirementStage,
+  options: RequirementStageStepperOptions = {}
 ): RequirementStageStep[] {
   const activeIndex = activeStepIndex[stage];
 
   return steps.map((step, index) => {
+    if (
+      step.id === "run" &&
+      (stage === "ready_to_run" || stage === "running") &&
+      options.blockKind
+    ) {
+      return {
+        ...step,
+        state: "failed",
+        reason: `Preflight blocked${
+          options.blockActionLabel ? `: ${options.blockActionLabel}` : ""
+        }`
+      };
+    }
+
     if (stage === "needs_rework" && step.id === "gates") {
       return {
         ...step,

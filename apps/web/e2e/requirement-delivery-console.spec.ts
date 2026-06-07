@@ -367,6 +367,9 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       queueItem.getByRole("button", { name: "Enqueue" }),
     ).toHaveCount(0);
+    await expect(page.getByLabel("Stage Stepper")).toContainText(
+      "Preflight blocked: Commit, stash, or discard local changes before running mutating workflows.",
+    );
     await expect(
       page.getByRole("button", { name: /apply candidate|apply patch/i }),
     ).toHaveCount(0);
@@ -479,6 +482,9 @@ test.describe("Requirement Delivery Console smoke", () => {
         .locator(".requirementQueuePanel")
         .getByRole("button", { exact: true, name: "Enqueue" }),
     ).toHaveCount(0);
+    await expect(page.getByLabel("Stage Stepper")).toContainText(
+      "Preflight blocked: Configure missing agent",
+    );
   });
 
   test("surfaces readable review evidence and artifact paths for requirement tickets", async ({

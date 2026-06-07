@@ -138,6 +138,14 @@ export function RequirementDeliveryConsole({
     ) ?? defaultRequirement;
   const stageSteps = buildRequirementStageStepper(
     selectedRequirement?.requirementStage ?? "draft",
+    {
+      blockActionLabel:
+        selectedRequirement?.actionBlockActionLabel ??
+        (selectedRequirement?.actionBlockKind
+          ? selectedRequirement.nextAction
+          : undefined),
+      blockKind: selectedRequirement?.actionBlockKind,
+    },
   );
   const selectedRequirementArtifacts = selectedRequirement
     ? buildRequirementEvidenceArtifactLinks(selectedRequirement, {

@@ -355,6 +355,9 @@ describe("RequirementDeliveryConsole", () => {
       "Commit, stash, or discard local changes before running mutating workflows.",
     );
     expect(html).toContain("Repository safety blocks execution");
+    expect(extractStageStepper(html)).toContain(
+      "Preflight blocked: Commit, stash, or discard local changes before running mutating workflows.",
+    );
     expect(html).toContain("No MAWO auto-merge; manual git apply outside MAWO");
     expect(html).not.toContain("Apply Candidate");
     const enqueueButtons = html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
@@ -427,6 +430,9 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).toContain("Affected tasks: patch");
     expect(html).toContain("Preflight blocked");
     expect(html).toContain("Agent preflight blocks execution");
+    expect(extractStageStepper(html)).toContain(
+      "Preflight blocked: Configure missing agent",
+    );
     expect(html).toContain("Codex CLI command is not configured");
     const enqueueButtons = html.match(/<button[^>]*>[\s\S]*?Enqueue<\/button>/g) ?? [];
     expect(enqueueButtons.length).toBeGreaterThan(0);
@@ -802,6 +808,16 @@ function extractFocusPanel(html: string): string {
 function extractDecisionQueue(html: string): string {
   const start = html.indexOf('class="deliveryPanel decisionQueuePanel"');
   const end = html.indexOf("</aside>", start);
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+}
+
+function extractStageStepper(html: string): string {
+  const start = html.indexOf('aria-label="Stage Stepper"');
+  const end = html.indexOf('class="requirementEvidenceCard', start);
 
   expect(start).toBeGreaterThanOrEqual(0);
   expect(end).toBeGreaterThan(start);
