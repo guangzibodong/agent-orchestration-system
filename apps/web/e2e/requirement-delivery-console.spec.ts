@@ -25,7 +25,13 @@ test.describe("Requirement Delivery Console smoke", () => {
   test("renders empty delivery state from mocked workflows", async ({
     page,
   }) => {
-    await mockApi(page, []);
+    const mutatingRequests: string[] = [];
+
+    await mockApi(page, [], {
+      onMutatingRequest: ({ method, pathname }) => {
+        mutatingRequests.push(`${method} ${pathname}`);
+      },
+    });
 
     await page.goto("/");
 
@@ -45,6 +51,25 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(deliveryHealth).toContainText("Queue 0");
     await expect(consoleShell.getByText("No requirements yet")).toBeVisible();
     await expect(consoleShell.getByText("No decisions waiting")).toBeVisible();
+    const focusPanel = consoleShell.locator(".deliveryFocusPanel");
+    const repositorySafety = focusPanel.getByLabel("Repository Safety");
+    await expect(repositorySafety).toContainText("Preflight pending");
+    await expect(repositorySafety).toContainText(
+      "Repository safety checks pending",
+    );
+    await expect(repositorySafety).toContainText(
+      "No MAWO auto-merge; manual git apply outside MAWO",
+    );
+    await expect(focusPanel.getByLabel("Stage Stepper")).toContainText(
+      "No active requirement stage",
+    );
+    const evidence = focusPanel.getByLabel("Gate Result / Review Evidence");
+    await expect(evidence).toContainText("Evidence pending");
+    await expect(evidence).toContainText("No requirement selected");
+    await expect(evidence).toContainText("No selected requirement evidence.");
+    await expect(focusPanel).not.toContainText("Manual apply command");
+    await expect(focusPanel).not.toContainText("Apply Candidate");
+    await expect(focusPanel).not.toContainText("Read-only evidence links");
     await expect(
       consoleShell.getByRole("link", {
         name: "Legacy Run Console secondary ops/debug",
@@ -58,6 +83,7 @@ test.describe("Requirement Delivery Console smoke", () => {
     await expect(
       page.locator("#legacy-run-console > summary"),
     ).toContainText("Secondary ops/debug");
+    expect(mutatingRequests).toEqual([]);
   });
 
   test("renders KPI, queue, and decision items for mixed workflow states", async ({
