@@ -130,6 +130,51 @@ describe("RequirementEvidencePanel display model", () => {
     expect(display.items.some((item) => item.value.includes("{"))).toBe(false);
   });
 
+  it("does not show manual apply commands for failed required gate evidence", () => {
+    const display = buildRequirementEvidenceDisplay({
+      ...reviewReadyRequirement,
+      requirementStage: "needs_rework",
+      executionStatus: "gate_failed",
+      nextAction: "Retry failed gate",
+      workflowRunStatus: "gate_failed",
+      workflowRunStatusLabel: "Gate failed",
+      reviewEvidence: {
+        ...reviewReadyRequirement.reviewEvidence!,
+        gateResults: [
+          {
+            id: "gate-1",
+            title: "Unit tests",
+            status: "failed",
+            command: "npm test",
+            required: true,
+            exitCode: 1,
+          },
+        ],
+      },
+    });
+
+    expect(display.title).toBe("Gate blocked by required gate");
+    expect(display.items).toEqual(
+      expect.arrayContaining([
+        {
+          label: "Patch artifact",
+          value: "C:/mawo/artifacts/workflow-review/merge-candidate.patch",
+        },
+        {
+          label: "Required gates",
+          value:
+            "1 required reported issues: Unit tests failed (exit 1): npm test; blocks merge approval",
+        },
+      ]),
+    );
+    expect(display.items.some((item) => item.label === "Manual apply command")).toBe(
+      false,
+    );
+    expect(display.items.some((item) => item.value.includes("git -C"))).toBe(
+      false,
+    );
+  });
+
   it("treats archived requirement evidence as inactive read-only evidence", () => {
     const display = buildRequirementEvidenceDisplay({
       ...reviewReadyRequirement,

@@ -143,7 +143,9 @@ export function buildRequirementEvidenceDisplay(
             requirement.repositorySafety.blockedReason ??
             "Quality gate failure requires rework before review",
         },
-        ...buildReviewEvidenceSummaryItems(requirement),
+        ...buildReviewEvidenceSummaryItems(requirement, {
+          includeManualApplyCommand: false,
+        }),
       ],
       artifactLinks: buildRequirementEvidenceArtifactLinks(requirement, {
         includeMergeCandidate: false,
