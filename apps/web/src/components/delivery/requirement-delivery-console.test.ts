@@ -165,6 +165,24 @@ describe("RequirementDeliveryConsole", () => {
     expect(html).not.toContain(`<span>${fullRepositoryPath}</span>`);
   });
 
+  it("keeps repository safety repository paths compact but inspectable", () => {
+    const fullRepositoryPath =
+      "C:/work/safety-console/checkout-with-a-very-long-repository-label";
+    const html = renderConsoleFor([
+      {
+        ...workflow,
+        repositoryPath: fullRepositoryPath,
+      },
+    ]);
+
+    expect(html).toContain(
+      `<dl class="repositorySafetyList"><div><dt>Repository</dt><dd aria-label="${fullRepositoryPath}" title="${fullRepositoryPath}">.../safety-console/checkout-with-a-very-long-repository-label</dd>`,
+    );
+    expect(html).not.toContain(
+      `<dl class="repositorySafetyList"><div><dt>Repository</dt><dd>${fullRepositoryPath}</dd>`,
+    );
+  });
+
   it("does not count archived requirements as active queue items", () => {
     const html = renderToStaticMarkup(
       createElement(RequirementDeliveryConsole, {

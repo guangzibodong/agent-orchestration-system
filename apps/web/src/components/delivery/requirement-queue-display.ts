@@ -98,7 +98,7 @@ export function buildRequirementQueueRows(
   });
 }
 
-function compactRepositoryLabel(label: string): string {
+export function compactRepositoryLabel(label: string): string {
   const normalizedPath = label.replace(/\\/g, "/");
   const segments = normalizedPath.split("/").filter(Boolean);
   const workRootIndex = segments.indexOf("work");

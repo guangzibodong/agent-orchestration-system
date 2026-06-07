@@ -21,6 +21,7 @@ import type {
 import {
   buildDecisionQueueDisplay,
   buildRequirementQueueRows,
+  compactRepositoryLabel,
   type RequirementQueueRow,
 } from "./requirement-queue-display";
 import { NewRequirementPanel } from "./new-requirement-panel";
@@ -529,12 +530,24 @@ export function RequirementDeliveryConsole({
                   "Merge policy",
                   selectedRequirement?.repositorySafety.mergePolicyLabel,
                 ],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value ?? "No requirement selected"}</dd>
-                </div>
-              ))}
+              ].map(([label, value]) => {
+                const presentation = buildRepositorySafetyValuePresentation(
+                  label,
+                  value,
+                );
+
+                return (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd
+                      aria-label={presentation.fullValue}
+                      title={presentation.fullValue}
+                    >
+                      {presentation.visibleValue}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
             {selectedRequirement?.repositorySafety.blockedReason ? (
               <div className="repositorySafetyNotice">
@@ -723,6 +736,24 @@ function buildDecisionActionLabel(actionLabel: string, viewerMode: boolean): str
 
 function normalizeDeliverySearchValue(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function buildRepositorySafetyValuePresentation(
+  label: string | undefined,
+  value: string | undefined,
+): { visibleValue: string; fullValue?: string } {
+  const visibleValue = value ?? "No requirement selected";
+
+  if (label !== "Repository" || !value) {
+    return { visibleValue };
+  }
+
+  const compactLabel = compactRepositoryLabel(value);
+
+  return {
+    visibleValue: compactLabel,
+    ...(compactLabel !== value ? { fullValue: value } : {}),
+  };
 }
 
 function matchesRequirementSearch(
