@@ -380,17 +380,39 @@ function RequirementWorkspaceCleanup({
         </div>
       </dl>
       <ul className="requirementWorkspaceCleanupList">
-        {cleanup.rows.map((row) => (
-          <li key={`${row.branch}:${row.path}`}>
-            <strong>{row.task}</strong>
-            <span>{row.status}</span>
-            <small>{row.branch}</small>
-            <small>{row.path}</small>
-          </li>
-        ))}
+        {cleanup.rows.map((row) => {
+          const visiblePath = compactWorktreePath(row.path);
+
+          return (
+            <li key={`${row.branch}:${row.path}`}>
+              <strong>{row.task}</strong>
+              <span>{row.status}</span>
+              <small>{row.branch}</small>
+              <small aria-label={row.path} title={row.path}>
+                {visiblePath}
+              </small>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
+}
+
+function compactWorktreePath(path: string): string {
+  const normalizedPath = path.replace(/\\/g, "/");
+  const segments = normalizedPath.split("/").filter(Boolean);
+  const worktreeRootIndex = segments.indexOf("worktrees");
+
+  if (worktreeRootIndex >= 0 && worktreeRootIndex < segments.length - 1) {
+    return `.../${segments.slice(worktreeRootIndex).join("/")}`;
+  }
+
+  if (segments.length > 4) {
+    return `.../${segments.slice(-4).join("/")}`;
+  }
+
+  return path;
 }
 
 function RequirementReviewAcceptance({

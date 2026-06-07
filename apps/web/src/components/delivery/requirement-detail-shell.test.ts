@@ -645,7 +645,16 @@ describe("RequirementDetailShell", () => {
     );
     expect(html).toContain("Update auth guard");
     expect(html).toContain("mawo/workflow-review/task-1");
-    expect(html).toContain("C:/mawo/worktrees/workflow-review/task-1");
+    expect(html).toContain(
+      "title=\"C:/mawo/worktrees/workflow-review/task-1\""
+    );
+    expect(html).toContain(
+      "aria-label=\"C:/mawo/worktrees/workflow-review/task-1\""
+    );
+    expect(html).toContain(">.../worktrees/workflow-review/task-1</small>");
+    expect(html).not.toContain(
+      "<small>C:/mawo/worktrees/workflow-review/task-1</small>"
+    );
     expect(html).toContain("Retained");
     expect(html).not.toContain("Clean Workspaces");
     expect(html).not.toContain("Cleanup now");
