@@ -30,6 +30,13 @@ describe("global layout resilience styles", () => {
     expect(ruleFor(".primaryButton")).toContain("linear-gradient");
   });
 
+  it("keeps the New Requirement repository safety contract inside the dark console system", () => {
+    const contractRule = ruleFor(".newRequirementRepositoryContract");
+
+    expect(contractRule).toContain("rgba(14, 42, 58");
+    expect(contractRule).toContain("var(--delivery-accent)");
+  });
+
   it("keeps long workflow titles, job ids, reports, and patch text contained", () => {
     const selectors = [
       "h2",

@@ -1334,9 +1334,19 @@ test.describe("Requirement Delivery Console smoke", () => {
   }) => {
     const desktopScreenshotPath = join(screenshotEvidenceDir, "desktop.png");
     const mobileScreenshotPath = join(screenshotEvidenceDir, "mobile.png");
+    const newRequirementDesktopScreenshotPath = join(
+      screenshotEvidenceDir,
+      "new-requirement-desktop.png",
+    );
+    const newRequirementMobileScreenshotPath = join(
+      screenshotEvidenceDir,
+      "new-requirement-mobile.png",
+    );
     await resetScreenshotEvidence([
       desktopScreenshotPath,
       mobileScreenshotPath,
+      newRequirementDesktopScreenshotPath,
+      newRequirementMobileScreenshotPath,
     ]);
     await mockApi(page, mobileStressWorkflows);
 
@@ -1353,10 +1363,27 @@ test.describe("Requirement Delivery Console smoke", () => {
     await captureScreenshotEvidence(page, desktopScreenshotPath);
     await expectScreenshotEvidence(desktopScreenshotPath);
 
+    await page.getByRole("button", { name: "New Requirement" }).click();
+    await expect(
+      page.getByRole("region", { name: "New Requirement panel" }),
+    ).toBeVisible();
+    await expectNoHorizontalDocumentOverflow(page);
+    await captureScreenshotEvidence(page, newRequirementDesktopScreenshotPath);
+    await expectScreenshotEvidence(newRequirementDesktopScreenshotPath);
+    await page.getByRole("button", { name: "Close New Requirement panel" }).click();
+
     await page.setViewportSize({ width: 390, height: 900 });
     await expectNoHorizontalDocumentOverflow(page);
     await captureScreenshotEvidence(page, mobileScreenshotPath);
     await expectScreenshotEvidence(mobileScreenshotPath);
+
+    await page.getByRole("button", { name: "New Requirement" }).click();
+    await expect(
+      page.getByRole("region", { name: "New Requirement panel" }),
+    ).toBeVisible();
+    await expectNoHorizontalDocumentOverflow(page);
+    await captureScreenshotEvidence(page, newRequirementMobileScreenshotPath);
+    await expectScreenshotEvidence(newRequirementMobileScreenshotPath);
   });
 
   test("New Requirement flow creates a structured requirement request when available", async ({
