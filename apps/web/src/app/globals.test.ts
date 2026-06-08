@@ -19,6 +19,17 @@ function ruleFor(selector: string): string {
 }
 
 describe("global layout resilience styles", () => {
+  it("gives the requirement console a layered dark operations surface with restrained accent tokens", () => {
+    expect(css).toContain("--delivery-bg: #0b1020");
+    expect(css).toContain("--delivery-panel: rgba(15, 23, 42, 0.92)");
+    expect(css).toContain("--delivery-accent: #9ad7ff");
+    expect(css).toContain("--delivery-amber: #f6c177");
+    expect(css).toContain("--delivery-green: #7dd3a8");
+    expect(ruleFor(".deliveryShell")).toContain("background:");
+    expect(ruleFor(".deliveryPanel")).toContain("box-shadow:");
+    expect(ruleFor(".primaryButton")).toContain("linear-gradient");
+  });
+
   it("keeps long workflow titles, job ids, reports, and patch text contained", () => {
     const selectors = [
       "h2",

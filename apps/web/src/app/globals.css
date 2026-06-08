@@ -12,6 +12,21 @@
   --success: #138a52;
   --warning: #b46a00;
   --danger: #bd2f2f;
+  --delivery-bg: #0b1020;
+  --delivery-panel: rgba(15, 23, 42, 0.92);
+  --delivery-panel-soft: rgba(30, 41, 59, 0.72);
+  --delivery-card: rgba(2, 6, 23, 0.42);
+  --delivery-border: rgba(148, 163, 184, 0.22);
+  --delivery-border-strong: rgba(154, 215, 255, 0.34);
+  --delivery-text: #e5edf8;
+  --delivery-muted: #9aa9bc;
+  --delivery-faint: #64748b;
+  --delivery-accent: #9ad7ff;
+  --delivery-accent-strong: #38bdf8;
+  --delivery-amber: #f6c177;
+  --delivery-green: #7dd3a8;
+  --delivery-red: #fb7185;
+  --delivery-violet: #c4b5fd;
 }
 
 *,
@@ -1433,6 +1448,12 @@ button {
 
 .legacyConsolePanel {
   margin: 0 24px 24px;
+  border-color: var(--delivery-border);
+  background: #0b1020;
+  color: var(--delivery-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 44px rgba(0, 0, 0, 0.22);
 }
 
 .legacyConsolePanel > summary {
@@ -1441,7 +1462,7 @@ button {
   flex-wrap: wrap;
   cursor: pointer;
   gap: 8px;
-  color: var(--muted);
+  color: var(--delivery-muted);
   font-weight: 700;
   padding: 14px 16px;
   overflow-wrap: anywhere;
@@ -1450,6 +1471,245 @@ button {
 .legacyConsolePanel > summary em {
   font-size: 12px;
   font-style: normal;
+}
+
+.deliveryShell {
+  --bg: var(--delivery-bg);
+  --panel: var(--delivery-panel);
+  --panel-border: var(--delivery-border);
+  --text: var(--delivery-text);
+  --muted: var(--delivery-muted);
+  --accent: var(--delivery-accent);
+  --accent-strong: var(--delivery-accent);
+  --success: var(--delivery-green);
+  --warning: var(--delivery-amber);
+  --danger: var(--delivery-red);
+  background:
+    linear-gradient(180deg, #0b1020 0%, #101713 48%, #0b0d12 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(154, 215, 255, 0.035) 0,
+      rgba(154, 215, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 72px
+    );
+  color: var(--delivery-text);
+  padding: 28px;
+}
+
+.deliveryShell .eyebrow {
+  color: var(--delivery-accent);
+}
+
+.deliveryShell h1 {
+  color: #f8fbff;
+  font-size: 24px;
+}
+
+.deliveryTopbar {
+  border: 1px solid var(--delivery-border);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 60px rgba(0, 0, 0, 0.22);
+  padding: 14px 16px;
+}
+
+.deliveryHealthIndicator,
+.deliverySearch,
+.deliverySyncBanner,
+.viewerModeBanner {
+  border-color: var(--delivery-border);
+  background: rgba(15, 23, 42, 0.76);
+  color: var(--delivery-muted);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.deliveryHealthIndicator strong,
+.deliverySearch input {
+  color: var(--delivery-text);
+}
+
+.deliveryHealthIndicator.healthy {
+  border-color: rgba(125, 211, 168, 0.32);
+  background: rgba(20, 83, 45, 0.24);
+}
+
+.deliveryHealthIndicator.warning {
+  border-color: rgba(246, 193, 119, 0.34);
+  background: rgba(113, 63, 18, 0.22);
+}
+
+.deliveryHealthIndicator.danger,
+.deliverySyncBanner.danger {
+  border-color: rgba(251, 113, 133, 0.36);
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.deliveryMetric {
+  border-color: var(--delivery-border);
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.7)),
+    var(--delivery-panel);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.deliveryMetric strong {
+  color: #f8fbff;
+}
+
+.deliveryMetric span {
+  color: var(--delivery-muted);
+}
+
+.deliveryPanel {
+  border-color: var(--delivery-border);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(3, 7, 18, 0.9)),
+    var(--delivery-panel);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.deliveryPanelHeader {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  padding-bottom: 10px;
+}
+
+.deliveryPanelHeader h2,
+.deliveryPanel h2 {
+  color: #f8fbff;
+}
+
+.requirementQueueItem,
+.decisionItem,
+.deliveryEmptyState,
+.repositorySafetyCard,
+.requirementEvidenceCard,
+.requirementStageStepperCard,
+.newRequirementPanel,
+.newRequirementTaskCard,
+.newRequirementGateCard,
+.agentAvailabilityCard,
+.requirementDetailDisclosure,
+.requirementDetailSection,
+.requirementChangedFilesStrip,
+.requirementValueReportSummary,
+.requirementAuditHistory,
+.requirementWorkspaceCleanup,
+.artifactDrawerGroup,
+.artifactDrawerItem {
+  border-color: var(--delivery-border);
+  background: var(--delivery-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.requirementQueueItem.selected,
+.decisionItem.selected {
+  border-color: var(--delivery-border-strong);
+  background: rgba(14, 42, 58, 0.66);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(154, 215, 255, 0.1),
+    0 18px 48px rgba(5, 18, 28, 0.34);
+}
+
+.requirementQueueMeta span,
+.decisionItem span,
+.requirementRunStatus a,
+.requirementRunStatus strong,
+.repositorySafetyStatus,
+.artifactDrawerSummaryPill,
+.requirementDetailSummary span,
+.requirementDetailSummary strong,
+.requirementDetailTabs a,
+.requirementChangedFilesStrip li {
+  border-color: var(--delivery-border);
+  background: rgba(15, 23, 42, 0.84);
+  color: var(--delivery-muted);
+}
+
+.requirementQueueMeta span:first-child,
+.decisionItem.warning span {
+  color: var(--delivery-amber);
+}
+
+.decisionItem.danger span,
+.dangerButton {
+  color: var(--delivery-red);
+}
+
+.repositorySafetyCard.success,
+.requirementEvidenceCard.success {
+  border-left-color: var(--delivery-green);
+}
+
+.repositorySafetyCard.warning,
+.requirementEvidenceCard.warning {
+  border-left-color: var(--delivery-amber);
+}
+
+.repositorySafetyCard.danger,
+.requirementEvidenceCard.danger,
+.agentAvailabilityCard {
+  border-left-color: var(--delivery-red);
+}
+
+.requirementEvidenceCard.danger,
+.requirementEvidenceCard.warning,
+.requirementEvidenceCard.success {
+  background: var(--delivery-card);
+}
+
+.repositorySafetyList dd,
+.requirementEvidenceItem dd,
+.requirementDetailMetaItem dd,
+.requirementValueReportGrid dd,
+.artifactMeta dd,
+.requirementAuditHistoryList dd {
+  color: var(--delivery-text);
+}
+
+.stageStep {
+  border-color: var(--delivery-border);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.stageStep.complete {
+  border-color: rgba(125, 211, 168, 0.32);
+  color: var(--delivery-green);
+}
+
+.stageStep.active {
+  border-color: var(--delivery-border-strong);
+  background: rgba(14, 42, 58, 0.68);
+  color: var(--delivery-accent);
+}
+
+.stageStep.failed {
+  border-color: rgba(251, 113, 133, 0.38);
+  background: rgba(127, 29, 29, 0.22);
+  color: var(--delivery-red);
+}
+
+.deliveryShell .field input,
+.deliveryShell .field select,
+.deliveryShell .field textarea {
+  border-color: var(--delivery-border);
+  background: rgba(2, 6, 23, 0.54);
+  color: var(--delivery-text);
+}
+
+.deliveryShell .field input:focus,
+.deliveryShell .field select:focus,
+.deliveryShell .field textarea:focus,
+.deliverySearch:focus-within {
+  border-color: var(--delivery-border-strong);
+  box-shadow: 0 0 0 3px rgba(154, 215, 255, 0.1);
 }
 
 @media (max-width: 1100px) {
@@ -1542,6 +1802,10 @@ button {
 
   .newRequirementFormGrid,
   .newRequirementTaskGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .repositorySafetyList {
     grid-template-columns: 1fr;
   }
 
@@ -1697,8 +1961,12 @@ h2 {
 }
 
 .primaryButton {
-  background: var(--accent);
-  color: #ffffff;
+  background: linear-gradient(180deg, #bdf1ff 0%, #63c8ff 100%);
+  color: #06111f;
+  font-weight: 800;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 10px 26px rgba(20, 108, 148, 0.28);
 }
 
 .secondaryButton {
@@ -1709,6 +1977,17 @@ h2 {
 
 .dangerButton {
   color: var(--danger);
+}
+
+.deliveryShell .secondaryButton {
+  border-color: var(--delivery-border);
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--delivery-text);
+}
+
+.deliveryShell .secondaryButton:hover {
+  border-color: var(--delivery-border-strong);
+  color: #ffffff;
 }
 
 .primaryButton:disabled,
