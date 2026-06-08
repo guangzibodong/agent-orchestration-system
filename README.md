@@ -1,257 +1,174 @@
-# Agent Orchestration System
+# MAWO - Agent Orchestration System
 
-一个面向真实代码仓库的多 Agent 工作流编排平台。它不是“多个聊天机器人窗口”，而是把 Codex、Claude Code、Cursor、Shell 脚本等执行器当成可调度、可隔离、可验收的工程工作单元，用任务图、质量门控、运行审计和结果聚合把复杂开发任务推到可审查、可合并的状态。
+![MAWO console cover](docs/assets/mawo-console-cover.png)
 
-当前版本是 local-first 的可运行系统：前端控制台、Fastify API、真实 git worktree 隔离、任务队列、取消、重试、质量门控、报告、merge candidate、审计事件和文件持久化都已经接通。
+MAWO is a local-first safety and acceptance console for AI coding agents working
+on real git repositories.
+
+Repository: [https://github.com/guangzibodong/agent-orchestration-system](https://github.com/guangzibodong/agent-orchestration-system)
+
+The first launch focus is deliberately narrow: turn coding-agent output into an
+isolated, quality-gated, retryable, auditable, human-applied merge candidate
+patch. MAWO does not auto-merge the main branch, does not create PRs by default,
+and does not pretend failed gates are safe to ship.
+
+## What MAWO Is For
+
+AI coding tools such as Codex, Claude Code, Cursor, and shell-based agents can
+make useful changes, but teams still need a trustworthy delivery loop:
+
+- run work against a real repository without polluting the main workspace;
+- capture stdout, stderr, git status, diffs, reports, and audit events;
+- enforce required quality gates before a merge-ready conclusion exists;
+- retry failed or cancelled runs without stale evidence confusion;
+- give reviewers a readable report, merge candidate patch, and manual
+  `git apply` command.
+
+MAWO is the control surface for that loop. The product object is a requirement
+delivery ticket; the execution layer remains workflow runs, jobs, worktrees,
+quality gates, reports, artifacts, and merge candidates.
+
+## Current Launch Status
+
+The current P0 launch slice is ready for a controlled server deployment:
+
+- real repository success path;
+- required gate failure path;
+- retry to success path;
+- merge candidate generation;
+- viewer/operator boundary;
+- backup/restore smoke;
+- desktop and mobile UI smoke.
+
+Latest recorded full launch gate evidence is written under
+`output/launch-readiness/` when `npm run launch:gate:postgres` or
+`npm run launch:gate:local` is run. The deployment runbook is
+[docs/SERVER_DEPLOYMENT.md](docs/SERVER_DEPLOYMENT.md).
+
+## Product Surface
+
+The primary UI is the Requirement Delivery Console:
+
+- New Requirement flow;
+- Repository Safety Card;
+- Requirement Queue;
+- Stage Stepper;
+- Decision Queue;
+- Gate Result and Review Evidence panels;
+- Artifact Drawer;
+- Viewer Mode banner;
+- Legacy Run Console demoted to secondary ops/debug support.
+
+The frozen P0 scope is documented in
+[docs/product/REQUIREMENTS_FREEZE.md](docs/product/REQUIREMENTS_FREEZE.md).
+Non-goals for this launch include automatic task decomposition, a full DAG
+editor, multi-agent competition, automatic PR creation, cloud multi-tenancy,
+enterprise SSO/RBAC, cost management, and long-term memory.
+
+## Architecture
 
 ![System architecture](docs/assets/architecture.svg)
 
-## 当前产品方向
-
-我们不再把首发价值表达成宽泛的“多 Agent 编排”。更清晰的首发定位是：
-
-> 本地代码 Agent 的安全验收台：把真实仓库里的 AI agent 改动变成隔离、可验收、可重跑、可审计、可合并的 patch。
-
-后续开发采用需求先行流程：先确认用户问题和 PRD，再设计 UI 信息架构，最后进入工程实现。新的产品文档在 `docs/product/`：
-
-- `docs/product/PRD.md`：定位、ICP、MVP 范围、成功指标和上线验收。
-- `docs/product/ROLE_WORKFLOW.md`：项目经理、产品经理、用户代表、UI/UX、工程、QA、运维的协作闸口。
-- `docs/product/USER_JOURNEYS.md`：真实 repo 成功、gate 失败、retry、评审交付、unsafe repo 等用户旅程。
-- `docs/product/UI_INFORMATION_ARCHITECTURE.md`：从 Run Console 转为“需求交付控制台”的第一屏和页面结构。
-- `docs/product/FEATURE_BRIEF_TEMPLATE.md`：任何新功能进入开发前必须填写的模板。
+| Layer          | Location                 | Responsibility                                                    |
+| -------------- | ------------------------ | ----------------------------------------------------------------- |
+| Web Console    | `apps/web`               | Requirement Delivery Console, viewer/operator UI, review evidence |
+| API Server     | `apps/api/src/server.ts` | Fastify API, auth boundary, requirement/workflow orchestration    |
+| Runner         | `apps/api/src/runner`    | shell/CLI agent execution, worktree isolation, gates, reports     |
+| Shared Schemas | `packages/shared`        | Zod schemas and TypeScript contracts shared by web/API            |
+| File State     | `.mawo/state`            | local workflow, job, repository, and audit persistence            |
+| Artifacts      | `.mawo/artifacts`        | stdout, stderr, patches, reports, merge candidates                |
+| Postgres Mode  | `apps/api/prisma`        | optional state and queue backend for worker topology              |
 
 ![Product-first delivery loop](docs/assets/product-first-delivery-loop.svg)
 
-## 这个项目解决什么问题
+## Quick Start
 
-现在 AI coding agent 已经很多，比如 Claude Code、Codex、Cursor。单个 agent 能完成不少任务，但复杂项目里会遇到这些问题：
-
-- 多个 agent 怎么分工，而不是互相覆盖同一份代码。
-- 每个 agent 的执行过程、日志、diff、退出码怎么留痕。
-- 怎么自动跑 lint、test、typecheck、build 等质量门。
-- 怎么知道最终结果能不能合并，而不是只相信 agent 的自然语言总结。
-- 怎么取消、重试、审查、拒绝、批准一次运行。
-- 怎么把运行历史和关键操作记录下来，方便回放和排障。
-
-本项目的目标是把“AI 写代码”升级成“AI 工程流水线”：任务被拆成节点，节点在独立 workspace 中执行，质量门自动验收，结果聚合成 report 和 patch，最后由人类做 review 决策。
-
-## 产品心智模型
-
-![Workflow lifecycle](docs/assets/workflow-lifecycle.svg)
-
-一次 workflow 大致分成 7 步：
-
-1. 选择一个真实 git 仓库，输入目标、任务命令和质量门命令。
-2. API 创建 workflow run，并写入 `.mawo/state/workflows.json`。
-3. 用户把 workflow 放入后台队列，系统创建 job。
-4. Runner 为任务创建独立 git worktree，让 agent 或 shell 在隔离环境中执行。
-5. 任务完成后收集 stdout、stderr、git status、diff patch。
-6. Quality gates 执行测试、lint、typecheck、build 或自定义命令。
-7. Aggregator 生成 report 和 merge candidate，人类 approve/reject。
-
-## 当前能力
-
-- Next.js Run Console：创建 demo workflow、真实仓库 workflow、运行、取消、重试、审核。
-- Fastify API：提供 workflow、job、report、merge candidate、audit events 等接口。
-- 文件持久化：workflow 状态和审计事件保存在 `.mawo/state/`。
-- Artifact Store：stdout、stderr、patch、report、merge candidate 保存在 `.mawo/artifacts/`。
-- 后台队列：`POST /workflows/:id/enqueue` 非阻塞运行 workflow，`MAWO_MAX_CONCURRENT_JOBS` 可限制同时执行的 workflow 数。
-- 并发保护：同一个 workflow 同时只能有一个 queued/running job。
-- 取消任务：queued job 不会启动，running job 会收到 abort signal 并终止底层进程。
-- 真实仓库隔离：每个任务使用 git worktree 和独立分支。
-- 质量门控：gate 失败会阻止 workflow 进入 review-ready。
-- 重试：失败或取消的 workflow 会先清理旧 worktree/临时分支，再 reset 后重新运行。
-- 审计事件：记录 create、enqueue、retry、review、cancel 等操作。
-- CLI Agent Adapter：支持通过环境变量接入 Codex、Claude、Cursor 等真实 CLI agent。
-
-## 架构说明
-
-![Data and operations](docs/assets/data-and-ops.svg)
-
-核心模块：
-
-| 模块 | 位置 | 作用 |
-| --- | --- | --- |
-| Web Console | `apps/web` | 操作界面，展示 workflow 图、任务日志、报告、merge candidate |
-| API Server | `apps/api/src/server.ts` | HTTP 入口，负责校验请求、编排 runner/queue/store |
-| LocalRunner | `apps/api/src/runner/local-runner.ts` | 执行 workflow、任务依赖、质量门、报告聚合 |
-| WorkflowJobQueue | `apps/api/src/runner/workflow-job-queue.ts` | 后台队列、取消、active job guard |
-| PostgresWorkflowWorker | `apps/api/src/runner/postgres-workflow-worker.ts` | 从 Postgres claim queued job、续租、执行并回写结果 |
-| ShellAdapter | `apps/api/src/runner/shell-adapter.ts` | 执行 shell 命令、超时、取消、stdout/stderr 捕获 |
-| CliAgentAdapter | `apps/api/src/runner/cli-agent-adapter.ts` | 把 CLI agent 包装成统一 runner |
-| GitWorktreeManager | `apps/api/src/runner/git-worktree-manager.ts` | 创建 worktree、收集 diff、隔离任务执行 |
-| FileRunStore | `apps/api/src/runner/file-run-store.ts` | 持久化 workflow 状态 |
-| FileArtifactStore | `apps/api/src/runner/file-artifact-store.ts` | 持久化报告、日志、patch |
-| FileAuditStore | `apps/api/src/runner/file-audit-store.ts` | 持久化操作审计事件 |
-| Shared Schemas | `packages/shared` | 前后端共享 Zod schema 和 TypeScript 类型 |
-
-## 快速开始
-
-项目内置便携 Node.js 和 Git，Windows 上直接使用 `.tools` 即可。
+On Windows, the repository includes portable Node.js and Git under `.tools`:
 
 ```powershell
 $root = (Get-Location).Path
 $env:PATH = "$root\.tools\node;$root\.tools\git\cmd;$env:PATH"
+npm.cmd install
+npm.cmd run dev
 ```
 
-安装和启动：
-
-```powershell
-.\.tools\node\npm.cmd install
-.\.tools\node\npm.cmd run dev
-```
-
-默认地址：
+Default local URLs:
 
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:4000`
 - Health: `http://127.0.0.1:4000/health`
 - Readiness: `http://127.0.0.1:4000/readiness`
 
-常用验证命令：
+Core verification commands:
 
 ```powershell
-.\.tools\node\npm.cmd run test
-.\.tools\node\npm.cmd run typecheck
-.\.tools\node\npm.cmd run lint
-.\.tools\node\npm.cmd run build
-.\.tools\node\npm.cmd run smoke:api
-.\.tools\node\npm.cmd run smoke:backup:restore
-# 需要可用的 DATABASE_URL 和已部署迁移：
-.\.tools\node\npm.cmd run smoke:api:postgres
+npm.cmd run env
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run test
+npm.cmd run build
+npm.cmd run smoke:ui
+npm.cmd run smoke:api
+npm.cmd run smoke:api:requirements
+npm.cmd run smoke:backup:restore
+npm.cmd run smoke:readiness:production
 ```
 
-## Docker Compose 部署
-
-仓库提供 API/Web/Postgres/Redis 的 Compose 栈，API 的 `.mawo` 运行状态会挂载到 `mawo_state` volume：
+For a Postgres-backed launch target, also run:
 
 ```powershell
-Copy-Item .env.example .env
-notepad .env
-# 填写 MAWO_API_TOKEN、MAWO_ALLOWED_REPOSITORY_ROOTS、POSTGRES_PASSWORD
-# 可选填写 MAWO_VIEWER_API_TOKEN，给只读审查者查看运行状态和报告
+npm.cmd run db:validate
+npm.cmd run db:migrate:deploy
+npm.cmd run smoke:api:postgres
+npm.cmd run launch:gate:postgres
+```
+
+The checked-in database migration baseline lives in
+`apps/api/prisma/migrations`. For local development, use
+`npm run db:migrate`; for shared, staging, or production databases, use
+`npm run db:migrate:deploy`.
+
+## Server Deployment
+
+Fastest single-server deployment path:
+
+```bash
+git clone https://github.com/guangzibodong/agent-orchestration-system.git mawo
+cd mawo
+cp .env.example .env
+# Fill MAWO_API_TOKEN, MAWO_ALLOWED_REPOSITORY_ROOTS, POSTGRES_PASSWORD,
+# NEXT_PUBLIC_API_URL, and optional MAWO_VIEWER_API_TOKEN.
+docker compose config
 docker compose up --build -d
 docker compose ps
 ```
 
-Compose 会先启动一次性 `mawo-migrate` 服务执行 `npm run db:migrate:deploy`，迁移成功后 API 才会启动。`docker compose ps` 里看到 `mawo-migrate` 退出成功是正常现象。
+Minimum production environment values:
 
-默认端口：
-
-- Web: `http://127.0.0.1:3000`
-- API: `http://127.0.0.1:4000`
-
-Postgres 的 baseline schema 已放在 `apps/api/prisma/migrations`，覆盖 workflow、task、quality gate、job、repository、audit event、artifact 和 merge candidate 这些运行时实体。首次准备数据库时执行：
-
-```powershell
-.\.tools\node\npm.cmd run db:generate
-.\.tools\node\npm.cmd run db:migrate
+```text
+NODE_ENV=production
+API_HOST=0.0.0.0
+API_PORT=4000
+MAWO_API_TOKEN=<long-random-operator-token>
+MAWO_VIEWER_API_TOKEN=<optional-read-only-token>
+MAWO_ALLOWED_REPOSITORY_ROOTS=<absolute-root-for-repos>
+NEXT_PUBLIC_API_URL=https://<your-api-host-or-reverse-proxy>
+MAWO_STATE_BACKEND=file
+MAWO_QUEUE_BACKEND=in_process
+MAWO_API_REPLICA_COUNT=1
+POSTGRES_PASSWORD=<strong-postgres-password>
 ```
 
-共享或生产环境不要使用开发迁移命令，改用：
+Put the API behind TLS, VPN, IP allowlist, or reverse proxy auth. The API can
+execute repository commands, so anyone with the operator token should be treated
+as a trusted operator.
 
-```powershell
-.\.tools\node\npm.cmd run db:validate
-.\.tools\node\npm.cmd run db:migrate:deploy
-```
+Full server checklist: [docs/SERVER_DEPLOYMENT.md](docs/SERVER_DEPLOYMENT.md).
+Operations runbook: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-对应的 package scripts 是 `npm run db:validate`、`npm run db:generate`、`npm run db:migrate` 和 `npm run db:migrate:deploy`。GitHub Actions 会启动 Postgres service 并执行 `npm run db:migrate:deploy`，防止迁移 SQL 和 Prisma schema 漂移。
+## API Snapshot
 
-注意：默认 `MAWO_STATE_BACKEND=file` 仍使用 `.mawo` 文件持久化；设置 `MAWO_STATE_BACKEND=postgres` 并完成迁移后，workflow、job、仓库注册和审计事件会使用 Postgres。Postgres job 表已经包含 worker lease 字段，用于后续外部 worker 原子 claim/续租；当前 active queue 仍是进程内队列，`MAWO_QUEUE_BACKEND=redis` 还未实现；切换后端前要看 `/readiness` 的 `runtime_backend` 结果。
-
-Postgres worker 可以用单次模式验证 claim/执行链路：
-
-```powershell
-$env:DATABASE_URL = "postgresql://mawo:<postgres-password>@localhost:5432/mawo?schema=public"
-$env:MAWO_WORKER_ONCE = "1"
-.\.tools\node\npm.cmd run worker:postgres
-```
-
-Postgres queue mode is now available for the external worker topology:
-
-```powershell
-$env:MAWO_STATE_BACKEND = "postgres"
-$env:MAWO_QUEUE_BACKEND = "postgres"
-$env:MAWO_API_REPLICA_COUNT = "2"
-```
-
-In this mode the API writes queued jobs to Postgres and does not execute them
-inside the API process. Run one or more `npm run worker:postgres` processes to
-claim leased jobs, execute workflows, and write final job state back to
-Postgres. `/readiness` reports `activeQueueBackend: "postgres"` and allows
-multiple API replicas only when both state and queue backends are Postgres.
-`MAWO_QUEUE_BACKEND=redis` remains reserved and is still blocked by readiness.
-
-长期运行时去掉 `MAWO_WORKER_ONCE`，用 `MAWO_WORKER_ID` 标识 worker；`MAWO_WORKER_LEASE_MS`、`MAWO_WORKER_RENEW_INTERVAL_MS` 和 `MAWO_WORKER_POLL_MS` 控制 claim 租约、续租心跳和空闲轮询间隔。
-
-停止服务：
-
-```powershell
-docker compose down
-```
-
-不要在有生产数据时执行 `docker compose down -v`，它会删除 `.mawo` 状态卷和数据库/Redis volume。
-
-## 真实仓库 Workflow 示例
-
-创建一个真实仓库 workflow：
-
-```powershell
-$body = @{
-  goal = "Run a real repository workflow"
-  repositoryPath = "C:/path/to/repo"
-  tasks = @(
-    @{
-      id = "repository-task"
-      title = "Repository task"
-      agent = "shell"
-      command = "npm test"
-      timeoutMs = 900000
-    }
-  )
-  qualityGates = @(
-    @{
-      id = "quality-gate"
-      title = "Quality gate"
-      command = "npm run lint"
-      timeoutMs = 300000
-    }
-  )
-} | ConvertTo-Json -Depth 10
-
-Invoke-RestMethod -Method Post `
-  -Uri http://127.0.0.1:4000/workflows/repository `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-运行、查看、重试：
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:4000/workflows/<id>/enqueue
-Invoke-RestMethod http://127.0.0.1:4000/workflows/<id>
-Invoke-RestMethod http://127.0.0.1:4000/workflows/<id>/report
-Invoke-RestMethod http://127.0.0.1:4000/workflows/<id>/merge-candidate
-Invoke-RestMethod -Method Post http://127.0.0.1:4000/workflows/<id>/retry
-```
-
-取消 queued/running job：
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:4000/jobs/<jobId>/cancel
-```
-
-审核 workflow：
-
-```powershell
-$review = @{ decision = "approve"; note = "Ready to apply" } | ConvertTo-Json
-Invoke-RestMethod -Method Post `
-  -Uri http://127.0.0.1:4000/workflows/<id>/review `
-  -ContentType "application/json" `
-  -Body $review
-```
-
-## API 一览
+Important endpoints:
 
 ```text
 GET  /health
@@ -259,39 +176,54 @@ GET  /readiness
 GET  /agents
 GET  /agents/health
 GET  /operations/snapshot
+GET  /requirements
+POST /requirements
+GET  /requirements/:id
+PATCH /requirements/:id
+POST /requirements/:id/confirm-plan
+POST /requirements/:id/enqueue
+POST /requirements/:id/retry
+GET  /requirements/:id/report
+GET  /requirements/:id/merge-candidate
 GET  /workflows
-GET  /workflows?status=<status>&repositoryId=<repositoryId>&repositoryPath=<path>&limit=<n>
-GET  /repositories
-POST /repositories
-DELETE /repositories/:id
-GET  /audit-events
-GET  /audit-events?workflowId=<id>
-GET  /audit-events?type=<type>&actor=<actor>&jobId=<jobId>&repositoryId=<repositoryId>&limit=<n>
-POST /workflows/demo
-POST /workflows/worktree-demo
-POST /workflows/agent-demo
 POST /workflows/repository
-GET  /workflows/:id
 POST /workflows/:id/enqueue
-POST /workflows/:id/run
 POST /workflows/:id/retry
 POST /workflows/:id/review
-GET  /workflows/:id/workspaces
-POST /workflows/:id/workspaces/cleanup
 GET  /workflows/:id/report
-GET  /workflows/:id/artifact?path=<artifact-path>&maxBytes=<n>
 GET  /workflows/:id/merge-candidate
-POST /workflows/:id/merge-candidate/apply
 GET  /jobs
-GET  /jobs?status=<status>&workflowId=<workflowId>&repositoryId=<repositoryId>&limit=<n>
-GET  /jobs/:id
-GET  /jobs/:id/timeline
 POST /jobs/:id/cancel
+GET  /audit-events
+GET  /launch/evidence/latest
 ```
 
-## 运行数据放在哪里
+## Real CLI Agent Setup
 
-运行时数据默认写在当前工作目录的 `.mawo` 下，不提交到 git。
+Shell execution is available when a task explicitly uses `shell`. Real CLI
+agents are configured by environment variables:
+
+```powershell
+$env:MAWO_CODEX_COMMAND_TEMPLATE = "codex run --prompt-file {promptFile}"
+$env:MAWO_CODEX_AUTH_PROBE_COMMAND = "codex auth status"
+$env:MAWO_CLAUDE_COMMAND_TEMPLATE = "claude -p @{promptFile}"
+$env:MAWO_CLAUDE_AUTH_PROBE_COMMAND = "claude --version"
+$env:MAWO_CURSOR_COMMAND_TEMPLATE = "cursor-agent {promptFile}"
+$env:MAWO_CURSOR_AUTH_PROBE_COMMAND = "cursor-agent --version"
+```
+
+Supported placeholders:
+
+- `{promptFile}`: MAWO-generated prompt file outside the task worktree;
+- `{workspace}`: isolated task worktree path;
+- `{goal}`: requirement/workflow goal.
+
+Use `GET /agents/health` to verify configured agent commands without exposing
+the full command templates.
+
+## Data, Backup, And Restore
+
+Default file-backed runtime data lives under `.mawo`:
 
 ```text
 .mawo/
@@ -310,92 +242,34 @@ POST /jobs/:id/cancel
       tasks/<taskId>/patch.diff
 ```
 
-这些文件用于恢复 workflow 状态、查看 job 历史、复用已登记仓库、查看审计记录、排查运行失败和生成可应用的 patch。审计事件同时覆盖 operator action 和 runner lifecycle，包括 task/gate 开始、完成、失败、取消等状态。API 重启时，`jobs.json` 里遗留的 queued job 会自动恢复调度；running job 会标记为 failed，并把匹配的 running workflow 恢复为 aborted，避免旧 job 永远占用运行槽。
-
-## 接入真实 CLI Agent
-
-默认总是有 fake demo agent。真实 CLI agent 通过环境变量注册：
+Before deployment, rollback, or manual cleanup, back up `.mawo` or the
+`mawo_state` Docker volume. The file-backed restore path is covered by:
 
 ```powershell
-$env:MAWO_CODEX_COMMAND_TEMPLATE = "codex run --prompt-file {promptFile}"
-$env:MAWO_CODEX_AUTH_PROBE_COMMAND = "codex auth status"
-$env:MAWO_CLAUDE_COMMAND_TEMPLATE = "claude -p @{promptFile}"
-$env:MAWO_CLAUDE_AUTH_PROBE_COMMAND = "claude --version"
-$env:MAWO_CURSOR_COMMAND_TEMPLATE = "cursor-agent {promptFile}"
-$env:MAWO_CURSOR_AUTH_PROBE_COMMAND = "cursor-agent --version"
+npm.cmd run smoke:backup:restore
 ```
 
-支持的占位符：
+## Known Limits For First Launch
 
-- `{promptFile}`：系统生成的 agent prompt 文件。
-- `{workspace}`：任务 worktree 路径。
-- `{goal}`：workflow 目标。
+- Local-first operator/viewer token model; no user accounts, SSO/RBAC, or
+  tenant isolation.
+- File state plus in-process queue supports one API replica.
+- Postgres state plus Postgres queue requires `worker:postgres` processes.
+- Redis is included in Compose but queue support is reserved.
+- Public production exposure still requires TLS and an external auth/network
+  boundary.
+- Target repositories must be git repositories with a committed `HEAD`.
+- MAWO generates merge candidates and explicit manual apply commands; it does
+  not auto-merge main by default.
 
-prompt 文件写在 worktree 外部，避免内部编排文件污染任务 diff。
+## Documentation
 
-workflow 审批完成或中止后，可以清理任务 worktree：
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:4000/workflows/<id>/workspaces/cleanup
-```
-
-`needs_review` 和 `failed` 阶段默认不允许清理，避免 review 证据和失败现场被误删。清理会删除任务 worktree 和对应临时分支，并写入 `workflow.workspaces_cleaned` 审计事件。
-
-可以用健康检查接口确认已注册 agent 是否可执行：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:4000/agents/health
-```
-
-该接口会返回 agent id、label、状态、检查时间、是否配置授权探针和解析出的命令名，不返回完整 command template，避免泄露 prompt/workspace 模板。未配置授权探针的真实 agent 会显示 `auth_unchecked`；探针失败会显示 `auth_failed`。
-
-## API 访问控制
-
-设置 `MAWO_API_TOKEN` 后，除 `GET /health` 外的 API 都要求 operator token：
-
-```text
-Authorization: Bearer <MAWO_API_TOKEN>
-```
-
-可选设置 `MAWO_VIEWER_API_TOKEN` 给只读审查者：
-
-```text
-Authorization: Bearer <MAWO_VIEWER_API_TOKEN>
-```
-
-viewer token 只能访问健康检查、agent/worker 状态、仓库列表、workflow/job 列表与详情、报告、artifact、merge candidate 预览、审计事件和 operations snapshot。创建/删除仓库、创建/运行/重试/审核 workflow、enqueue/cancel job、清理 worktree、应用 merge candidate 都必须使用 operator token；viewer 调用这些写接口会返回 `403 forbidden`。如果只设置 viewer token，API 会启用保护，但没有任何 token 能执行写操作。
-
-Web 控制台右上角可以输入 API token，token 只保存在当前浏览器的 localStorage 中。生产环境仍建议放在 VPN、防火墙或反向代理认证后面，并启用 TLS。
-
-设置 `MAWO_ALLOWED_REPOSITORY_ROOTS` 后，仓库注册和 repository workflow 只能使用这些根目录下面的 git 仓库。多个根目录用分号或换行分隔：
-
-```text
-MAWO_ALLOWED_REPOSITORY_ROOTS=C:\work\repos;D:\client-repos
-```
-
-## 当前限制
-
-- 目前是 local-first 系统，有 operator/viewer token 保护，但没有用户账号、细粒度 RBAC、租户隔离。
-- API 可以执行命令，不应裸露到公网；生产环境应叠加 TLS、反向代理 auth、VPN 或 IP allowlist，并设置 `MAWO_ALLOWED_REPOSITORY_ROOTS`。
-- `NODE_ENV=production` 时，`GET /readiness` 会把示例 `MAWO_API_TOKEN` 或缺失的 `MAWO_ALLOWED_REPOSITORY_ROOTS` 标记为 `production_config` 阻塞项。
-- 当前文件持久化 + 进程内队列只支持 `MAWO_API_REPLICA_COUNT=1`；Postgres state + Postgres queue + `worker:postgres` 可支持多 API 副本，`GET /readiness` 会通过 `deployment_topology` 校验拓扑是否匹配。
-- workflow、job history、仓库注册表和审计事件默认是文件持久化；`MAWO_STATE_BACKEND=postgres` 可切到 Postgres state store，`MAWO_QUEUE_BACKEND=postgres` 会让 API 只写入/查询/取消 Postgres queued job，实际执行交给 `worker:postgres` claim/续租/回写。
-- job queue 运行器仍保留在单 API 进程内用于本地和单副本模式；默认 `MAWO_MAX_CONCURRENT_JOBS=1` 控制资源压力。切到 Postgres queue 后，并发执行能力由 worker 进程数量和 worker 配置决定。
-- Docker Compose 里有 Postgres/Redis；Postgres state backend 已可通过 `MAWO_STATE_BACKEND=postgres` 启用，Postgres worker 服务可通过 `postgres-worker` profile 启动。Redis queue 尚未实现，如果把 `MAWO_QUEUE_BACKEND` 切到未实现后端，`GET /readiness` 会通过 `runtime_backend` 阻塞上线。
-- 真实 CLI agent 健康检查可确认命令是否存在，也可通过 `MAWO_*_AUTH_PROBE_COMMAND` 执行轻量授权探针；探针命令本身需要按部署环境配置。
-
-## 路线图
-
-近期优先级：
-
-1. 队列层升级：把进程内 job queue 迁移到 Redis/worker，并补齐多 API 副本拓扑。
-4. 云平台部署模板：Render/Vercel/Cloudflare/本机服务脚本。
-
-## 文档入口
-
-- [Operations Runbook](docs/OPERATIONS.md)：启动、部署、备份、回滚、健康检查、已知限制。
-- [Launch Scope](docs/LAUNCH_SCOPE.md)：上线范围和验收标准。
-- [Launch Readiness Evidence](docs/LAUNCH_READINESS_EVIDENCE.md)：最新上线验证证据、剩余 release gates 和 accepted known limits。
-- [Swarm Sprint](docs/SWARM_SPRINT.md)：多角色协作推进记录。
-- [Project Plan](PROJECT_PLAN.md)：早期产品规划草案。
-- [Real System Plan](REAL_SYSTEM_PLAN.md)：生产化计划。
+- [Server Deployment](docs/SERVER_DEPLOYMENT.md)
+- [Operations Runbook](docs/OPERATIONS.md)
+- [Launch Readiness Evidence](docs/LAUNCH_READINESS_EVIDENCE.md)
+- [PRD](docs/product/PRD.md)
+- [Requirements Freeze](docs/product/REQUIREMENTS_FREEZE.md)
+- [Role Workflow](docs/product/ROLE_WORKFLOW.md)
+- [User Journeys](docs/product/USER_JOURNEYS.md)
+- [UI Information Architecture](docs/product/UI_INFORMATION_ARCHITECTURE.md)
+- [UI Stage Brief](docs/product/UI_STAGE_BRIEF.md)
