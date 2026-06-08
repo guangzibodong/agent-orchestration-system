@@ -123,6 +123,13 @@ export function buildLaunchGatePlan(
       args: ["diff", "--check"],
       execution: "run" as const,
     },
+    npmRunCheck(
+      "db_generate",
+      "Prisma client generate",
+      "db:generate",
+      npmCommand,
+      true,
+    ),
     ...frozenLocalChecks
       .filter(([id]) => id !== "env")
       .map(([id, label, script]) =>

@@ -20,6 +20,7 @@ describe("launch gate planning", () => {
     ).toEqual([
       "env",
       "git_diff_check",
+      "db_generate",
       "typecheck",
       "lint",
       "test",
