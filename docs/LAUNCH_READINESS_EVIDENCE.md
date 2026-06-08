@@ -1,18 +1,19 @@
 # MAWO Launch Readiness Evidence
 
-Status as of 2026-06-07: the local file-backed P0 trust loop is launch-ready, with production release still blocked only by external Postgres verification that requires `DATABASE_URL`.
+Status as of 2026-06-07T16:54:54.409Z: the local file-backed P0 trust loop is launch-ready, with production release still blocked only by external Postgres verification that requires `DATABASE_URL`.
 
 ## Verified This Run
 
 Latest generated evidence:
 
-- Markdown: `output/launch-readiness/2026-06-07T13-35-04-128Z.md`
-- JSON: `output/launch-readiness/2026-06-07T13-35-04-128Z.json`
+- Markdown: `output/launch-readiness/2026-06-07T16-54-54-409Z.md`
+- JSON: `output/launch-readiness/2026-06-07T16-54-54-409Z.json`
 
-Commands ran from the repository root on `main` at commit `21ab891`.
+Commands ran from the repository root on `main` at commit `67565b8`.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
+| `npm.cmd run smoke:ui` | Passed | Chromium UI smoke ran 31 tests, including the real API New Requirement journey: browser creates a requirement for a real temporary git repo, repository safety is visible, two isolated shell tasks produce reviewable diffs, a required gate fails and blocks merge-ready evidence, retry resets stale evidence, retry enqueue reaches `needs_review`, Review Evidence shows changed files, gate status, manual `git apply`, and no `Apply Candidate` action. |
 | `npm.cmd run smoke:api` | Passed | Real temporary git repo registered, required gate failure blocked merge candidate with `409`, retry reset workflow, retry run reached `needs_review`, report artifact was readable, merge candidate was ready, manual apply updated the target repo, audit and cleanup checks passed. |
 | `npm.cmd run smoke:api:requirements` | Passed | Viewer can read requirements and is blocked from writes, operator can create/confirm/enqueue a requirement, failed required gate synced requirement to `needs_rework`, requirement retry reset current evidence, retry enqueue produced `needs_review`, requirement report and merge candidate endpoints returned `200`. |
 | `npm.cmd run smoke:backup:restore` | Passed | File-backed `.mawo` state was backed up, damaged/restored, API restarted, restored workflow/report/merge candidate/artifacts/readiness were readable. |
@@ -50,10 +51,11 @@ The local file-backed runtime has passed the core P0 product proof:
 4. Report and merge candidate are available only after passing gates.
 5. Human apply is explicit and audited.
 6. Backup/restore preserves review evidence after restart.
+7. The Requirement Delivery Console proves the same flow in a real browser against the real requirement API bridge, with manual apply evidence visible and direct apply absent from the main UI path.
 
 ## Remaining Release Gates
 
-- Refresh `npm.cmd run launch:gate:local` immediately before release tagging if any tracked file changes after `21ab891`.
+- Refresh `npm.cmd run launch:gate:local` immediately before release tagging if any tracked file changes after `67565b8`.
 - Run `npm.cmd run smoke:api:postgres` if the launch target uses `MAWO_STATE_BACKEND=postgres` or `MAWO_QUEUE_BACKEND=postgres`. This requires `DATABASE_URL`, migrated schema, and a reachable Postgres instance.
 - Run `npm.cmd run launch:gate:postgres` for a Postgres-backed launch target after `DATABASE_URL` is configured and migrations are deployed.
 - Check `GET /readiness` in the actual production configuration and confirm no blocker remains.
